@@ -1,109 +1,88 @@
-/* Map overlays: target tag, context drawer, camera network. */
+/* Map overlays, Dispatch edition: paper tags, ink rules, signal orange. */
 .map-world-label {
   position: absolute;
   z-index: 4;
   transform: translate(-50%, -100%);
-  padding: 6px 10px 6px 18px;
-  border: 1px solid var(--line-3, #4a4840);
-  border-radius: 0;
-  background: rgba(10, 10, 9, 0.9);
-  color: var(--ink, #ede9dd);
-  font: 500 9px/1.2 var(--font-mono, ui-monospace, monospace);
-  font-stretch: 85%;
-  letter-spacing: 0.14em;
+  padding: 5px 9px;
+  font: 500 10px/1.2 var(--font-wire, ui-monospace, monospace);
+  letter-spacing: 0.12em;
   white-space: nowrap;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
-}
-.map-world-label.is-candidate {
-  color: var(--hot-2, #ff7c55);
-  border-color: var(--hot, #ff4d1f);
-  box-shadow: 0 0 26px rgba(255, 77, 31, 0.32);
-}
-.map-world-label::before {
-  /* blinking status pip inside the tag */
-  content: "";
-  position: absolute;
-  left: 7px;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  margin-top: -2.5px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: cw-blink 1.2s steps(1) infinite;
+  color: var(--ink, #0e0e0e);
+  background: var(--card, #fbfaf7);
+  border: 2px solid var(--ink, #0e0e0e);
+  border-radius: 0;
+  box-shadow: 3px 3px 0 var(--ink, #0e0e0e);
 }
 .map-world-label::after {
-  /* leader line down to the point */
   content: "";
   position: absolute;
   left: 50%;
   top: 100%;
-  width: 1px;
-  height: 12px;
-  background: currentColor;
-  opacity: 0.8;
+  width: 2px;
+  height: 14px;
+  margin-left: -1px;
+  background: var(--ink, #0e0e0e);
 }
-.map-world-label[hidden] {
-  display: none;
+.map-world-label.is-candidate {
+  color: #fff;
+  background: var(--signal, #ff4f00);
 }
 .map-world-label.is-confirmed {
-  color: var(--live, #c6ff3d);
-  border-color: var(--live, #c6ff3d);
-  box-shadow: 0 0 26px rgba(198, 255, 61, 0.22);
+  color: var(--paper, #f3f1ec);
+  background: var(--ink, #0e0e0e);
 }
 .map-world-label.is-public {
-  color: var(--ink, #ede9dd);
-  border-color: var(--cool, #9b97ff);
-  box-shadow: 0 0 22px rgba(155, 151, 255, 0.22);
+  color: #fff;
+  background: var(--cobalt, #1f3bff);
   max-width: 240px;
-  text-overflow: ellipsis;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 .map-world-label.is-public::after {
+  display: none;
+}
+.map-world-label[hidden] {
   display: none;
 }
 .map-shell:has(.map-context[open]) .map-world-label {
   visibility: hidden;
 }
 .map-world-label:focus-visible {
-  outline: 2px solid var(--ink, #fff);
+  outline: 2px solid var(--cobalt, #1f3bff);
   outline-offset: 3px;
 }
 .map-context {
   position: absolute;
-  top: 118px;
-  left: 24px;
+  top: 132px;
+  left: 16px;
   z-index: 5;
   max-width: min(340px, calc(100% - 90px));
-  max-height: calc(100% - 200px);
+  max-height: calc(100% - 210px);
   overflow: auto;
-  color: var(--ink-2, #c4c0b3);
-  border: 1px solid var(--line-2, #33322c);
-  background: rgba(10, 10, 9, 0.92);
-  backdrop-filter: blur(8px);
-  font-size: 11px;
+  font-size: 13px;
+  color: var(--ink, #0e0e0e);
+  background: var(--card, #fbfaf7);
+  border: 1px solid var(--ink, #0e0e0e);
 }
 .map-context summary {
   position: sticky;
   top: 0;
-  padding: 8px 10px;
+  padding: 7px 10px;
   cursor: pointer;
-  user-select: none;
   list-style: none;
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 9px;
+  user-select: none;
+  font-family: var(--font-wire, monospace);
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink, #ede9dd);
-  background: rgba(10, 10, 9, 0.96);
+  background: var(--card, #fbfaf7);
 }
 .map-context summary::-webkit-details-marker {
   display: none;
 }
 .map-context summary::before {
   content: "+ ";
-  color: var(--live, #c6ff3d);
+  color: var(--signal, #ff4f00);
 }
 .map-context[open] summary::before {
   content: "− ";
@@ -116,32 +95,29 @@
 }
 .map-context dl > div {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 100px minmax(0, 1fr);
   gap: 8px;
   padding: 6px 0;
-  border-top: 1px solid var(--line, #23221e);
+  border-top: 1px solid var(--rule-soft, #d2cec3);
 }
 .map-context dt {
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 8px;
-  letter-spacing: 0.1em;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted, #8f8b80);
+  color: var(--muted, #6b6860);
   padding-top: 2px;
 }
 .map-context dd {
   margin: 0;
   overflow-wrap: anywhere;
-  color: var(--ink, #ede9dd);
 }
 .map-context p {
   margin: 8px 10px 10px;
-  line-height: 1.55;
-  color: var(--muted, #8f8b80);
+  line-height: 1.5;
+  color: var(--ink-2, #2d2c29);
 }
 .map-context a {
-  color: var(--ink, #ede9dd);
   text-decoration: underline;
 }
 .map-context-toggle {
@@ -150,27 +126,23 @@
   align-items: center;
   margin: 10px;
   line-height: 1.4;
-  color: var(--ink-2, #c4c0b3);
 }
 .map-context-toggle input {
-  accent-color: var(--live, #c6ff3d);
+  accent-color: var(--signal, #ff4f00);
 }
 .map-context-network {
   margin: 0 10px;
   padding: 7px 10px;
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 8px;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink, #ede9dd);
-  background: transparent;
-  border: 1px solid var(--line-3, #4a4840);
-  border-radius: 2px;
+  color: var(--ink, #0e0e0e);
+  border: 1px solid var(--ink, #0e0e0e);
 }
 .map-context-network:hover:not(:disabled) {
-  border-color: var(--live, #c6ff3d);
-  color: var(--live, #c6ff3d);
+  color: var(--paper, #f3f1ec);
+  background: var(--ink, #0e0e0e);
 }
 .map-context-network:disabled {
   opacity: 0.5;
@@ -178,67 +150,61 @@
 }
 .camera-legend-dot {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   margin-left: 6px;
   border-radius: 50%;
-  background: var(--teal, #5ee6d0);
+  background: var(--muted, #6b6860);
 }
 .public-camera-legend-dot {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--cool, #9b97ff);
+  background: var(--cobalt, #1f3bff);
 }
 .map-public-layer {
   padding: 2px 0 0;
-  border-top: 1px solid var(--line-2, #33322c);
-  border-bottom: 1px solid var(--line-2, #33322c);
+  border-top: 1px solid var(--rule-soft, #d2cec3);
+  border-bottom: 1px solid var(--rule-soft, #d2cec3);
 }
 .map-public-shortcut {
   position: absolute;
-  top: 118px;
+  top: 132px;
   left: 170px;
   z-index: 4;
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 10px;
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 9px;
-  letter-spacing: 0.12em;
+  padding: 6px 10px;
+  font-family: var(--font-wire, monospace);
+  font-size: 10px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink, #ede9dd);
-  border: 1px solid rgba(155, 151, 255, 0.55);
-  background: rgba(10, 10, 9, 0.88);
-  backdrop-filter: blur(6px);
-  border-radius: 0;
-}
-.map-public-shortcut svg {
-  color: var(--cool, #9b97ff);
+  color: #fff;
+  background: var(--cobalt, #1f3bff);
+  border: 1px solid var(--cobalt, #1f3bff);
 }
 .map-public-shortcut:hover:not(:disabled) {
-  border-color: var(--cool, #9b97ff);
-  background: rgba(155, 151, 255, 0.12);
+  color: var(--cobalt, #1f3bff);
+  background: var(--card, #fbfaf7);
 }
 .map-public-shortcut:disabled {
   opacity: 0.5;
 }
 .map-camera-detail {
   position: absolute;
-  top: 158px;
-  left: 24px;
+  top: 172px;
+  left: 16px;
   z-index: 5;
   display: grid;
   gap: 7px;
   max-width: min(290px, calc(100% - 90px));
   padding: 13px;
-  color: var(--ink, #ede9dd);
-  border: 1px solid var(--teal, #5ee6d0);
-  background: rgba(10, 10, 9, 0.94);
-  box-shadow: 0 0 30px rgba(94, 230, 208, 0.14);
+  color: var(--ink, #0e0e0e);
+  background: var(--card, #fbfaf7);
+  border: 2px solid var(--ink, #0e0e0e);
+  box-shadow: 4px 4px 0 var(--ink, #0e0e0e);
 }
 .map-camera-detail > button {
   position: absolute;
@@ -247,40 +213,33 @@
   width: 24px;
   height: 24px;
   font-size: 18px;
-  color: var(--muted, #8f8b80);
-  background: transparent;
-}
-.map-camera-detail > button:hover {
-  color: var(--ink, #ede9dd);
 }
 .map-camera-detail .eyebrow {
   padding-right: 15px;
-  color: var(--teal, #5ee6d0);
+  color: var(--signal, #ff4f00);
 }
 .map-camera-detail strong {
   padding-right: 8px;
-  font-size: 15px;
-  font-weight: 700;
-  font-stretch: 80%;
-  line-height: 1.2;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
 }
 .map-camera-detail > span:not(.eyebrow),
 .map-camera-detail small {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
-  color: var(--muted, #8f8b80);
+  color: var(--ink-2, #2d2c29);
 }
 @media (max-width: 720px) {
   .map-context {
-    top: 104px;
-    left: 16px;
+    top: 116px;
   }
   .map-public-shortcut {
-    top: 104px;
-    left: 158px;
+    top: 116px;
+    left: 160px;
   }
   .map-camera-detail {
-    top: 144px;
-    left: 16px;
+    top: 156px;
   }
 }

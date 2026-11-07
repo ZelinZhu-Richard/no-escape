@@ -31,8 +31,9 @@ Versions and license declarations below were checked against `web/package-lock.j
 | CesiumJS | 1.147.0 | Apache-2.0; CesiumJS Contributors. Installed engine 26.5.0 and widgets 16.3.1 also declare Apache-2.0. |
 | qrcode.react | 4.2.0 | ISC; Paul O’Shannessy. Its bundled QR Code generator credits Project Nayuki under MIT. |
 | hls.js | 1.7.4 | Apache-2.0; installed package license retained by the bundled dependency notice build. Used for official public HLS playback where native playback is unavailable. |
-| Archivo Variable (`@fontsource-variable/archivo`) | 5.3.0 package | SIL Open Font License 1.1; The Archivo Project Authors |
-| Martian Mono Variable (`@fontsource-variable/martian-mono`) | 5.3.0 package | SIL Open Font License 1.1; The Martian Mono Project Authors |
+| Schibsted Grotesk Variable (`@fontsource-variable/schibsted-grotesk`) | 5.3.0 package | SIL Open Font License 1.1; The Schibsted-Grotesk Project Authors |
+| Instrument Serif (`@fontsource/instrument-serif`) | 5.3.0 package | SIL Open Font License 1.1; The Instrument Serif Project Authors |
+| IBM Plex Mono (`@fontsource/ibm-plex-mono`) | 5.3.0 package | SIL Open Font License 1.1; IBM Corp. |
 | FastAPI / Pydantic | 0.162.0 / 2.14.3 | MIT |
 | Starlette / Uvicorn | 1.10.0 / 0.54.0 | BSD-3-Clause |
 | python-dotenv | 1.2.4 | BSD-3-Clause, checked in installed distribution metadata |
@@ -43,11 +44,11 @@ Versions and license declarations below were checked against `web/package-lock.j
 
 Evidence: each frontend package's `LICENSE`, `LICENSE.md`, or `LICENSE.txt` under `web/node_modules/`; Python `*.dist-info/licenses/` files in `.venv/`. Keep dependency notices with redistributed bundles rather than treating this summary as a replacement for the license texts.
 
-The Vite build is configured to emit `assets/licenses/bundled-dependencies.md` and copy `cesium-LICENSE.md`, Cesium's third-party JSON notices, `archivo-OFL.txt`, and `martian-mono-OFL.txt` into `web/dist/assets/licenses/`. Preserve that folder when distributing the built frontend. Final build verification is recorded in `MORNING_REPORT.md`.
+The Vite build is configured to emit `assets/licenses/bundled-dependencies.md` and copy `cesium-LICENSE.md`, Cesium's third-party JSON notices, `schibsted-grotesk-OFL.txt`, `instrument-serif-OFL.txt`, and `ibm-plex-mono-OFL.txt` into `web/dist/assets/licenses/`. Preserve that folder when distributing the built frontend. Final build verification is recorded in `MORNING_REPORT.md`.
 
-The UI imports Archivo and Martian Mono through Fontsource and serves their font assets locally. Font copyrights: **Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo)** and **Copyright 2020 The Martian Mono Project Authors (https://github.com/evilmartians/mono)**. Their full OFL texts are in `web/node_modules/@fontsource-variable/archivo/LICENSE` and `web/node_modules/@fontsource-variable/martian-mono/LICENSE`; preserve those copyrights and licenses with distributed font files. The fonts remain OFL-1.1, independently of Clearway's application source license.
+The UI imports Schibsted Grotesk, Instrument Serif and IBM Plex Mono through Fontsource and serves their font assets locally. Font copyrights: **Copyright 2023 The Schibsted-Grotesk Project Authors (https://github.com/schibsted/schibsted-grotesk)**, **Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif)** and **Copyright 2017 IBM Corp.** Their full OFL texts are in the matching `web/node_modules/@fontsource*/*/LICENSE` files; preserve those copyrights and licenses with distributed font files. The fonts remain OFL-1.1, independently of Clearway's application source license.
 
-The basic map uses Stadia Maps' Alidade Smooth Dark raster tiles (© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors), which need no API key on localhost. If those tiles fail, the map falls back to standard OpenStreetMap tiles (© OpenStreetMap contributors). Native map credits stay visible in the Cesium credit bar.
+The basic map uses Stadia Maps' Stamen Toner Lite raster tiles (© Stadia Maps, © Stamen Design, © OpenMapTiles, © OpenStreetMap contributors), which need no API key on localhost. If those tiles fail, the map falls back to standard OpenStreetMap tiles (© OpenStreetMap contributors). Native map credits stay visible in the Cesium credit bar.
 
 ## Selected positive footage
 

@@ -1,54 +1,58 @@
-/* Public camera network: feed browser + live monitor. */
+/* Public camera network, Dispatch edition. */
 .live-camera-panel {
-  padding: 20px 24px 22px;
-  color: var(--ink, #ede9dd);
-  background: var(--bg, #0a0a09);
+  padding: 22px 0 28px;
+  color: var(--ink, #0e0e0e);
 }
 .live-camera-heading {
   display: flex;
-  align-items: flex-end;
+  align-items: baseline;
   justify-content: space-between;
   gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule-soft, #d2cec3);
+}
+.live-camera-heading .eyebrow::before {
+  content: "§ 04 — ";
+  color: var(--cobalt, #1f3bff);
 }
 .live-camera-heading h2 {
-  margin-top: 5px;
-  font-size: 26px;
-  font-weight: 800;
-  font-stretch: 66%;
-  text-transform: uppercase;
-  letter-spacing: 0.005em;
+  margin-top: 8px;
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: -0.05em;
 }
 .live-camera-count {
-  padding: 6px 9px;
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 9px;
+  padding: 5px 9px;
+  font-family: var(--font-wire, monospace);
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   white-space: nowrap;
-  color: var(--cool, #9b97ff);
-  border: 1px solid rgba(155, 151, 255, 0.45);
+  color: #fff;
+  background: var(--cobalt, #1f3bff);
 }
 .live-camera-intro,
 .live-catalog-credit {
-  margin-top: 10px;
+  margin-top: 12px;
   max-width: 760px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--muted, #8f8b80);
+  font-family: var(--font-serif, serif);
+  font-style: italic;
+  font-size: 18px;
+  line-height: 1.3;
+  color: var(--ink-2, #2d2c29);
 }
 .live-camera-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.6fr);
-  gap: 1px;
-  margin-top: 16px;
-  background: var(--line-2, #33322c);
-  border: 1px solid var(--line-2, #33322c);
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr);
+  gap: 0;
+  margin-top: 18px;
+  border: 1px solid var(--ink, #0e0e0e);
 }
 .live-camera-browser {
-  padding: 12px;
-  background: var(--panel, #111110);
   min-width: 0;
+  padding: 14px;
+  border-right: 1px solid var(--ink, #0e0e0e);
+  background: var(--card, #fbfaf7);
 }
 .live-camera-filters {
   display: grid;
@@ -60,98 +64,78 @@
   width: 100%;
   min-width: 0;
   padding: 9px;
-  font-size: 12px;
-  color: var(--ink, #ede9dd);
-  background: var(--bg, #0a0a09);
-  border: 1px solid var(--line-2, #33322c);
-  border-radius: 2px;
-}
-.live-camera-filters input:hover,
-.live-camera-filters select:hover {
-  border-color: var(--line-3, #4a4840);
+  font-size: 14px;
+  color: var(--ink, #0e0e0e);
+  background: var(--paper, #f3f1ec);
+  border: 1px solid var(--ink, #0e0e0e);
+  border-radius: 0;
 }
 .live-camera-filters input::placeholder {
-  color: var(--dim, #64615a);
+  color: var(--muted, #6b6860);
 }
 .live-camera-result-count {
-  margin: 10px 0 6px;
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 8px;
+  margin: 12px 0 6px;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted, #8f8b80);
+  color: var(--muted, #6b6860);
 }
 .live-camera-list {
   margin: 0;
   padding: 0;
   list-style: none;
-  max-height: 330px;
+  max-height: 340px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 .live-camera-list li + li {
-  margin-top: 2px;
+  border-top: 1px solid var(--rule-soft, #d2cec3);
 }
 .live-camera-list button {
-  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 9px;
   width: 100%;
-  padding: 9px 9px 9px 11px;
+  padding: 10px 8px;
   text-align: left;
-  color: var(--ink, #ede9dd);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 2px;
+  color: var(--ink, #0e0e0e);
   transition:
-    background 0.15s,
-    border-color 0.15s;
+    background 0.12s,
+    color 0.12s;
 }
 .live-camera-list button:hover {
-  background: var(--panel-2, #171714);
+  background: var(--paper-2, #ebe8e0);
 }
 .live-camera-list button.is-selected {
-  border-color: var(--cool, #9b97ff);
-  background: linear-gradient(90deg, rgba(155, 151, 255, 0.12), transparent);
-}
-.live-camera-list button.is-selected::before {
-  content: "";
-  position: absolute;
-  left: -1px;
-  top: -1px;
-  bottom: -1px;
-  width: 3px;
-  background: var(--cool, #9b97ff);
+  color: #fff;
+  background: var(--cobalt, #1f3bff);
 }
 .live-camera-list button > svg {
   margin-top: 2px;
-  color: var(--cool, #9b97ff);
 }
 .live-camera-list strong {
   display: block;
-  font-size: 13px;
-  font-weight: 700;
-  font-stretch: 82%;
-  line-height: 1.3;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 .live-camera-list small {
   display: block;
   margin-top: 3px;
-  font-size: 10px;
-  line-height: 1.45;
-  color: var(--muted, #8f8b80);
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.8;
 }
 .live-camera-list .live-camera-capability {
   margin-top: 5px;
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 8px;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--live, #c6ff3d);
+  opacity: 1;
 }
 .live-media-mode {
   display: flex;
@@ -159,21 +143,17 @@
   margin: 0 0 10px;
 }
 .live-media-mode button {
-  padding: 7px 9px;
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 8px;
+  padding: 7px 10px;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted, #8f8b80);
-  background: transparent;
-  border: 1px solid var(--line-2, #33322c);
-  border-radius: 2px;
+  color: var(--ink, #0e0e0e);
+  border: 1px solid var(--ink, #0e0e0e);
 }
 .live-media-mode button[aria-pressed="true"] {
-  color: #0a0a09;
-  background: var(--ink, #ede9dd);
-  border-color: var(--ink, #ede9dd);
+  color: var(--paper, #f3f1ec);
+  background: var(--ink, #0e0e0e);
 }
 .live-image-boxes {
   position: absolute;
@@ -195,7 +175,7 @@
   overflow: hidden;
 }
 .live-video-overlay .detection-box {
-  stroke-width: 1.25px;
+  stroke-width: 1.5px;
   fill: transparent;
 }
 .live-detection-summary {
@@ -204,76 +184,63 @@
   justify-content: space-between;
   gap: 8px;
   padding-top: 10px;
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--live, #c6ff3d);
+  font-family: var(--font-wire, monospace);
+  font-size: 11px;
+  color: var(--ink, #0e0e0e);
   font-variant-numeric: tabular-nums;
 }
 .live-detection-summary > span:last-child {
-  color: var(--muted, #8f8b80);
+  color: var(--muted, #6b6860);
 }
 .live-camera-shortcut {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 14px;
-  margin-top: 14px;
-  padding: 11px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  font-stretch: 80%;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--ink, #ede9dd);
-  background: transparent;
-  border: 1px solid var(--line-2, #33322c);
-  border-left: 3px solid var(--live, #c6ff3d);
-  border-radius: 2px;
-  transition:
-    border-color 0.15s,
-    background 0.15s;
+  margin-top: 16px;
+  padding: 12px 14px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink, #0e0e0e);
+  border: 2px solid var(--ink, #0e0e0e);
+  box-shadow: 4px 4px 0 var(--ink, #0e0e0e);
+  transition: transform 0.12s;
 }
 .live-camera-shortcut span {
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 9px;
+  font-family: var(--font-wire, monospace);
+  font-size: 10px;
   font-weight: 400;
-  letter-spacing: 0.06em;
-  text-transform: none;
-  color: var(--muted, #8f8b80);
+  letter-spacing: 0.04em;
+  color: var(--muted, #6b6860);
 }
 .live-camera-shortcut:hover {
-  background: var(--live-bg, rgba(198, 255, 61, 0.08));
-  border-color: var(--live, #c6ff3d);
+  transform: translate(-1px, -1px);
 }
 .live-yolo-counts {
   display: flex;
   flex-wrap: wrap;
   gap: 5px 14px;
   margin-top: 8px;
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.6;
-  color: var(--ink-2, #c4c0b3);
+  color: var(--ink-2, #2d2c29);
 }
 .live-yolo-counts b {
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 15px;
-  font-weight: 400;
-  color: var(--ink, #ede9dd);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--ink, #0e0e0e);
   font-variant-numeric: tabular-nums;
 }
 .live-yolo-counts > span:last-child {
   flex-basis: 100%;
-  font-size: 9px;
-  color: var(--muted, #8f8b80);
+  font-size: 11px;
+  color: var(--muted, #6b6860);
 }
 .live-camera-preview {
   min-width: 0;
-  padding: 12px;
-  background: var(--bg-2, #0e0e0c);
+  padding: 14px;
 }
 .live-preview-heading {
   display: flex;
@@ -284,49 +251,33 @@
 }
 .live-preview-heading h3 {
   margin-top: 5px;
-  font-size: 19px;
-  font-weight: 800;
-  font-stretch: 72%;
-  text-transform: uppercase;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
   overflow-wrap: anywhere;
 }
 .live-snapshot-badge {
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 8px;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
   letter-spacing: 0.12em;
-  color: var(--cool, #9b97ff);
+  color: var(--cobalt, #1f3bff);
 }
 .live-close {
   display: flex;
   padding: 7px;
-  color: var(--muted, #8f8b80);
-  background: transparent;
-  border: 1px solid var(--line-2, #33322c);
-  border-radius: 2px;
+  color: var(--ink, #0e0e0e);
+  border: 1px solid var(--ink, #0e0e0e);
 }
 .live-close:hover {
-  color: var(--ink, #ede9dd);
-  border-color: var(--ink-2, #c4c0b3);
+  color: var(--paper, #f3f1ec);
+  background: var(--ink, #0e0e0e);
 }
 .live-snapshot-frame {
   position: relative;
   aspect-ratio: 16/9;
   overflow: hidden;
   background: #000;
-  border: 1px solid var(--line-2, #33322c);
-}
-.live-snapshot-frame::after {
-  content: "";
-  position: absolute;
-  inset: 6px;
-  pointer-events: none;
-  --c: rgba(237, 233, 221, 0.6);
-  background:
-    linear-gradient(var(--c), var(--c)) top left / 12px 1px no-repeat,
-    linear-gradient(var(--c), var(--c)) top left / 1px 12px no-repeat,
-    linear-gradient(var(--c), var(--c)) bottom right / 12px 1px no-repeat,
-    linear-gradient(var(--c), var(--c)) bottom right / 1px 12px no-repeat;
+  border: 2px solid var(--ink, #0e0e0e);
 }
 .live-snapshot-frame > img {
   display: block;
@@ -343,24 +294,24 @@
   gap: 10px;
   padding: 16px;
   text-align: center;
-  font-size: 11px;
-  line-height: 1.55;
-  color: var(--muted, #8f8b80);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2, #2d2c29);
 }
 .live-snapshot-placeholder {
   height: 100%;
+  color: var(--paper, #f3f1ec);
 }
 .live-camera-empty-preview {
-  min-height: 260px;
-  background:
-    repeating-linear-gradient(-45deg, rgba(237, 233, 221, 0.02) 0 10px, transparent 10px 20px);
+  min-height: 280px;
+  background: radial-gradient(rgba(14, 14, 14, 0.1) 0.8px, transparent 0.9px) 0
+    0 / 6px 6px;
 }
 .live-camera-empty-preview strong {
-  font-size: 17px;
-  font-weight: 800;
-  font-stretch: 72%;
-  text-transform: uppercase;
-  color: var(--ink-2, #c4c0b3);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--ink, #0e0e0e);
 }
 .live-image-status {
   position: absolute;
@@ -368,15 +319,14 @@
   top: 8px;
   z-index: 2;
   padding: 4px 6px;
-  font: 8px var(--font-mono, monospace);
+  font: 500 9px var(--font-wire, monospace);
   letter-spacing: 0.1em;
-  color: var(--live, #c6ff3d);
-  background: rgba(10, 10, 9, 0.82);
-  border-left: 2px solid var(--live, #c6ff3d);
+  color: var(--ink, #0e0e0e);
+  background: var(--paper, #f3f1ec);
 }
 .live-image-status.is-stale {
-  color: var(--warn, #f2c14e);
-  border-left-color: var(--warn, #f2c14e);
+  color: #fff;
+  background: var(--signal, #ff4f00);
 }
 .live-camera-refresh {
   display: flex;
@@ -385,34 +335,31 @@
   flex-wrap: wrap;
   gap: 7px;
   margin-top: 10px;
-  font-size: 10px;
-  color: var(--muted, #8f8b80);
+  font-size: 12px;
+  color: var(--muted, #6b6860);
 }
 .live-camera-refresh button {
-  padding: 7px 9px;
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 8px;
+  padding: 7px 10px;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink, #ede9dd);
-  background: transparent;
-  border: 1px solid var(--line-2, #33322c);
-  border-radius: 2px;
+  color: var(--ink, #0e0e0e);
+  border: 1px solid var(--ink, #0e0e0e);
 }
 .live-camera-refresh button:hover:not(:disabled) {
-  border-color: var(--live, #c6ff3d);
-  color: var(--live, #c6ff3d);
+  color: var(--paper, #f3f1ec);
+  background: var(--ink, #0e0e0e);
 }
 .live-snapshot-notice {
   margin-top: 8px;
-  font-size: 10px;
-  line-height: 1.6;
-  color: var(--warn, #f2c14e);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--signal-2, #e64700);
 }
 .live-snapshot-facts {
   margin: 11px 0 0;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.7;
 }
 .live-snapshot-facts > div {
@@ -420,44 +367,43 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 2px 10px;
-  border-top: 1px solid var(--line, #23221e);
   padding: 3px 0;
+  border-top: 1px solid var(--rule-soft, #d2cec3);
 }
 .live-snapshot-facts dt {
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 8px;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted, #8f8b80);
+  color: var(--muted, #6b6860);
 }
 .live-snapshot-facts dd {
   margin: 0;
-  color: var(--ink, #ede9dd);
 }
 .live-camera-disclosure {
   margin-top: 9px;
-  font-size: 10px;
-  line-height: 1.6;
-  color: var(--dim, #64615a);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #6b6860);
 }
 .live-provider-link {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   margin-top: 8px;
-  font-size: 10px;
-  color: var(--ink-2, #c4c0b3);
+  font-size: 12px;
+  font-weight: 600;
 }
 .live-camera-empty {
   padding: 16px 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--muted, #8f8b80);
+  font-family: var(--font-serif, serif);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--ink-2, #2d2c29);
 }
 .live-excluded-region {
   fill: none;
-  stroke: var(--muted, #8f8b80);
+  stroke: var(--paper, #f3f1ec);
   stroke-width: 1;
   stroke-dasharray: 3 3;
   vector-effect: non-scaling-stroke;
@@ -465,18 +411,16 @@
 .live-alert-monitor {
   margin-top: 12px;
   padding-top: 10px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
-  color: var(--ink-2, #c4c0b3);
-  border-top: 1px solid var(--line-2, #33322c);
+  color: var(--ink-2, #2d2c29);
+  border-top: 1px solid var(--ink, #0e0e0e);
 }
 .live-alert-monitor strong {
-  font-size: 14px;
-  font-weight: 700;
-  font-stretch: 80%;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--ink, #ede9dd);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink, #0e0e0e);
 }
 .live-alert-monitor p {
   margin: 7px 0 0;
@@ -484,34 +428,32 @@
 .live-catalog-credit {
   margin-top: 14px;
   padding-top: 10px;
-  font-family: var(--font-mono, monospace);
-  font-stretch: 85%;
-  font-size: 8px;
-  letter-spacing: 0.04em;
-  border-top: 1px solid var(--line, #23221e);
+  font-family: var(--font-wire, monospace);
+  font-style: normal;
+  font-size: 10px;
+  color: var(--muted, #6b6860);
+  border-top: 1px solid var(--rule-soft, #d2cec3);
 }
-@media (max-width: 1250px) {
+@media (max-width: 1100px) {
   .live-camera-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+  .live-camera-browser {
+    border-right: 0;
+    border-bottom: 1px solid var(--ink, #0e0e0e);
+  }
   .live-camera-list {
-    max-height: 200px;
+    max-height: 220px;
   }
 }
 @media (max-width: 600px) {
-  .live-camera-panel {
-    padding: 16px 14px;
-  }
   .live-camera-heading h2 {
-    font-size: 22px;
+    font-size: 30px;
   }
   .live-camera-list {
-    max-height: 170px;
+    max-height: 180px;
   }
   .live-camera-empty-preview {
-    min-height: 140px;
-  }
-  .live-snapshot-frame {
-    max-height: 260px;
+    min-height: 150px;
   }
 }

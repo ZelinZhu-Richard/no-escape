@@ -24,14 +24,19 @@ export default defineConfig({
           rename: { stripBase: true },
         },
         {
-          src: "node_modules/@fontsource-variable/archivo/LICENSE",
+          src: "node_modules/@fontsource-variable/schibsted-grotesk/LICENSE",
           dest: "assets/licenses",
-          rename: { stripBase: true, name: "archivo-OFL.txt" },
+          rename: { stripBase: true, name: "schibsted-grotesk-OFL.txt" },
         },
         {
-          src: "node_modules/@fontsource-variable/martian-mono/LICENSE",
+          src: "node_modules/@fontsource/instrument-serif/LICENSE",
           dest: "assets/licenses",
-          rename: { stripBase: true, name: "martian-mono-OFL.txt" },
+          rename: { stripBase: true, name: "instrument-serif-OFL.txt" },
+        },
+        {
+          src: "node_modules/@fontsource/ibm-plex-mono/LICENSE",
+          dest: "assets/licenses",
+          rename: { stripBase: true, name: "ibm-plex-mono-OFL.txt" },
         },
       ],
     }),
