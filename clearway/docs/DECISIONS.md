@@ -74,3 +74,21 @@ The user requested real inference on the obstruction clip and explicitly approve
 Load the teammate's ignored backend `clearway/.env` privately, with literal parsing and existing environment precedence. Default the documented model/version so a key-only file is sufficient. The local authorization record derives from the user's actual approval, not a fabricated free-tier verification. The user confirmed the key has **not yet** been added; no model or account access is claimed.
 
 Add offline readiness, a bounded model-access preflight, and a smoke command using the actual 1/4/8-second frames followed by zero-network genuine-cache verification. Include generation settings in cache identity. A model no-candidate result must remain unchanged; no label, metric, or human confirmation is fabricated.
+
+## November 7, 2026 — Expo upgrade authorized
+
+The user requested a new goal and implementation of visible YOLO, gate metrics, stable serving, Google 3D, public phone handoff, map-label repair, richer data points, voice, and a licensed person-in-roadway scenario. This explicitly authorizes a temporary responder-only tunnel and expands the prior overnight feature scope. It does not authorize increased provider caps, paid stock purchases, organizer messages, or a deployment.
+
+The current launcher already omits `--reload`; the observed eight-second interruption cannot be attributed to reload without process evidence. Add durable logs and readiness, preserve loopback services, and announce the single integration restart. A prior implementation restart is a possible explanation, not a verified cause.
+
+Clone God's Eye View under ignored `.local/references/` as a reference; keep Clearway in place. Use authentic local YOLO outputs for overlays, an explicit shadow gate baseline for estimated avoided requests, and separate actual provider spend. Use browser speech for an on-demand, evidence-grounded briefing. Public camera metadata is contextual and cannot corroborate unrelated historical stock footage.
+
+No Gemini key or Cesium token was configured at the start of this upgrade. Token setup has been requested privately; dependent service validation remains pending. Do not claim Google 3D, real Gemini output, or a physical cellular test until observed.
+
+The user deferred the Cesium token; prepare 3D without claiming it is active. Genuine local YOLOX-Tiny inference now supplies video overlays for all four clips. Preserve the visibly separate fixture incident narratives. The person footage is licensed Pexels roadside video showing an upright pedestrian among vehicles; reject an unsupported person-down/emergency claim and disclose its unknown exact location and camera motion.
+
+Map context uses twenty actual NCDOT inventory coordinates from an official public dataset, preserving source/retrieval dates and no stream-availability or incident-corroboration claim. Replace Cesium glyph labels with an HTML label attached to a stable marker. God’s Eye View reference is pinned locally at `ca6eace79e60f29770597ea26871d5427b504b2b`; do not import its separately licensed data.
+
+Review found a SIGHUP orphan risk and inconsistent custom data-directory handling in the new tunnel wrapper. Both are repaired with isolated subprocess regressions. Integration found that sandboxed sibling processes cannot signal-probe each other: an active, fresh (<=15 s) wrapper heartbeat may supply the managed origin when the PID probe is permission-denied; a missing PID, stale heartbeat, or inactive state still hides it. Keep provider secrets out of the child environment and expose only the responder.
+
+The public HTTPS responder and QR are verified in an external browser/HTTP client; operator/config/detection/context routes remain unavailable and writes are blocked. The physical phone/cellular check has been requested from the user and is pending. No human labels or measured medical/danger classification metrics were created.

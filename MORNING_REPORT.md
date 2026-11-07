@@ -1,5 +1,50 @@
 # Clearway morning handoff
 
+## Current expo upgrade — November 7, 2026
+
+The app now shows **genuine YOLOX-Tiny vehicle/person boxes on playing video**, synced to seeks and portrait letterboxing. All four available clips have source-bound local detection caches. Incident narratives still use explicit fixtures because the Gemini key is pending. This is real object detection plus a demonstrated review workflow, not a validated danger classifier.
+
+- Added a licensed **person-in-roadway** clip (10.63 s); the upright pedestrian is clearest at 3–4 s. The actual detector reports 0.82 confidence on that person at 4 s. No injury, person down, collision, or confirmed danger is established. It is roadside stock footage, not verified municipal CCTV.
+- Added a **shadow gate** counter with an explicit one-call-per-two-second baseline: obstruction 4/6 hypothetical requests avoided; person 0/6, street traffic 0/18, dense traffic 4/6. These are not actual billed savings or incident recall. Actual Gemini/Claude/OpenAI application requests remain zero; provider spend remains $0.
+- Replaced the corrupt Cesium glyph label with a stable HTML label. Added 20 official, dated NCDOT camera inventory points, selectable details, and network overview. They are not live camera claims or corroboration for stock footage.
+- Prepared Google photorealistic 3D with explicit loading/failure states. **The user deferred the token; basic mapping remains active.** Follow [MAP-SETUP.md](clearway/docs/MAP-SETUP.md) when it arrives.
+- Added **Listen to brief** on operator/responder pages. It reads the current evidence, provenance, review status, and unknowns; stops on reset/change. Speaking/stop UI was observed in the built-in browser. A human should confirm audible output on the expo machine.
+- The expo launcher uses no reload watcher. It now records service health/exits to dated local logs. SIGINT/SIGTERM/SIGHUP clean up owned processes. The historical eight-second interruption has no established cause; intentional integration restarts are distinct from crashes.
+- A temporary Cloudflare tunnel is now **running for responder port 8001 only**, as explicitly authorized. The operator stays loopback-only. The QR updates from a fresh runtime heartbeat without a server restart; stale/inactive state removes it. Public HTTPS page/API loaded, six operator/detector/context endpoints returned 404, and public writes returned 405. **Physical cellular confirmation remains pending.**
+- God's Eye View is cloned under ignored `.local/references/gods-eye-view`, revision `ca6eace79e60f29770597ea26871d5427b504b2b`, for reference. Clearway was not replaced; no GEV code or bundled data was copied.
+
+### Exact commands
+
+The local server and temporary responder tunnel are currently running. Do not launch duplicates. For a new session:
+
+```sh
+make serve                # terminal 1: operator 8000, read-only responder 8001
+make tunnel               # terminal 2: temporary responder-only HTTPS origin
+make tunnel-status
+make tunnel-stop          # close public access, remove the managed QR origin
+```
+
+For a fresh checkout, prepare `make setup`, `make footage`, `make detection-setup`, `make detect`, and `make build` before serving. Media and detector weights are intentionally absent from Git. Optional dense-traffic media may be unavailable; detection preparation skips missing optional footage.
+
+### Verified in this upgrade
+
+- **162 backend tests passed**, including detector provenance, malformed/incomplete cache rejection, person-category sample validation, responder isolation, and actual hangup signals against isolated fake children. After the sandbox PID-probe repair, all **16 affected integration/operations tests passed** again.
+- **20 frontend tests passed** and the production build plus Cesium/license asset check passed.
+- Five complete HTTP replay/evidence/confirm/reset cycles passed. Thirty consecutive HTTP health samples succeeded over one minute; this does not establish long-term uptime.
+- Built-in-browser checks: actual playback/seek updates the boxes and counts; map label is readable; NCDOT point selection/network overview works; voice enters speaking state and stops; the public QR appears; the HTTPS read-only brief loads. At 390×844, operator and public responder had no horizontal page overflow; the responder had no operator controls.
+- Screenshots and receipts remain local under `clearway/data/verification/`: `expo-person-overlay.jpg`, `expo-public-responder.jpg`, `expo-health.json`, `public-handoff.json`, `api-cycles.json`. These are not human evaluation labels.
+
+### Remaining human work
+
+1. Test the current QR on a phone with Wi-Fi off; confirm on the laptop and observe the phone update. Then verify old-link expiry after reset. A laptop/public HTTP check is not a cellular test.
+2. Add the Gemini key privately and run the bounded real semantic analysis. The $5/five-attempt ceiling persists; no provider substitution is enabled.
+3. Add the deferred Cesium token and rebuild/visually validate Google 3D. Native provider credits must remain visible.
+4. Check audible voice output, label development windows, and rehearse the 90-second story with explicit replay/fixture distinctions. Do not claim medical diagnosis, live dispatch, calibrated lane location, or natural-incident accuracy.
+
+## Historical overnight handoff
+
+The remainder records the earlier build before the expo additions above. Its zero-tunnel and deferred-YOLO/voice statements describe that earlier run only.
+
 November 7, 2026. The local review-to-handoff workflow is implemented. **The working demonstration uses explicit fixture analysis on real licensed footage. Genuine model detection and cellular phone handoff are not yet validated.**
 
 **Gemini follow-up:** the user has now authorized **$5 total / at most five inference attempts**. Private `clearway/.env` loading, the selected `gemini-3.5-flash-lite` model, bounded cost accounting, offline readiness, and `make gemini-smoke` / `make gemini-replay` are implemented. **107 backend/setup/budget/smoke tests and five frontend tests pass.** The user confirmed the key is not yet available; the smoke command stops at that check and has made zero provider requests. See [MODEL-SETUP.md](clearway/docs/MODEL-SETUP.md) for the teammate handoff. The overnight results below remain historical verification, not a claim of real inference.

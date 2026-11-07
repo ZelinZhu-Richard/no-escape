@@ -5,6 +5,8 @@ started morning tunnel. It has no operator routes, docs, labels, or archive.
 """
 
 from pathlib import Path
+from datetime import datetime, timezone
+import json
 import os
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -22,8 +24,29 @@ ROOT = Path(__file__).resolve().parent.parent
 load_local_environment()
 
 
-def _public_origin() -> tuple[str | None, str | None]:
+def _public_origin(data_dir: Path | None = None) -> tuple[str | None, str | None]:
     configured = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if not configured and data_dir is not None:
+        # The foreground tunnel wrapper owns this short-lived runtime record.
+        # Reading it per request avoids restarting the operator to change QR URLs.
+        runtime = data_dir / "runtime" / "tunnel.json"
+        try:
+            if runtime.is_file() and not runtime.is_symlink() and runtime.stat().st_size <= 8192:
+                record = json.loads(runtime.read_text())
+                pid = record.get("pid")
+                updated = datetime.fromisoformat(record.get("updated_at", ""))
+                age = (datetime.now(timezone.utc) - updated).total_seconds()
+                if record.get("active") is True and 0 <= age <= 15 and isinstance(pid, int) and not isinstance(pid, bool) and pid > 1:
+                    try:
+                        os.kill(pid, 0)
+                    except PermissionError:
+                        # Sandboxed sibling services may not signal each other.
+                        # The wrapper's active state and <=15s heartbeat remain
+                        # mandatory; a dead/missing PID still fails below.
+                        pass
+                    configured = str(record.get("public_base_url", "")).strip().rstrip("/")
+        except (OSError, ValueError, TypeError, AttributeError):
+            configured = ""
     if not configured:
         return None, None
     try:
@@ -51,7 +74,7 @@ def _unavailable() -> dict:
 
 def create_app(
     *, data_dir: Path | str | None = None, analysis_service=None,
-    read_only: bool = False, web_dist: Path | str | None = None,
+    detection_service=None, read_only: bool = False, web_dist: Path | str | None = None,
 ) -> FastAPI:
     data = Path(data_dir or os.environ.get("CLEARWAY_DATA_DIR", ROOT / "data")).resolve()
     dist = Path(web_dist or ROOT / "web" / "dist").resolve()
@@ -59,7 +82,9 @@ def create_app(
     if analysis_service is None and not read_only:
         from .analysis import AnalysisService
         analysis_service = AnalysisService(data)
-    public_url, public_error = _public_origin()
+    if detection_service is None and not read_only:
+        from .detection import DetectionService
+        detection_service = DetectionService(data)
     application = FastAPI(
         title="Clearway responder" if read_only else "Clearway local operator",
         docs_url=None, redoc_url=None, openapi_url=None,
@@ -165,6 +190,7 @@ def create_app(
 
         @application.get("/api/config")
         def config():
+            public_url, public_error = _public_origin(data)
             readiness = analysis_service.readiness() if hasattr(analysis_service, "readiness") else {
                 "ready": False, "message": "Provider readiness is unavailable.", "max_billable_usd": 0,
             }
@@ -179,6 +205,17 @@ def create_app(
         @application.get("/api/sources")
         def sources():
             return {"sources": [source_record(data, sid) for sid in SOURCES]}
+
+        @application.get("/api/sources/{source_id}/detections")
+        def detections(source_id: str):
+            if source_id not in SOURCES:
+                raise HTTPException(404, "Source not found.")
+            return detection_service.get(source_id)
+
+        @application.get("/api/camera-context")
+        def camera_context():
+            from .camera_context import camera_context_record
+            return camera_context_record()
 
         @application.get("/api/state")
         def state():

@@ -3,13 +3,15 @@ import {
   Cartesian2,
   Cartesian3,
   Color,
+  ConstantPositionProperty,
+  ConstantProperty,
   Credit,
   EllipsoidTerrainProvider,
-  HeightReference,
   Ion,
-  LabelStyle,
   Math as CesiumMath,
   OpenStreetMapImageryProvider,
+  Rectangle,
+  SceneTransforms,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   Viewer,
@@ -17,6 +19,11 @@ import {
 } from "cesium";
 import type { Incident, Source } from "./types";
 import { Icon } from "./Icon";
+import { request } from "./api";
+import { readCameraContext, type CameraContext, type CameraContextPoint } from "./mapContext";
+import "./MapView.css";
+
+type MapState = "basic" | "loading" | "photorealistic" | "unavailable";
 
 const metrics = () =>
   (window.__clearwayMapMetrics ??= {
@@ -119,18 +126,34 @@ export function MapView({
   onSelect: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const markerLabel = useRef<HTMLButtonElement>(null);
+  const markerPosition = useRef<Cartesian3 | null>(null);
   const viewer = useRef<Viewer | null>(null);
   const selection = useRef(onSelect);
   selection.current = onSelect;
   const [fallback, setFallback] = useState(
     import.meta.env.VITE_MAP_OFFLINE === "true",
   );
-  const [mapName, setMapName] = useState("Basic map");
+  const [mapState, setMapState] = useState<MapState>("basic");
   const [tiles, setTiles] = useState(0);
+  const [roots, setRoots] = useState(0);
   const [ready, setReady] = useState(false);
   const currentSource = useRef(source);
   currentSource.current = source;
   const initialSourceId = useRef("");
+  const [cameraContext, setCameraContext] = useState<CameraContext | null>(null);
+  const [showCameras, setShowCameras] = useState(true);
+  const [selectedCamera, setSelectedCamera] = useState<CameraContextPoint | null>(null);
+  const contextPoints = useRef<CameraContextPoint[]>([]);
+  contextPoints.current = cameraContext?.points ?? [];
+
+  useEffect(() => {
+    const abort = new AbortController();
+    request<unknown>("/api/camera-context", { signal: abort.signal })
+      .then((value) => { if (!abort.signal.aborted) setCameraContext(readCameraContext(value)); })
+      .catch(() => { if (!abort.signal.aborted) setCameraContext(null); });
+    return () => abort.abort();
+  }, []);
 
   useEffect(() => {
     if (!container.current || import.meta.env.VITE_MAP_OFFLINE === "true")
@@ -139,6 +162,10 @@ export function MapView({
     let observer: PerformanceObserver | undefined;
     let handler: ScreenSpaceEventHandler | undefined;
     let instance: Viewer | undefined;
+    let removeLabelPosition: (() => void) | undefined;
+    let loadingTimeout: ReturnType<typeof setTimeout> | undefined;
+    let basicAdded = false;
+    let abandonedTiles = false;
     try {
       Ion.defaultAccessToken = "";
       instance = new Viewer(container.current, {
@@ -174,9 +201,33 @@ export function MapView({
       handler.setInputAction((event: { position: Cartesian2 }) => {
         const picked = instance?.scene.pick(event.position);
         if (picked?.id?.id === "selected-source") selection.current();
+        else if (typeof picked?.id?.id === "string" && picked.id.id.startsWith("context-camera:")) {
+          const id = picked.id.id.slice("context-camera:".length);
+          setSelectedCamera(contextPoints.current.find((point) => point.id === id) ?? null);
+        }
       }, ScreenSpaceEventType.LEFT_CLICK);
+      // Use one ordinary DOM label rather than rebuilding Cesium's glyph atlas
+      // on every status poll. Its text stays readable as review status changes.
+      removeLabelPosition = instance.scene.postRender.addEventListener(() => {
+        const label = markerLabel.current;
+        const position = markerPosition.current;
+        if (!label || !position || !instance || disposed) return;
+        const screen = SceneTransforms.worldToWindowCoordinates(instance.scene, position);
+        const width = instance.scene.canvas.clientWidth;
+        const height = instance.scene.canvas.clientHeight;
+        const visible = screen && screen.x >= 16 && screen.x <= width - 16
+          && screen.y >= 155 && screen.y <= height - 145;
+        label.hidden = !visible;
+        if (screen && visible) {
+          label.style.left = `${Math.max(110, Math.min(width - 110, screen.x))}px`;
+          label.style.top = `${screen.y - 20}px`;
+        }
+      });
       const addBasicMap = () => {
         if (!instance || disposed) return;
+        instance.scene.globe.show = true;
+        if (basicAdded) return;
+        basicAdded = true;
         const imagery = new OpenStreetMapImageryProvider({
           url: "https://tile.openstreetmap.org/",
           maximumLevel: 19,
@@ -199,20 +250,62 @@ export function MapView({
       if (ionToken && import.meta.env.VITE_PHOTOREALISTIC_TILES === "true") {
         Ion.defaultAccessToken = ionToken;
         metrics().tileset_initializations++;
-        createGooglePhotorealistic3DTileset()
+        setMapState("loading");
+        loadingTimeout = setTimeout(() => {
+          if (disposed) return;
+          abandonedTiles = true;
+          setMapState("unavailable");
+          addBasicMap();
+        }, 20000);
+        // There is no geocoder in this app. Never combine Google tiles with
+        // another provider's geocoding, and retain the tileset's native credits.
+        createGooglePhotorealistic3DTileset(
+          { onlyUsingWithGoogleGeocoder: true },
+          { maximumScreenSpaceError: 20, cacheBytes: 256 * 1024 * 1024,
+            maximumCacheOverflowBytes: 128 * 1024 * 1024, enableCollision: true },
+        )
           .then((tileset) => {
-            if (disposed || !instance) {
+            if (loadingTimeout) clearTimeout(loadingTimeout);
+            if (disposed || !instance || abandonedTiles) {
               tileset.destroy();
               return;
             }
             instance.scene.primitives.add(tileset);
-            instance.scene.globe.show = false;
-            setMapName("Photorealistic 3D");
+            // Root metadata is not evidence that visible city tiles loaded.
+            // Switch the badge only when at least one tile is actually loaded.
+            let visibleTilesLoaded = false;
+            let failures = 0;
+            const readyTiles = () => {
+              if (disposed || abandonedTiles || !instance) return;
+              visibleTilesLoaded = true;
+              instance.scene.globe.show = false;
+              setMapState("photorealistic");
+              if (loadingTimeout) clearTimeout(loadingTimeout);
+              instance.scene.requestRender();
+            };
+            const removeFirstLoad = tileset.tileLoad.addEventListener(() => {
+              removeFirstLoad();
+              readyTiles();
+            });
+            tileset.tileFailed.addEventListener(() => {
+              if (!disposed && !visibleTilesLoaded && ++failures >= 3) {
+                setMapState("unavailable");
+                addBasicMap();
+              }
+            });
+            loadingTimeout = setTimeout(() => {
+              if (disposed) return;
+              abandonedTiles = true;
+              instance?.scene.primitives.remove(tileset);
+              setMapState("unavailable");
+              addBasicMap();
+            }, 20000);
             instance.scene.requestRender();
           })
           .catch(() => {
+            if (loadingTimeout) clearTimeout(loadingTimeout);
             if (!disposed) {
-              setMapName("Basic map · 3D unavailable");
+              setMapState("unavailable");
               addBasicMap();
             }
           });
@@ -224,7 +317,10 @@ export function MapView({
           else if (/tile\.openstreetmap\.org|\/3dtiles\//.test(entry.name))
             metrics().tile_content_requests++;
         }
-        if (!disposed) setTiles(metrics().tile_content_requests);
+        if (!disposed) {
+          setTiles(metrics().tile_content_requests);
+          setRoots(metrics().root_tile_requests);
+        }
       });
       observer.observe({ type: "resource", buffered: false });
       setReady(true);
@@ -239,6 +335,8 @@ export function MapView({
     }
     return () => {
       disposed = true;
+      if (loadingTimeout) clearTimeout(loadingTimeout);
+      removeLabelPosition?.();
       observer?.disconnect();
       handler?.destroy();
       if (instance && !instance.isDestroyed()) instance.destroy();
@@ -249,44 +347,23 @@ export function MapView({
   useEffect(() => {
     const v = viewer.current;
     if (!v || v.isDestroyed() || !source) return;
-    v.entities.removeAll();
     const longitude = source.location.longitude ?? -78.8986;
     const latitude = source.location.latitude ?? 35.994;
     const accent = Color.fromCssColorString(
       incident?.review_status === "confirmed" ? "#9cd8ba" : "#f2bd59",
     );
-    v.entities.add({
-      id: "selected-source",
-      position: Cartesian3.fromDegrees(longitude, latitude, 3),
-      point: {
-        pixelSize: incident ? 18 : 12,
-        color: accent,
+    const position = Cartesian3.fromDegrees(longitude, latitude, 3);
+    markerPosition.current = position;
+    const entity = v.entities.getById("selected-source") ?? v.entities.add({
+      id: "selected-source", point: { outlineWidth: 4,
         outlineColor: Color.fromCssColorString("#17262e"),
-        outlineWidth: 4,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-      ellipse: {
-        semiMinorAxis: 75,
-        semiMajorAxis: 75,
-        material: accent.withAlpha(0.13),
-        height: 1,
-      },
-      label: {
-        text: incident
-          ? incident.review_status === "confirmed"
-            ? "CONFIRMED DEMO"
-            : "REVIEW CANDIDATE"
-          : "DEMO CAMERA",
-        font: "11px monospace",
-        fillColor: accent,
-        style: LabelStyle.FILL_AND_OUTLINE,
-        outlineColor: Color.fromCssColorString("#15232c"),
-        outlineWidth: 5,
-        pixelOffset: new Cartesian2(0, -35),
-        heightReference: HeightReference.NONE,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
+        disableDepthTestDistance: Number.POSITIVE_INFINITY },
     });
+    entity.position = new ConstantPositionProperty(position);
+    if (entity.point) {
+      entity.point.pixelSize = new ConstantProperty(incident ? 18 : 12);
+      entity.point.color = new ConstantProperty(accent);
+    }
     if (initialSourceId.current !== source.id) {
       v.camera.flyTo({
         destination: Cartesian3.fromDegrees(longitude, latitude - 0.005, 1450),
@@ -301,6 +378,23 @@ export function MapView({
     }
     v.scene.requestRender();
   }, [ready, source, incident]);
+
+  useEffect(() => {
+    const v = viewer.current;
+    if (!v || v.isDestroyed()) return;
+    const points = cameraContext?.points ?? [];
+    for (const point of points) {
+      const entity = v.entities.getById(`context-camera:${point.id}`) ?? v.entities.add({
+        id: `context-camera:${point.id}`,
+        position: Cartesian3.fromDegrees(point.longitude, point.latitude, 3),
+        point: { pixelSize: 7, color: Color.fromCssColorString("#6ed6df"),
+          outlineWidth: 2, outlineColor: Color.fromCssColorString("#102e37"),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY },
+      });
+      entity.show = showCameras;
+    }
+    v.scene.requestRender();
+  }, [ready, cameraContext, showCameras]);
 
   const focus = () => {
     const v = viewer.current;
@@ -318,6 +412,28 @@ export function MapView({
           : 0.7,
       });
   };
+  const mapName = mapState === "photorealistic" ? "Photorealistic 3D"
+    : mapState === "loading" ? "Loading Google 3D"
+      : mapState === "unavailable" ? "Basic map · 3D unavailable" : "Basic map";
+  const hasCoordinates = Number.isFinite(source?.location.latitude)
+    && Number.isFinite(source?.location.longitude);
+  const locationKind = source?.location.quality === "known_camera"
+    ? "Source camera" : source?.location.quality === "simulated" ? "Simulated placement" : "Approximate context";
+  const focusNetwork = () => {
+    const v = viewer.current;
+    const points = cameraContext?.points ?? [];
+    if (!v || v.isDestroyed() || !points.length) return;
+    setShowCameras(true);
+    v.camera.flyTo({
+      destination: Rectangle.fromDegrees(
+        Math.min(...points.map((point) => point.longitude)) - .01,
+        Math.min(...points.map((point) => point.latitude)) - .01,
+        Math.max(...points.map((point) => point.longitude)) + .01,
+        Math.max(...points.map((point) => point.latitude)) + .01,
+      ),
+      duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : .7,
+    });
+  };
   return (
     <section className="map-shell" aria-label="Incident map">
       <div
@@ -326,6 +442,11 @@ export function MapView({
         style={fallback ? { visibility: "hidden" } : undefined}
       />
       {fallback && <Diagram incident={incident} onSelect={onSelect} />}
+      {!fallback && <button ref={markerLabel} hidden
+        className={`map-world-label ${incident?.review_status === "confirmed" ? "is-confirmed" : ""}`}
+        onClick={onSelect} data-testid="map-world-label">
+        {incident ? incident.review_status === "confirmed" ? "CONFIRMED DEMO" : "REVIEW CANDIDATE" : "DEMO CAMERA"}
+      </button>}
       <div className="map-topline">
         <div>
           <span className="eyebrow">SPATIAL CONTEXT</span>
@@ -350,6 +471,46 @@ export function MapView({
             : "Simulated placement · footage location unknown"}
         </span>
       </div>
+      <details className="map-context" data-testid="map-context">
+        <summary>View map context</summary>
+        <dl>
+          <div><dt>Placement</dt><dd>{locationKind}</dd></div>
+          <div><dt>Coordinates</dt><dd>{hasCoordinates
+            ? `${source!.location.latitude!.toFixed(5)}, ${source!.location.longitude!.toFixed(5)}`
+            : "Unknown"}</dd></div>
+          <div><dt>Clip length</dt><dd>{source ? `${source.duration_seconds.toFixed(1)} seconds` : "Not selected"}</dd></div>
+          <div><dt>Evidence</dt><dd>{incident?.evidence.length ?? 0} timestamped observations</dd></div>
+          <div><dt>Capture time</dt><dd>Unknown</dd></div>
+          <div><dt>Map loads</dt><dd>{roots} root · {tiles} tile requests observed</dd></div>
+          <div><dt>Camera layer</dt><dd>{cameraContext?.points.length ?? 0} inventory locations</dd></div>
+        </dl>
+        <p>{source?.location.quality === "known_camera"
+          ? "Camera metadata does not locate an object within a lane."
+          : "The marker demonstrates the handoff. It is not the footage's measured location."}</p>
+        {mapState !== "photorealistic" && <p>{mapState === "loading"
+          ? "Waiting for Google city tiles."
+          : mapState === "unavailable"
+            ? "Google 3D could not load. Check token access, account eligibility, and connection."
+            : "Google 3D is not configured for this build."}</p>}
+        {cameraContext?.status === "available" && <>
+          <label className="map-context-toggle"><input type="checkbox" checked={showCameras}
+            onChange={(event) => { setShowCameras(event.target.checked); setSelectedCamera(null); }} />
+            Show Durham-area NCDOT locations</label>
+          <button className="map-context-network" onClick={focusNetwork} disabled={fallback}>Fit camera network</button>
+          <p>Inventory only · streams unverified · unrelated to this replay.
+            {cameraContext.stale ? " Snapshot may be stale." : ""}</p>
+          <p>{cameraContext.source_url && <a href={cameraContext.source_url} target="_blank" rel="noreferrer">{cameraContext.attribution}</a>}
+            {cameraContext.fetched_at && <> · Retrieved {new Date(cameraContext.fetched_at).toLocaleString()}</>}
+            {cameraContext.source_updated_at && <> · Source updated {new Date(cameraContext.source_updated_at).toLocaleDateString()}</>}</p>
+        </>}
+      </details>
+      {selectedCamera && showCameras && !fallback && <aside className="map-camera-detail" aria-label="Camera inventory details">
+        <button aria-label="Close camera inventory details" onClick={() => setSelectedCamera(null)}>×</button>
+        <span className="eyebrow">NCDOT INVENTORY · NOT LIVE</span>
+        <strong>{selectedCamera.description || selectedCamera.name}</strong>
+        <span>{selectedCamera.latitude.toFixed(5)}, {selectedCamera.longitude.toFixed(5)}</span>
+        <small>Camera location only. Not evidence for the replay incident.</small>
+      </aside>}
       <div className="map-tools">
         <button
           className="map-tool"
@@ -419,6 +580,7 @@ export function MapView({
         <span>
           <i className="legend-dot" />
           {incident ? "Incident candidate" : "Replay camera"}
+          {!fallback && showCameras && !!cameraContext?.points.length && <><i className="camera-legend-dot" />{cameraContext.points.length} NCDOT locations</>}
         </span>
         <span className="mono">
           {fallback

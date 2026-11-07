@@ -231,4 +231,51 @@ describe("operator mutation and polling consistency", () => {
     expect(container.textContent).not.toContain("Cached model result");
     expect(container.textContent).not.toContain("This fixture produced");
   });
+
+  it("refreshes the responder origin and removes a stale QR when config is unavailable", async () => {
+    currentState = stateFor("oldrun01", [candidate]);
+    await mount();
+    expect(container.textContent).toContain("phone access not configured");
+    const usual = vi.mocked(request).getMockImplementation()!;
+    vi.mocked(request).mockImplementation((path, options) =>
+      path === "/api/config"
+        ? Promise.resolve({
+            ...config,
+            public_base_url: "https://responder.example.invalid",
+          })
+        : usual(path, options),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(
+      container.querySelector<HTMLAnchorElement>(
+        '[data-testid="responder-preview"]',
+      )?.href,
+    ).toBe("https://responder.example.invalid/respond/oldrun01/candidate1");
+    vi.mocked(request).mockImplementation((path, options) =>
+      path === "/api/config"
+        ? Promise.reject(new Error("Connection lost"))
+        : usual(path, options),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(container.textContent).toContain("phone access not configured");
+    expect(
+      container
+        .querySelector<HTMLAnchorElement>('[data-testid="responder-preview"]')
+        ?.getAttribute("href"),
+    ).toBe("/respond/oldrun01/candidate1");
+  });
+
+  it("clears a connection-interrupted notice once polling recovers", async () => {
+    await mount();
+    nextState = () => Promise.reject(new Error("Temporary outage"));
+    await tick();
+    expect(container.textContent).toContain("Connection interrupted.");
+    nextState = undefined;
+    await tick();
+    expect(container.textContent).not.toContain("Connection interrupted.");
+  });
 });

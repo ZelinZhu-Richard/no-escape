@@ -1,66 +1,73 @@
-# Morning phone handoff
+# Expo server and phone handoff
 
-This runbook prepares a manual morning test. No tunnel or deployment is started by this document. The overnight target is local workflow verification; cellular access remains unverified until someone performs the steps below.
+The November 7 expo follow-up explicitly authorizes a temporary responder-only public tunnel. The original overnight run did not. A successful public HTTP check is separate from a real phone test over cellular; record both honestly in `MORNING_REPORT.md`.
 
-The commands follow `API-CONTRACT.md`. Before use, check `MORNING_REPORT.md` for the final tested startup commands and any implementation changes. Run commands from `/Users/richardzhu/dev/no_escape/clearway` unless stated otherwise.
+Run the commands below from `/Users/richardzhu/dev/no_escape`. Only the read-only responder on **127.0.0.1:8001** is exposed. The local operator remains on **127.0.0.1:8000**.
 
-## Local prerequisites
-
-Install the project's documented dependencies and build `web/dist` using the main run instructions. Keep the source footage in `data/footage/`; it is not in Git. Confirm that the normal local console works before exposing the responder service.
-
-The intended services are:
-
-- Operator: `api.app:app` on `127.0.0.1:8000`.
-- Responder: `api.app:responder_app` on `127.0.0.1:8001`.
-- Both processes default to `clearway/data/clearway.sqlite3`. If `CLEARWAY_DATA_DIR` is set, use the same absolute data-directory value in both terminals. Do not point one at a test database or another temporary data directory.
-- Only the responder port is used for the public connection. It serves the built phone UI, read-only selected-incident status, and that incident's allowed evidence.
-
-Start the responder in a separate terminal:
-
-If `make serve` is already running, stop that launcher with Ctrl+C first: it owns both ports. The commands below replace that combined launcher so the operator can receive the new public origin without starting duplicate services.
+## Stable expo serving
 
 ```sh
-.venv/bin/python -m uvicorn api.app:responder_app --host 127.0.0.1 --port 8001
+make build
+make serve
 ```
 
-Before creating the tunnel, verify a selected incident's local responder route on port 8001. Confirm that `/api/state`, `/api/labels`, and operator mutation routes are unavailable there. The incident-specific video and poster should load; no directory listing or generic footage download endpoint should be exposed. Root integration verification and exact status codes belong in `MORNING_REPORT.md`.
+The launcher starts the production frontend and both Uvicorn services **without `--reload`**. It does not restart a failed service automatically. Do not run a second launcher on the same ports, rebuild the frontend mid-pitch, or restart the backend while someone is demonstrating it. Stop the old launcher with Ctrl+C before intentionally loading a new build or private environment settings.
 
-## Create the temporary connection manually
+The original launcher already omitted reload. An observed interruption therefore does not by itself establish an auto-reload problem; intentional restarts and process failures must be distinguished using terminal evidence.
 
-If `cloudflared` is already installed, use its documented [Quick Tunnel command](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/):
+Each launcher session now writes timestamped operator, responder, and launcher logs under ignored `clearway/data/runtime/logs/`. It records child PIDs, HTTP health transitions, and the exact exit code if a service stops. Access logs are disabled so incident URLs are not copied into ordinary server logs. Provider credentials and raw provider errors are not part of logging. A process exit stops its peer and prints which service log to inspect; there is no hidden restart loop.
+
+Both processes and the tunnel command must use the same `CLEARWAY_DATA_DIR` if configured. The tunnel uses the same private configuration loader as the operator. Its heartbeat is under that data directory's `runtime/` subfolder; the default is `clearway/data/runtime/`. No server is exposed on all interfaces.
+
+## Start the temporary public connection
 
 ```sh
-cloudflared tunnel --url http://127.0.0.1:8001
+clearway/.venv/bin/python clearway/scripts/tunnel.py install
+clearway/.venv/bin/python clearway/scripts/tunnel.py start
 ```
 
-Copy the HTTPS `trycloudflare.com` origin printed by the command. Keep this terminal open only for the planned phone test/demo. Quick Tunnels have changing hostnames, no uptime guarantee, and no SSE support; Clearway's responder uses two-second polling.
+`install` prepares the official Cloudflare **2026.10.7** macOS ARM64 release in ignored `.local/bin/`. It checks the archive SHA-256 published by the official GitHub release metadata and the executable SHA-256 before running it. No global installation, account login, personal Cloudflare configuration, or service registration occurs. On other operating systems, this automatic installer stops; use the [official downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) and adapt the pinned platform asset before running it.
 
-Restart the operator with the actual origin in `PUBLIC_BASE_URL`. The placeholder below must be replaced; it is not a usable tunnel address:
+The start command first verifies that port 8001 serves the responder HTML and returns 404 for operator state, configuration, sources, and labels. It then starts a [Cloudflare Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) targeting only `http://127.0.0.1:8001`, with a deliberately empty configuration file, auto-update disabled, and loopback-only metrics. It never inherits provider keys or `TUNNEL_*` overrides. The command remains in the foreground; keep its terminal open for the agreed demo/test period.
+
+When the connection is registered, it prints the temporary HTTPS origin and writes ignored `clearway/data/runtime/tunnel.json`. The operator reads this managed origin when `PUBLIC_BASE_URL` is unset, so the tunnel can be configured without restarting the demo server. A deliberately configured `PUBLIC_BASE_URL` takes precedence; clear an old manual value before using automatic tunnel discovery. Refresh the operator configuration after starting or stopping the tunnel.
+
+The runtime record includes the origin, active status, child PID, wrapper PID, session ID, and a three-second heartbeat. Expired/inactive records must not produce a public QR. It is local runtime state, not a deployable credential or a committed default URL.
+
+Check status from another terminal:
 
 ```sh
-PUBLIC_BASE_URL='https://REPLACE-WITH-ACTUAL-HOST.trycloudflare.com' \
-  .venv/bin/python -m uvicorn api.app:app --host 127.0.0.1 --port 8000
+clearway/.venv/bin/python clearway/scripts/tunnel.py status
 ```
 
-Use the configured data directory from the main run instructions for both processes. `PUBLIC_BASE_URL` must be an HTTPS origin without a path, credentials, query, or fragment. It is read at startup, so restart the operator after changing it. Do not add API keys to these commands. The base URL controls link generation; it does not expose operator controls.
+The hostname changes each time. Quick Tunnels have no uptime guarantee and no SSE support; the responder uses polling. Anyone with a current incident link can view that brief and its licensed evidence until the run expires or the connection stops. This is a temporary expo connection, not a production dispatch service.
 
-Return to the operator console. Refresh its configuration, select the current incident, and verify the generated QR contains the new HTTPS origin, the selected `run_id`, and the selected `incident_id`. A local preview or an unset base URL is not a public phone handoff.
+## Public and cellular acceptance
 
-## Cellular acceptance test
+First check from an external HTTP client that the current responder page and its status endpoint load, while `/api/state`, `/api/config`, `/api/labels`, and `/api/sources` are unavailable on the public origin. Confirm/reset/write requests must remain blocked. Check selected evidence and old-run expiration. A public HTTP response proves public reachability, not cellular operation on a judge's phone.
 
-1. Turn off Wi-Fi on the phone; leave cellular data on.
-2. Start the licensed replay and open the incident on the laptop.
-3. Scan its QR. Check that the page shows the same incident, source/analysis modes, simulated placement, evidence, and current review status.
-4. Confirm on the laptop. Within the polling interval and normal network delay, the phone should show the confirmed status. The phone must not expose confirm/reset controls.
-5. Reset on the laptop. The old phone URL must show expired; it must not switch to a new incident automatically. Old evidence requests must also expire.
-6. Start a new replay, select its incident, scan the new QR, and verify that its run ID differs.
+Then perform the human phone test:
 
-Record device, network mode, time, success/failure, observed update delay, and expired-link behavior in `MORNING_REPORT.md`. Do not record the full signed incident URL in public logs if a later implementation adds access tokens.
+1. Turn off Wi-Fi on the phone; leave cellular data enabled.
+2. Start the licensed replay and select its incident on the laptop.
+3. Scan the generated QR. Check matching incident, source/analysis modes, simulated placement, evidence, and review status.
+4. Confirm on the laptop. The phone should update after its polling interval and network delay, with no operator controls.
+5. Reset on the laptop. The old phone link must show expired; its evidence must expire too. It must not jump to a newer incident.
+6. Start a new replay and scan the new QR; its run ID must differ.
 
-If the hostname changes, update `PUBLIC_BASE_URL`, restart/refresh the operator configuration, regenerate the QR, and repeat the cellular check. A successful local browser test is not a replacement.
+Record device, cellular mode, time, result, observed update delay, and expiration behavior. Do not claim cellular verification from a laptop browser or an HTTP request. If no person has performed this test, the report must retain **cellular phone test pending**.
 
-## Shutdown and fallback
+## Stop and return to local mode
 
-Press Ctrl-C in the `cloudflared` terminal when testing ends; its temporary URL should stop responding. Stop the responder process when it is no longer needed. Restart the operator without `PUBLIC_BASE_URL` to return to local-preview mode if desired.
+Press Ctrl+C in the tunnel terminal, or run:
 
-If cellular access fails, keep the local phone-layout preview available on the laptop and state that network handoff is pending. Use a backup recording only if the team has made and labeled one. Do not broaden the tunnel to the operator port or leave it unattended overnight to work around a responder failure.
+```sh
+clearway/.venv/bin/python clearway/scripts/tunnel.py stop
+clearway/.venv/bin/python clearway/scripts/tunnel.py status
+```
+
+The stop command immediately marks the managed origin inactive, and the foreground owner terminates and waits for its `cloudflared` child. Normal exit, Ctrl+C, termination, and POSIX terminal hangup (`SIGHUP`) perform the same cleanup. The expo service launcher also cleans up both of its children on terminal hangup. The status should become `stopped`. Refresh the operator configuration; it should return to a clearly labeled local responder preview. The temporary public URL should stop serving the brief.
+
+Do not force-kill the wrapper: an operating-system SIGKILL cannot run cleanup. If a wrapper was forcibly killed, the heartbeat expires and hides the managed QR, but an orphaned child may need deliberate process cleanup. `stop` does not blindly send signals to a stale, potentially reused PID. Service/session terminal ownership should be retained throughout the expo.
+
+If public connectivity fails, preserve the local phone-layout preview and report the failed network step. Never point the tunnel at the operator port to bypass a responder failure.

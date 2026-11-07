@@ -85,3 +85,53 @@ export interface Label {
   reviewer: string;
   note: string;
 }
+
+export interface DetectionBox {
+  class_name: string;
+  confidence: number;
+  xyxy: [number, number, number, number];
+}
+export interface DetectionFrame {
+  time_seconds: number;
+  boxes: DetectionBox[];
+  vehicle_count: number;
+  person_count: number;
+}
+export interface DetectionResult {
+  status: "available";
+  source_id: string;
+  model: {
+    name: string;
+    version: string;
+    weights_sha256: string;
+    license: string;
+  };
+  provenance: {
+    kind: "local_yolo_cached";
+    fixture: false;
+    generated_at: string;
+    source_sha256: string;
+    preprocessing_version: string;
+  };
+  sample_fps: number;
+  duration_seconds: number;
+  video_width: number;
+  video_height: number;
+  frames: DetectionFrame[];
+  gate: {
+    evaluated_windows: number;
+    passed_windows: number;
+    suppressed_windows: number;
+    baseline: string;
+    estimated_calls_avoided: number;
+    actual_model_calls: number;
+    mode: "shadow";
+    policy: string;
+    note: string;
+  };
+}
+export interface DetectionUnavailable {
+  status: "unavailable";
+  source_id: string;
+  message?: string;
+}

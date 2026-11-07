@@ -7,6 +7,20 @@
 
 Clearway is a fresh implementation. Exact reviewed source files and revisions are in `REFERENCES.md`. Hackathon eligibility is separate from software licensing; record any future copied code, pinned revision, and applicable notices before submission.
 
+Expo reference checkout: God's Eye View is cloned locally under ignored `.local/references/gods-eye-view`, pinned at `ca6eace79e60f29770597ea26871d5427b504b2b`. Its source license does not grant rights to every bundled dataset; no GEV code or datasets were imported. See `MAP-SETUP.md`.
+
+## Local object detection
+
+The detector uses [Megvii YOLOX](https://github.com/Megvii-BaseDetection/YOLOX), official `0.1.1rc0` YOLOX-Tiny ONNX weights, SHA-256 `427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7`. Preprocessing and grid decoding follow its [ONNX example](https://github.com/Megvii-BaseDetection/YOLOX/tree/main/demo/ONNXRuntime), Apache-2.0, Copyright (c) Megvii, Inc. and its affiliates. The full notice is retained in `clearway/licenses/YOLOX-APACHE-2.0.txt` from the repository root. Clearway adds provenance validation, normalized replay overlays, and an explicitly hypothetical gate comparison. Keep the notice with redistributed detector code; downloaded weights remain local.
+
+Optional detection requirements are pinned separately: NumPy 2.5.4, OpenCV headless 4.14.0.94, and ONNX Runtime 1.31.1. Their installed distributions include their own licenses and third-party notices. The serving process reads prepared detection JSON without loading those inference libraries.
+
+## Person-in-roadway footage
+
+**Busy Indian Highway with Traffic and Pedestrians** — md Jahangir alam / [Pexels source](https://www.pexels.com/video/busy-indian-highway-with-traffic-and-pedestrians-35532487/), [Pexels License](https://www.pexels.com/license/). Full source metadata, original/derivative hashes, and limits are in `person-footage-candidate.json`.
+
+Replay changes: downscaled 2160×3840 to 720×1280 H.264, no audio, all 319 frames with original duration, framing, and speed retained. Display creator/source/license links. This roadside stock clip is not verified municipal CCTV. It shows an upright person among vehicles, not an established injury, collapse, collision, or emergency. Do not imply endorsement or fault by the people shown; do not redistribute the raw clip as standalone stock.
+
 ## Installed software and font
 
 Versions and license declarations below were checked against `web/package-lock.json`, installed package metadata/license files, and the installed Python distributions on November 7, 2026. This is a core dependency summary, not a complete transitive license inventory.
@@ -56,5 +70,7 @@ All paths here are relative to `clearway/`. Full provenance and checksums are in
 ## Mapping attribution
 
 The basic map uses Cesium's OpenStreetMap imagery provider. Keep the native Cesium credit container visible and unobscured, with **© OpenStreetMap contributors** linked to the [OSM copyright and license page](https://www.openstreetmap.org/copyright). OpenStreetMap data is available under ODbL; access to the community tile service also follows its separate [tile usage policy](https://operations.osmfoundation.org/policies/tiles/). Normal interactive viewing is different from bulk downloading or an offline tile archive.
+
+Camera inventory locations come from the public [NCDOT / NCDIT-Transportation GIS Unit dataset](https://www.arcgis.com/home/item.html?id=384ee5b6105e48cba8009ad842b508c4). The dated subset in `camera-context.json` retains the original camera latitude/longitude attributes and source attribution. Do not relabel this dataset CC-licensed or infer current stream availability from an inventory record. The publisher's accuracy limitations remain applicable. These locations do not corroborate the historical replay scenes.
 
 Do not replace provider credits with Clearway branding. The optional Google photorealistic tile configuration must also retain its provider credits and use separately eligible account access; it does not inherit permission from GEV's MIT code license. The locally drawn illustrative fallback is labeled as a schematic, not real imagery or measured road geometry.

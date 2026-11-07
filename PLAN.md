@@ -43,6 +43,20 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Expo upgrade authorized November 7, 2026
+
+This follow-up supersedes the overnight feature exclusions below. The user explicitly requested visible YOLO detections on playing video, model-call savings, stable expo serving, Google photorealistic 3D, a public responder tunnel and cellular check, a corrected map label, more map data points, voice, and a licensed person-in-roadway scenario. The user requested a goal and authorized work to start; the existing PR and subagent authorization continue.
+
+1. Run actual local YOLO inference on the licensed clips. Synchronize stored, timestamped boxes to playback and label them as saved local detections. Show the model, confidence, vehicle/person counts, and sampling cadence. A missing detection cache is unavailable, never fabricated boxes.
+2. Measure gate decisions against an explicit same-window request baseline. Label shadow-mode skipped requests as an estimate; keep actual Gemini calls, cache hits, and spend separate. Vehicle/person detections alone do not prove an incident.
+3. Retain a production launcher without `--reload`, add durable service logs and readiness checks, and perform one announced integration restart. File edits must not interrupt the expo process.
+4. Fix the map label and retain the viewer across replay/reset. Enable Google photorealistic tiles only with a supplied browser-scoped Cesium token and eligible account. Show service failures honestly. Add official camera metadata where accessible, with timestamp/source and no claim that these cameras corroborate historical replay.
+5. Clone God's Eye View into ignored `.local/references/gods-eye-view` for reference without replacing Clearway. Record its pinned commit and license; do not import bundled data with incompatible terms or present reference code as original work.
+6. Add on-demand voice reading of the selected evidence brief, status, source mode, and unknowns. Stop speech on reset/selection changes. Use browser speech without another paid provider.
+7. Add a separately licensed, visually checked person-in-roadway replay when obtainable. Describe the visible person/vehicle relationship; do not call normal crossing a confirmed emergency or infer injury, collapse, or illegal behavior. Keep fixture narratives separate from genuine detections and model outputs.
+8. A temporary public tunnel is now explicitly authorized for the read-only responder on port 8001. The operator stays loopback-only. Configure the current HTTPS origin, verify public read-only routes and expiry, show QR, and ask the user to perform the physical cellular test. Browser/HTTP verification is not a cellular phone test. Keep a clear stop command and remove stale public origins when the tunnel ends.
+9. Preserve the $5/five-attempt Gemini ceiling and persistent ledger. No new paid voice, deployment, stock-media purchase, or map billing is authorized. Credentials remain private. Run appropriate regressions, five lifecycle cycles, and visible built-in-browser checks; update the morning report and existing draft PR with actual results and outstanding credential/phone dependencies.
+
 Updated November 7, 2026. This revision adopts the useful parts of Claude's overnight enhancements and corrects them for the licensed obstruction footage now available. The user authorized unattended implementation, a PR, and subagents on November 7, 2026. Build status and verification will be recorded in MORNING_REPORT.md; genuine model inference remains subject to the stated caps.
 
 ## Confirmed constraints
@@ -52,7 +66,7 @@ Updated November 7, 2026. This revision adopts the useful parts of Claude's over
 - Use existing licensed footage. The team will not film a staged vehicle scene.
 - For this project, work directly in the repository root. The user explicitly removed the `workspace/` requirement. Application files remain organized under `clearway/`.
 - Protect any designated `holdout/` data under the existing custodian rule. This review does not access holdout or create a protected evaluation set.
-- Current authorization: build unattended following this plan, use the two repositories as references, use subagents where useful, and create a PR. Deployments, public tunnels, organizer contact, and paid calls beyond the specified caps remain excluded.
+- Current authorization: implement the expo upgrade above, use both repositories as references, use subagents where useful, and update the PR. The temporary responder-only tunnel is now authorized. Deployments, organizer contact, and paid calls beyond the specified caps remain excluded.
 
 **Product:** Clearway connects a possible road obstruction to visual evidence, a map view, human confirmation, and a phone responder brief.
 
@@ -304,4 +318,4 @@ no_escape/
 
 Repository remote: [ZelinZhu-Richard/no-escape](https://github.com/ZelinZhu-Richard/no-escape). The documentation baseline is on `main`; the authorized overnight implementation is on `feat/clearway-overnight-demo` in [draft PR #1](https://github.com/ZelinZhu-Richard/no-escape/pull/1). Keep downloaded footage, caches, credentials, and unrelated tool-installation artifacts out of commits.
 
-Current implementation: the local operator/responder applications, licensed replay, evidence review, confirmation/reset lifecycle, human-labeling UI, fixture/genuine-cache separation, guarded Gemini Developer API adapter, evaluation script, and startup/media-restore tools exist. Actual model inference, human evaluation labels, public phone/cellular validation, photorealistic-service validation, and projection remain unfinished. See [MORNING_REPORT.md](MORNING_REPORT.md) for final tested behavior, commands, limitations, and PR status. Fixtures do not establish Computer Vision performance.
+Current implementation adds genuine local YOLO video overlays, shadow gate decisions, person-in-roadway replay, voice brief controls, dated official camera inventory, stable map labels, and a temporary read-only HTTPS responder. Actual Gemini semantic analysis, human evaluation labels, physical cellular validation, photorealistic-service validation, and projection remain unfinished. The user deferred the Cesium token. See [MORNING_REPORT.md](MORNING_REPORT.md) for tested behavior, commands, limitations, and PR status. Fixtures and unlabeled detections do not establish incident-classifier accuracy.

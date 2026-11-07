@@ -46,7 +46,7 @@ def evaluate(labels: list[dict], predictions: list[dict]) -> dict:
         if (label["label"] != "uncertain" and type(pred.get("gate_passed")) is bool
                 and pred.get("gate_mode") == "local" and pred.get("gate_provenance_id")):
             gate_windows.append((label, pred))
-    positive_gates = [(label, pred) for label, pred in gate_windows if label["label"] == "road_obstruction"]
+    positive_gates = [(label, pred) for label, pred in gate_windows if label["label"] in {"road_obstruction", "person_in_roadway"}]
     report["gate_metrics"] = {
         "known_positive_gate_coverage": {"numerator": sum(pred["gate_passed"] for _, pred in positive_gates), "denominator": len(positive_gates), "scenes": len({label["source_id"] for label, _ in positive_gates})},
         "hypothetical_gate_requests_avoided": {"numerator": sum(not pred["gate_passed"] for _, pred in gate_windows), "denominator": len(gate_windows)},
@@ -54,7 +54,7 @@ def evaluate(labels: list[dict], predictions: list[dict]) -> dict:
     eligible = []
     omitted = {"fixture": 0, "missing_or_unavailable": 0, "uncertain_label": 0}
     for label in labels:
-        if label["label"] not in {"normal", "road_obstruction", "queue", "uncertain"}:
+        if label["label"] not in {"normal", "road_obstruction", "person_in_roadway", "queue", "uncertain"}:
             raise ValueError("Unknown human label category")
         if not label.get("reviewer", "").strip():
             raise ValueError("Every submitted human label requires a reviewer")
@@ -70,7 +70,7 @@ def evaluate(labels: list[dict], predictions: list[dict]) -> dict:
             continue
         if pred.get("analysis_mode") not in {"fresh", "cached"} or not pred.get("provenance_id"):
             raise ValueError("Real accuracy requires fresh/cached prediction provenance; fixtures must be marked fixture")
-        if pred.get("predicted_category") not in {"normal", "road_obstruction", "queue", "uncertain"}:
+        if pred.get("predicted_category") not in {"normal", "road_obstruction", "person_in_roadway", "queue", "uncertain"}:
             raise ValueError("Unknown predicted category")
         eligible.append((label, pred))
     report["excluded"] = omitted
@@ -81,6 +81,7 @@ def evaluate(labels: list[dict], predictions: list[dict]) -> dict:
         return report
     normal = [(label, pred) for label, pred in eligible if label["label"] == "normal"]
     positive = [(label, pred) for label, pred in eligible if label["label"] == "road_obstruction"]
+    people = [(label, pred) for label, pred in eligible if label["label"] == "person_in_roadway"]
     latency = {}
     for mode in ["fresh", "cached"]:
         values = [float(pred["latency_ms"]) for _, pred in eligible if pred["analysis_mode"] == mode and pred.get("latency_ms") is not None]
@@ -93,8 +94,9 @@ def evaluate(labels: list[dict], predictions: list[dict]) -> dict:
         raise ValueError("Costs must be finite and nonnegative")
     report["status"] = "development_results"
     report["metrics"] = {
-        "normal_false_alerts": {"numerator": sum(pred["predicted_category"] in {"road_obstruction", "queue"} for _, pred in normal), "denominator": len(normal)},
+        "normal_false_alerts": {"numerator": sum(pred["predicted_category"] in {"road_obstruction", "person_in_roadway", "queue"} for _, pred in normal), "denominator": len(normal)},
         "positive_obstruction_detections": {"numerator": sum(pred["predicted_category"] == "road_obstruction" for _, pred in positive), "denominator": len(positive), "scenes": len({label["source_id"] for label, _ in positive})},
+        "person_in_roadway_detections": {"numerator": sum(pred["predicted_category"] == "person_in_roadway" for _, pred in people), "denominator": len(people), "scenes": len({label["source_id"] for label, _ in people})},
         "uncertain_model_windows": sum(pred["predicted_category"] == "uncertain" for _, pred in eligible),
         "latency": latency,
         "billable_cost": {"known_sum_usd": sum(known_costs), "known_cost_windows": len(known_costs), "unknown_cost_windows": len(costs) - len(known_costs), "mean_per_window_usd": sum(known_costs) / len(costs) if len(known_costs) == len(costs) else None},

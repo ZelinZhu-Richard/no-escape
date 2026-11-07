@@ -26,13 +26,16 @@ from .analysis_models import RESPONSE_SCHEMA, VisionResponse
 from .gemini import API_BASE, MODEL_PATTERN, ProviderError, ProviderResponse, generate_content, generation_config
 from .gemini_budget import MAX_PAID_REQUESTS, amount, estimate_usage, spending, validate_paid_policy
 
-PROMPT_VERSION = "road-observation-v1"
-SCHEMA_VERSION = "road-observation-schema-v1"
+PROMPT_VERSION = "road-observation-v2"
+SCHEMA_VERSION = "road-observation-schema-v2"
 PREPROCESS_VERSION = "ffmpeg-jpeg-width960-q3-v1"
 PROMPT = """Inspect these timestamped frames from prerecorded road footage.
 Return only observable road conditions. A candidate means a possible roadway
-obstruction requiring human review, not a confirmed incident. Normal queues,
-parking, or vehicles alone are insufficient to diagnose a breakdown. Record
+obstruction or person exposed in a vehicle travel lane requiring human review,
+not a confirmed incident. A visible person alone, normal controlled crossing,
+normal queues, parking, or vehicles alone do not establish an emergency or
+breakdown. For people, describe visible position and nearby traffic; never
+infer injury, distress, intent, identity, or fault. Record
 visible evidence using only the supplied frame timestamps. Do not infer
 mechanical failure, collision, injury, illegal conduct, exact lane count,
 incident onset, geographic coordinates, or live status. Unknowns should state
@@ -45,13 +48,31 @@ SOURCE_FILES = {
     "road-obstruction": ("road-obstruction-demo.mp4", 11.1111),
     "street-traffic": ("street-traffic.webm", 35.004),
     "traffic-jam": ("traffic-jam.webm", 11.2),
+    "person-roadway": ("person-roadway-demo.mp4", 10.633333),
 }
 SAMPLE_TIMES = (1.0, 4.0, 8.0)
+SOURCE_SAMPLE_TIMES = {"person-roadway": (3.0, 4.0, 5.0)}
 COMMON_UNKNOWNS = [
     "The original capture time and measured incident coordinates are unknown.",
     "This is a recorded demonstration, not a live emergency report.",
 ]
 FIXTURES = {
+    "person-roadway": {
+        "candidate": True,
+        "category": "person_in_roadway",
+        "title": "Person in roadway — review possible exposure",
+        "observations": [
+            {"timestamp_seconds": 3.0, "observation": "An upright person is visible on the roadway among vehicles."},
+            {"timestamp_seconds": 4.0, "observation": "A person stands or crosses near a car and motorcycles."},
+            {"timestamp_seconds": 5.0, "observation": "People and vehicles share the visible roadway; foreground traffic partly occludes the view."},
+        ],
+        "unknowns": COMMON_UNKNOWNS + [
+            "This is a predefined review fixture, not a model danger assessment or a human evaluation label.",
+            "Whether the crossing is controlled, permitted, or immediately hazardous is unknown.",
+            "No person down, injury, collision, need for assistance, or emergency dispatch is established.",
+            "Roadside stock footage is not a verified fixed DOT camera feed; camera movement prevents calibrated lane projection.",
+        ],
+    },
     "road-obstruction": {
         "candidate": True,
         "category": "road_obstruction",
@@ -266,7 +287,7 @@ class AnalysisService:
         if not source.is_file():
             raise ValueError("Source footage is missing; no inference or cache lookup can be validated.")
         frames = []
-        for timestamp in SAMPLE_TIMES:
+        for timestamp in SOURCE_SAMPLE_TIMES.get(source_id, SAMPLE_TIMES):
             try:
                 result = subprocess.run(
                     ["ffmpeg", "-hide_banner", "-loglevel", "error", "-ss", str(timestamp), "-i", str(source),
@@ -293,9 +314,9 @@ class AnalysisService:
                         "official_context": "not_applicable", "source_mode": "recorded_replay"},
         }
 
-    def _validate_response(self, payload: dict) -> dict:
+    def _validate_response(self, payload: dict, sample_times=SAMPLE_TIMES) -> dict:
         response = VisionResponse.model_validate(payload)
-        if any(ob.timestamp_seconds not in SAMPLE_TIMES for ob in response.observations):
+        if any(ob.timestamp_seconds not in sample_times for ob in response.observations):
             raise ValueError("Response cites a frame outside the supplied sample.")
         return response.model_dump()
 
@@ -317,7 +338,7 @@ class AnalysisService:
                        and r.get("cache_key") == key and r.get("response_sha256") == _hash(entry["response"])
                        for r in events):
                 return None
-            response = self._validate_response(entry["response"])
+            response = self._validate_response(entry["response"], [frame["timestamp_seconds"] for frame in identity["frame_window"]])
             return {"mode": "cached", "status": "complete", "message": "Saved genuine model response; no network inference call.",
                     **response, "provenance": self._provenance(identity, key)}
         except (OSError, ValueError, TypeError, KeyError, ValidationError):
@@ -391,7 +412,7 @@ class AnalysisService:
             answer: ProviderResponse = generate_content(api_key=api_key, model=model, prompt=PROMPT, frames=frames)
             if answer.model_version != version:
                 raise ProviderError("Provider model version differs from the verified pinned version; response was not cached.")
-            response = self._validate_response(answer.document)
+            response = self._validate_response(answer.document, [timestamp for timestamp, _ in frames])
             # Reject accidental credential echo before storing or returning any text.
             if api_key in json.dumps(response):
                 raise ProviderError("Provider output failed the secret-redaction boundary.")

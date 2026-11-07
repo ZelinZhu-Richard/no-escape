@@ -1,6 +1,6 @@
 # Clearway table pitch
 
-Draft for the two teammates to finalize. Use `MORNING_REPORT.md` for verified capabilities and results before presenting. The selected clip is a licensed recorded replay; the map location is simulated. Fixture analysis must be disclosed until genuine model output has been checked and saved.
+Draft for the two teammates to finalize. Use `MORNING_REPORT.md` for verified capabilities before presenting. YOLO overlays are genuine saved local inference; semantic incident narratives remain explicit fixtures until Gemini validation. The source is licensed recorded footage and its map placement is simulated.
 
 ## One sentence
 
@@ -10,12 +10,12 @@ Clearway brings recorded camera evidence, map context, visible unknowns, and a h
 
 | Time | Action | Suggested words |
 | --- | --- | --- |
-| 0–10 s | Show the incident desk and invite the judge to start replay. | “An operator needs more than an alert. They need to see the evidence, understand what is unknown, and hand off a clear brief. This is Clearway.” |
-| 10–25 s | Start the licensed obstruction clip. Point to source and analysis badges. | “This is licensed recorded footage of a road obstruction: utility trucks, yellow tape, and debris. The map placement is simulated because the original camera coordinates are unknown.” |
-| 25–45 s | Select the incident and inspect timestamped evidence. | “Selecting the incident opens the source evidence and the observations behind it. We keep unknowns visible instead of inferring a crash, injury, or exact blocked-lane count.” |
+| 0–10 s | Start **Person in roadway**, seek to 4 seconds. | “There is a person among moving road traffic. Who sees the evidence, who reviews the uncertainty, and how does the next person get a clear brief?” |
+| 10–25 s | Show the person/vehicle boxes and counts while the clip plays. | “These boxes come from real local YOLO inference, saved at four samples per second and synchronized to this licensed replay. Detecting a person does not prove injury or danger.” |
+| 25–45 s | Point to the analysis badge, evidence times, unknowns, and map. Optionally play a short voice brief and stop it. | “Our incident narrative is a labeled fixture while Gemini setup is pending. The operator can inspect the actual video, hear the brief, and see what remains unknown. The map placement is simulated; the cyan pins are separate official camera inventory.” |
 | 45–60 s | Ask the judge to confirm the demo incident. | “The operator decides whether this candidate should be confirmed. Confirmation is a recorded human action, not a second AI accuracy score.” |
 | 60–80 s | Open the selected run's responder page by QR, only after cellular validation. Otherwise use local preview and say so. | “This brief is tied to this incident and this demo run. It carries the evidence and review status to the responder view. Resetting the demonstration expires the previous link.” |
-| 80–90 s | State one verified result and reset. | “Our contribution is the complete evidence-to-handoff workflow with explicit provenance and repeatable state. Here is our measured result: [insert one result from the report, with its denominator].” |
+| 80–90 s | State the verified lifecycle result and reset. | “Five repeated handoff/reset cycles passed. The old brief expires. Our contribution is connecting visible detection to evidence, human review, and a run-specific handoff.” |
 
 At 10–25 seconds, add the sentence that matches the actual analysis mode:
 
@@ -23,6 +23,8 @@ At 10–25 seconds, add the sentence that matches the actual analysis mode:
 - **Cached genuine inference:** “These observations are saved from an actual model run on these frames; this replay makes no new inference calls.”
 - **Fresh genuine inference:** “This run is analyzing the sampled frames now.” Use only when fresh inference actually occurs.
 - **Unavailable:** “Analysis is unavailable for this configuration.” Do not narrate fixture observations as fresh analysis.
+
+If the judge asks about efficiency, select the obstruction clip: “The shadow gate would skip four of six two-second windows against an always-sample baseline. These are hypothetical avoided requests; it has not skipped actual paid calls, and incident recall is not yet measured.” For the person clip it skips zero of six because person presence is deliberately conservative. Never present the zero/positive counter as a classifier accuracy score.
 
 Do not claim “first detected,” a confirmed breakdown, live North Carolina coverage, lane-level projection, cost savings, or accuracy unless the report supports that specific claim. If labels are absent, say “awaiting labels.”
 

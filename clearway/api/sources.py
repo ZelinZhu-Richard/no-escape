@@ -5,6 +5,27 @@ from pathlib import Path
 
 
 SOURCES = {
+    "person-roadway": {
+        "id": "person-roadway",
+        "title": "Person in roadway · review exposure",
+        "duration_seconds": 10.633333,
+        "video": "person-roadway-demo.mp4",
+        "poster": "person-roadway-poster.jpg",
+        "control_status": "reference_scenario_not_human_evaluation",
+        "attribution": {
+            "creator": "md Jahangir alam",
+            "title": "Busy Indian Highway with Traffic and Pedestrians",
+            "source_url": "https://www.pexels.com/video/busy-indian-highway-with-traffic-and-pedestrians-35532487/",
+            "license": "Pexels License",
+            "license_url": "https://www.pexels.com/license/",
+        },
+        "location": {
+            "latitude": 35.9940,
+            "longitude": -78.8986,
+            "quality": "simulated",
+            "label": "Demo placement · Durham; source describes India",
+        },
+    },
     "road-obstruction": {
         "id": "road-obstruction",
         "title": "Road obstruction / utility work zone",

@@ -19,6 +19,8 @@ import type {
   State,
 } from "./types";
 import { Icon } from "./Icon";
+import { DetectionOverlay } from "./DetectionOverlay";
+import { VoiceBrief } from "./VoiceBrief";
 const MapView = lazy(() =>
   import("./MapView").then((module) => ({ default: module.MapView })),
 );
@@ -35,13 +37,19 @@ const sourceName = (id: string) =>
     ? "Road obstruction"
     : id === "street-traffic"
       ? "Ordinary street traffic"
-      : "Dense traffic";
+      : id === "traffic-jam"
+        ? "Dense traffic"
+        : id === "person-roadway"
+          ? "Person in roadway"
+          : id.replaceAll("-", " ");
 const sourceHint = (id: string) =>
   id === "road-obstruction"
     ? "Utility work zone · positive replay"
     : id === "street-traffic"
       ? "Control candidate · awaiting labels"
-      : "Congestion candidate · unverified";
+      : id === "traffic-jam"
+        ? "Congestion candidate · unverified"
+        : "Licensed scene · human review required";
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -125,13 +133,21 @@ function Video({
   source,
   videoRef,
   replayKey,
+  showDetections = false,
 }: {
   source: Source;
   videoRef?: RefObject<HTMLVideoElement | null>;
   replayKey?: string;
+  showDetections?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [source.video_url]);
+  const [aspectRatio, setAspectRatio] = useState(16 / 9);
+  const localRef = useRef<HTMLVideoElement>(null);
+  const effectiveRef = videoRef ?? localRef;
+  useEffect(() => {
+    setFailed(false);
+    setAspectRatio(16 / 9);
+  }, [source.video_url]);
   if (!source.media_available || failed)
     return (
       <div className="media-missing">
@@ -144,18 +160,35 @@ function Video({
       </div>
     );
   return (
-    <video
-      ref={videoRef}
-      key={replayKey ?? source.video_url}
-      controls
-      muted
-      playsInline
-      preload="metadata"
-      poster={source.poster_available === false ? undefined : source.poster_url}
-      src={source.video_url}
-      onError={() => setFailed(true)}
-      aria-label={`${sourceName(source.id)} recorded footage`}
-    />
+    <>
+      <video
+        ref={effectiveRef}
+        key={replayKey ?? source.video_url}
+        controls
+        muted
+        playsInline
+        preload="metadata"
+        poster={
+          source.poster_available === false ? undefined : source.poster_url
+        }
+        src={source.video_url}
+        style={showDetections ? { aspectRatio } : undefined}
+        onLoadedMetadata={(event) => {
+          const video = event.currentTarget;
+          if (video.videoWidth > 0 && video.videoHeight > 0)
+            setAspectRatio(video.videoWidth / video.videoHeight);
+        }}
+        onError={() => setFailed(true)}
+        aria-label={`${sourceName(source.id)} recorded footage`}
+      />
+      {showDetections && (
+        <DetectionOverlay
+          sourceId={source.id}
+          videoRef={effectiveRef}
+          replayKey={replayKey}
+        />
+      )}
+    </>
   );
 }
 
@@ -171,6 +204,7 @@ function Operator() {
   const [tab, setTab] = useState<"desk" | "labels">("desk");
   const [playbackKey, setPlaybackKey] = useState(0);
   const epoch = useRef(0);
+  const configEpoch = useRef(0);
   // Synchronous guard: a render-time pending flag cannot protect polling races.
   const writeInFlight = useRef<
     "reset" | "replay" | "confirm" | "dismiss" | null
@@ -189,6 +223,7 @@ function Operator() {
     mounted.current = true;
     const controller = new AbortController();
     const generation = epoch.current;
+    const configGeneration = ++configEpoch.current;
     Promise.all([
       request<Config>("/api/config", { signal: controller.signal }),
       request<{ sources: Source[] }>("/api/sources", {
@@ -198,7 +233,7 @@ function Operator() {
     ])
       .then(([c, s, st]) => {
         if (!mounted.current) return;
-        setConfig(c);
+        if (configGeneration === configEpoch.current) setConfig(c);
         setSources(s.sources);
         if (generation === epoch.current && writeInFlight.current === null) {
           setState(st);
@@ -218,6 +253,33 @@ function Operator() {
     return () => {
       mounted.current = false;
       controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const refreshConfig = async () => {
+      const generation = ++configEpoch.current;
+      try {
+        const result = await request<Config>("/api/config", {
+          signal: controller.signal,
+        });
+        if (!controller.signal.aborted && generation === configEpoch.current)
+          setConfig(result);
+      } catch {
+        // A stale public origin must not remain scannable after tunnel loss.
+        if (!controller.signal.aborted && generation === configEpoch.current)
+          setConfig((current) =>
+            current ? { ...current, public_base_url: null } : current,
+          );
+      }
+      if (!controller.signal.aborted) timer = setTimeout(refreshConfig, 10_000);
+    };
+    timer = setTimeout(refreshConfig, 10_000);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
     };
   }, []);
 
@@ -242,8 +304,12 @@ function Operator() {
           alive &&
           generation === epoch.current &&
           writeInFlight.current === null
-        )
+        ) {
           setState(result);
+          setError((current) =>
+            current.startsWith("Connection interrupted.") ? "" : current,
+          );
+        }
       } catch (e) {
         if (
           alive &&
@@ -672,6 +738,7 @@ function Operator() {
                       source={source}
                       videoRef={videoRef}
                       replayKey={`${source.id}-${state?.run.id}-${playbackKey}`}
+                      showDetections
                     />
                     <div className="video-toplabel">
                       <span className="video-dot" />
@@ -688,6 +755,10 @@ function Operator() {
                           ? "These are reference observations for the workflow demonstration. No model inferred this result."
                           : "Review the saved observations against the source video before confirming."}
                       </p>
+                      <VoiceBrief
+                        incident={incident}
+                        disabled={Boolean(pending)}
+                      />
                       <div className="section-label">OBSERVED IN THE SCENE</div>
                       <ol className="observations">
                         {incident.evidence.map((e, index) => (
@@ -840,7 +911,7 @@ function Operator() {
                     ? (state.telemetry.network_inference_calls ?? "Unknown")
                     : "—"}
                 </b>{" "}
-                inference calls
+                actual inference calls
               </span>
               <span>
                 <b>{state ? (state.telemetry.cache_hits ?? "Unknown") : "—"}</b>{" "}
@@ -1038,6 +1109,7 @@ function Responder({
                 : "This candidate has not been confirmed by the operator. Review status updates automatically."}
             </p>
             <Provenance incident={incident} />
+            <VoiceBrief incident={incident} disabled={Boolean(error)} />
             {error && (
               <div className="responder-warning" role="alert">
                 {error}
@@ -1276,6 +1348,9 @@ function Labeling({
               <option value="">Choose after reviewing…</option>
               <option value="road_obstruction">
                 Road obstruction / work zone
+              </option>
+              <option value="person_in_roadway">
+                Person in roadway · context needs review
               </option>
               <option value="normal">Normal traffic</option>
               <option value="queue">Queue / dense traffic</option>

@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-SourceId = Literal["road-obstruction", "street-traffic", "traffic-jam"]
+SourceId = Literal["road-obstruction", "street-traffic", "traffic-jam", "person-roadway"]
 AnalysisMode = Literal["fixture", "cached", "fresh"]
 
 
@@ -22,7 +22,7 @@ class LabelRequest(StrictModel):
     source_id: SourceId
     start_seconds: float = Field(ge=0)
     end_seconds: float = Field(gt=0)
-    label: Literal["road_obstruction", "normal", "queue", "uncertain"]
+    label: Literal["road_obstruction", "person_in_roadway", "normal", "queue", "uncertain"]
     reviewer: str = Field(min_length=1, max_length=120)
     note: str = Field(default="", max_length=2000)
 

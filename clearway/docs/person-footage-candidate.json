@@ -1,0 +1,130 @@
+{
+  "id": "person-roadway",
+  "selection_status": "licensed development demo candidate; visually inspected, not a human evaluation label",
+  "title": "Busy Indian Highway with Traffic and Pedestrians",
+  "author": "md Jahangir alam",
+  "source_url": "https://www.pexels.com/video/busy-indian-highway-with-traffic-and-pedestrians-35532487/",
+  "download_url": "https://videos.pexels.com/video-files/35532487/15053369_2160_3840_30fps.mp4",
+  "license": "Pexels License",
+  "license_url": "https://www.pexels.com/license/",
+  "license_checked_on": "2026-11-07",
+  "license_note": "Free use and modification, including app/presentation use, subject to Pexels terms. Do not portray identifiable people offensively or imply endorsement. Downloaded media stays excluded from Git; display attribution voluntarily.",
+  "published_date": "2026-01-05",
+  "capture_time": null,
+  "location": {
+    "country_from_source": "India",
+    "exact_coordinates": null,
+    "camera_location_quality": "unknown",
+    "note": "Source title describes India; no calibrated camera location or object coordinates. Any Durham placement is simulated."
+  },
+  "camera": {
+    "kind": "roadside stock recording",
+    "fixed_traffic_camera_verified": false,
+    "motion": "Camera moves and foreground traffic occludes the view later in the clip. Do not treat an uncalibrated image ROI as a fixed roadway polygon."
+  },
+  "original": {
+    "path": "clearway/data/footage/person-roadway-original.mp4",
+    "sha256": "91dfe497dc17295998b17bc9d4d62d3c11d6ac8960dc39123c907254779978ab",
+    "bytes": 40752048,
+    "width": 2160,
+    "height": 3840,
+    "fps": 30,
+    "duration_seconds": 10.633333
+  },
+  "replay": {
+    "path": "clearway/data/footage/person-roadway-demo.mp4",
+    "sha256": "a4da25c2084005c43efccb5a21271a212e7b372564b821f6b1ab93e8aa94556c",
+    "bytes": 6247450,
+    "width": 720,
+    "height": 1280,
+    "fps": 30,
+    "duration_seconds": 10.633333,
+    "decoded_frames": 319,
+    "changes": "Full duration, framing, and playback speed retained; downscaled to 720x1280 H.264, no audio. All 319 frames decoded successfully."
+  },
+  "poster": "clearway/data/footage/person-roadway-poster.jpg",
+  "preview_paths": [
+    ".local/person-research/person-roadway-1.jpg",
+    ".local/person-research/person-roadway-3.jpg",
+    ".local/person-research/person-roadway-4.jpg",
+    ".local/person-research/person-roadway-5.jpg",
+    ".local/person-research/person-roadway-8.jpg"
+  ],
+  "observable_scene": [
+    "At 3 and 4 seconds, an upright pedestrian is visible on the road surface between a car and motorcycles; additional vehicles occupy the road behind them.",
+    "The scene does not show a person down, an injury, or a collision.",
+    "Near 1 second the pedestrian is occluded by a car. Near 5 seconds a foreground three-wheeled vehicle crosses the view and partly occludes the pedestrian. Near 8 seconds foreground traffic again blocks part of the view."
+  ],
+  "suggested_title": "Person in roadway \u2014 review exposure",
+  "suggested_evidence_times_seconds": [
+    3,
+    3.5,
+    4
+  ],
+  "unknowns": [
+    "Whether the crossing is permitted or controlled",
+    "Whether there is an immediate hazard requiring emergency response",
+    "Whether anyone needs assistance",
+    "Exact camera position and capture time"
+  ],
+  "prohibited_claims": [
+    "Confirmed injury or person down",
+    "Collision or near miss without separate evidence",
+    "Pedestrian illegality or fault",
+    "An actual emergency dispatch",
+    "Live DOT road camera feed"
+  ],
+  "evaluation_status": "Development footage; no accuracy labels or metrics created.",
+  "rejected_candidates": [
+    {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Pedestrian_killed_in_Hit_and_Run_Traffic_Collision_NR24121ktdm.webm",
+      "reason": "Full source is marked graphic/fatal and its PD-automated claim is pending license review; not selected, downloaded, or used."
+    }
+  ],
+  "alternative": {
+    "source_url": "https://www.pexels.com/video/man-walking-on-the-lane-of-the-road-3052594/",
+    "title": "Man Walking On The Lane Of The Road",
+    "author": "Ricky Esquivel",
+    "license": "Pexels License",
+    "download_url": "https://videos.pexels.com/video-files/3052594/3052594-hd_1080_1920_24fps.mp4",
+    "research_path": ".local/person-research/man-in-lane.mp4",
+    "note": "One large person walking the centerline of an otherwise empty road, rear view. Simpler person detection but no approaching vehicle or established immediate danger."
+  },
+  "fixed_view_alternative": {
+    "id": "pedestrian-crosswalk",
+    "source_url": "https://www.pexels.com/video/busy-new-york-city-street-with-traffic-and-pedestrians-34118767/",
+    "author": "ubeyonroad",
+    "license": "Pexels License",
+    "license_url": "https://www.pexels.com/license/",
+    "download_url": "https://videos.pexels.com/video-files/34118767/14468446_3840_2160_30fps.mp4",
+    "published_date": "2025-10-01",
+    "capture_time": null,
+    "source_location_description": "New York City near Lincoln Tunnel; exact camera and object coordinates not verified.",
+    "original_sha256": "c96f3d0ff8ae622a543aeb72a0a2ade649621d0ac1b6a1c4c0618f91fd32ef5d",
+    "original_bytes": 32150877,
+    "replay_path": "clearway/data/footage/pedestrian-crosswalk-demo.mp4",
+    "replay_sha256": "1c16bcf7773604275385f884ff8e0b608d30250eb958c9356ae4449c0090d1b9",
+    "replay_bytes": 7926138,
+    "replay_metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1920,
+          "height": 1080,
+          "r_frame_rate": "30000/1001",
+          "nb_read_frames": "420"
+        }
+      ],
+      "format": {
+        "duration": "14.014000"
+      }
+    },
+    "poster": "clearway/data/footage/pedestrian-crosswalk-poster.jpg",
+    "changes": "Full duration/framing retained; downscaled to 1920x1080 H.264, no audio; all frames decoded.",
+    "note": "Landscape elevated generally fixed view, not verified municipal CCTV. At 5 seconds several people occupy a marked crosswalk across vehicle travel lanes while vehicles also occupy the intersection. Ordinary crossing context is visible; do not portray this as proven danger, illegal crossing, or injury.",
+    "evaluation_status": "Development candidate, not evaluation ground truth.",
+    "selection_status": "Not selected; root chose the India person-roadway source. Local research/download completed before stop instruction; not integrated."
+  }
+}
