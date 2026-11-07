@@ -10,12 +10,12 @@ The app now shows **genuine YOLOX-Tiny vehicle/person boxes on playing video**, 
 - Prepared Google photorealistic 3D with explicit loading/failure states. **The user deferred the token; basic mapping remains active.** Follow [MAP-SETUP.md](clearway/docs/MAP-SETUP.md) when it arrives.
 - Added **Listen to brief** on operator/responder pages. It reads the current evidence, provenance, review status, and unknowns; stops on reset/change. Speaking/stop UI was observed in the built-in browser. A human should confirm audible output on the expo machine.
 - The expo launcher uses no reload watcher. It now records service health/exits to dated local logs. SIGINT/SIGTERM/SIGHUP clean up owned processes. The historical eight-second interruption has no established cause; intentional integration restarts are distinct from crashes.
-- A temporary Cloudflare tunnel is now **running for responder port 8001 only**, as explicitly authorized. The operator stays loopback-only. The QR updates from a fresh runtime heartbeat without a server restart; stale/inactive state removes it. Public HTTPS page/API loaded, six operator/detector/context endpoints returned 404, and public writes returned 405. **Physical cellular confirmation remains pending.**
+- A temporary Cloudflare tunnel was verified for **responder port 8001 only** and then stopped after the user deferred the physical phone test. The operator stays loopback-only. The QR updates from a fresh runtime heartbeat without a server restart; stale/inactive state removes it. Public HTTPS page/API loaded, six operator/detector/context endpoints returned 404, and public writes returned 405. **Physical cellular confirmation is deferred by the user, not passed.**
 - God's Eye View is cloned under ignored `.local/references/gods-eye-view`, revision `ca6eace79e60f29770597ea26871d5427b504b2b`, for reference. Clearway was not replaced; no GEV code or bundled data was copied.
 
 ### Exact commands
 
-The local server and temporary responder tunnel are currently running. Do not launch duplicates. For a new session:
+The local server is running; the temporary responder tunnel is stopped. Shutdown was verified through the foreground process exit, `tunnel-status: stopped`, and an empty operator public origin. Do not launch a duplicate server. Use `make tunnel` when ready for the deferred phone test; it creates a new hostname and QR. For a new session:
 
 ```sh
 make serve                # terminal 1: operator 8000, read-only responder 8001
@@ -37,7 +37,7 @@ For a fresh checkout, prepare `make setup`, `make footage`, `make detection-setu
 
 ### Remaining human work
 
-1. Test the current QR on a phone with Wi-Fi off; confirm on the laptop and observe the phone update. Then verify old-link expiry after reset. A laptop/public HTTP check is not a cellular test.
+1. **Deferred by the user:** when ready, run `make tunnel`, scan the newly generated QR on a phone with Wi-Fi off, confirm on the laptop, and observe the phone update. Then verify old-link expiry after reset. The previous public hostname is no longer active. A laptop/public HTTP check is not a cellular test.
 2. Add the Gemini key privately and run the bounded real semantic analysis. The $5/five-attempt ceiling persists; no provider substitution is enabled.
 3. Add the deferred Cesium token and rebuild/visually validate Google 3D. Native provider credits must remain visible.
 4. Check audible voice output, label development windows, and rehearse the 90-second story with explicit replay/fixture distinctions. Do not claim medical diagnosis, live dispatch, calibrated lane location, or natural-incident accuracy.

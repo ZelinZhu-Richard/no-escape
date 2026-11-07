@@ -57,6 +57,8 @@ This follow-up supersedes the overnight feature exclusions below. The user expli
 8. A temporary public tunnel is now explicitly authorized for the read-only responder on port 8001. The operator stays loopback-only. Configure the current HTTPS origin, verify public read-only routes and expiry, show QR, and ask the user to perform the physical cellular test. Browser/HTTP verification is not a cellular phone test. Keep a clear stop command and remove stale public origins when the tunnel ends.
 9. Preserve the $5/five-attempt Gemini ceiling and persistent ledger. No new paid voice, deployment, stock-media purchase, or map billing is authorized. Credentials remain private. Run appropriate regressions, five lifecycle cycles, and visible built-in-browser checks; update the morning report and existing draft PR with actual results and outstanding credential/phone dependencies.
 
+**Follow-up deferral:** the user chose to defer the physical phone/cellular test. Retain the verified public browser/HTTP results without calling them a cellular pass. The temporary tunnel has been stopped; reopen it intentionally with `make tunnel` and use the new QR when testing resumes. The user also deferred the Cesium token; Google 3D remains prepared but unverified.
+
 Updated November 7, 2026. This revision adopts the useful parts of Claude's overnight enhancements and corrects them for the licensed obstruction footage now available. The user authorized unattended implementation, a PR, and subagents on November 7, 2026. Build status and verification will be recorded in MORNING_REPORT.md; genuine model inference remains subject to the stated caps.
 
 ## Confirmed constraints

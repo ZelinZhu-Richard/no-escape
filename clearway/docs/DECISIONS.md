@@ -92,3 +92,7 @@ Map context uses twenty actual NCDOT inventory coordinates from an official publ
 Review found a SIGHUP orphan risk and inconsistent custom data-directory handling in the new tunnel wrapper. Both are repaired with isolated subprocess regressions. Integration found that sandboxed sibling processes cannot signal-probe each other: an active, fresh (<=15 s) wrapper heartbeat may supply the managed origin when the PID probe is permission-denied; a missing PID, stale heartbeat, or inactive state still hides it. Keep provider secrets out of the child environment and expose only the responder.
 
 The public HTTPS responder and QR are verified in an external browser/HTTP client; operator/config/detection/context routes remain unavailable and writes are blocked. The physical phone/cellular check has been requested from the user and is pending. No human labels or measured medical/danger classification metrics were created.
+
+## November 7, 2026 — Physical phone test deferred
+
+The user explicitly selected “Defer the physical phone test.” Record it as deferred, never as passed. Stop the temporary tunnel now that the immediate phone test is deferred; the foreground wrapper exited cleanly, runtime status is stopped, and the operator public origin is empty. The local server remains healthy. Reopening with `make tunnel` creates a new hostname/QR; the old public link is no longer the test target. The Cesium token was separately deferred, and the Gemini key remains absent.
