@@ -1,5 +1,19 @@
 # Clearway morning handoff
 
+## Bay Area-only public CCTV — November 7, 2026
+
+**Working:** the NC camera inventory layer, dataset, endpoint and refresh task are removed. Public CCTV now includes **767 Caltrans cameras across all nine Bay Area counties**, an increase of 667. **191 advertise HLS video**; the other 576 provide snapshots only. Every record has a snapshot endpoint. County and geographic validation excludes out-of-scope entries. The camera list shows 50 matches at a time, with county/search filters and all matching map pins selectable.
+
+**Verification:** **386 backend tests and 111 frontend tests passed**, plus TypeScript/production build and emitted asset/license checks. The visible built-in browser verified list pagination from 50 to 100, Santa Clara's 148-camera filter, map selection of newly added **TVC95 — SR-237 just west of Lawrence Expressway**, and actual 1280×720 playback with local YOLO/ByteTrack at approximately 6–6.5 updates/s. Fitting the network shows the expanded Bay Area camera points. The removed NC API returns 404 on both services.
+
+One announced no-reload restart loaded the expansion; the current run and all four existing incidents survived. The selected SR-237 feed subsequently generated one additional unconfirmed review candidate through the existing temporal rule. This is not a verified emergency or an accuracy measurement. Network inference calls and spend remain zero. No model download, public tunnel or deployment was used.
+
+**Run:** the updated app is running at `http://127.0.0.1:8000/`; use `make serve` when stopped. Open **Public CCTV**, filter by county or search by roadway, and select a list item or blue map pin. Use **Show 50 more** for additional list rows and **Fit public camera network** to see all matching points. Refresh metadata with `make live-camera-refresh` and reload the page. Historical replay placement remains honestly labeled as simulated Durham context, separate from the public-camera network.
+
+**Availability limits:** counts describe provider-advertised endpoints, not fleet uptime. Two of three bounded new HLS master-playlist probes succeeded (Santa Clara and Napa); the Marin probe failed. Only the Santa Clara stream was played in this expansion check. Snapshot fallback remains available; individual sources can show outages or stale images. Existing detector/alert limitations and the deferred credentials, physical phone test and human evaluation labels still apply.
+
+Ignored browser proofs: `clearway/data/verification/bay-area-camera-map.jpg` and `bay-area-expanded-live.jpg`. Local catalog/probe/state evidence is under `.local/bay-area-expansion/`; source media and runtime artifacts remain untracked. See [LIVE-CAMERAS.md](clearway/docs/LIVE-CAMERAS.md) for county counts and official sources.
+
 ## Tiled Dense traffic and live ByteTrack — November 7, 2026
 
 **Working:** Dense traffic now uses 768px overlapping crops from the original 1080p frame plus a full-frame pass. Its final 45-sample cache took 17.074 seconds to prepare; playback reads saved detections. Same 1/4/8-second frames returned **88/60/68 boxes versus 69/41/51 before** (full frame at the same new 0.50 cutoff: 55/30/41). Visual coverage improved, with remaining roof/background false boxes, overlaps and occluded misses.

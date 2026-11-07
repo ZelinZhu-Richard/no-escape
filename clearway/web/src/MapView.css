@@ -148,14 +148,6 @@
   opacity: 0.5;
   cursor: default;
 }
-.camera-legend-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-left: 6px;
-  border-radius: 50%;
-  background: var(--muted, #6b6860);
-}
 .public-camera-legend-dot {
   display: inline-block;
   width: 7px;
@@ -192,45 +184,6 @@
 .map-public-shortcut:disabled {
   opacity: 0.5;
 }
-.map-camera-detail {
-  position: absolute;
-  top: 172px;
-  left: 16px;
-  z-index: 5;
-  display: grid;
-  gap: 7px;
-  max-width: min(290px, calc(100% - 90px));
-  padding: 13px;
-  color: var(--ink, #0e0e0e);
-  background: var(--card, #fbfaf7);
-  border: 2px solid var(--ink, #0e0e0e);
-  box-shadow: 4px 4px 0 var(--ink, #0e0e0e);
-}
-.map-camera-detail > button {
-  position: absolute;
-  right: 4px;
-  top: 4px;
-  width: 24px;
-  height: 24px;
-  font-size: 18px;
-}
-.map-camera-detail .eyebrow {
-  padding-right: 15px;
-  color: var(--signal, #ff4f00);
-}
-.map-camera-detail strong {
-  padding-right: 8px;
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-}
-.map-camera-detail > span:not(.eyebrow),
-.map-camera-detail small {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--ink-2, #2d2c29);
-}
 @media (max-width: 720px) {
   .map-context {
     top: 116px;
@@ -238,8 +191,5 @@
   .map-public-shortcut {
     top: 116px;
     left: 160px;
-  }
-  .map-camera-detail {
-    top: 156px;
   }
 }

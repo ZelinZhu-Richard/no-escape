@@ -4,6 +4,9 @@ import { Icon } from "./Icon";
 import {
   cadenceLabel,
   filterLiveCameras,
+  BAY_AREA_REGIONS,
+  MAX_LIVE_CAMERAS,
+  isBayAreaCamera,
   readLiveSnapshot,
 } from "./liveCameras";
 import type {
@@ -193,6 +196,7 @@ const formatTime = (value: string | null) =>
         second: "2-digit",
       })
     : "Unknown";
+const CAMERA_PAGE_SIZE = 50;
 
 export function LiveCameraPanel({
   catalog,
@@ -206,6 +210,7 @@ export function LiveCameraPanel({
 }: LiveCameraPanelProps) {
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState("");
+  const [listLimit, setListLimit] = useState(CAMERA_PAGE_SIZE);
   const [paused, setPaused] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const [mediaChoice, setMediaChoice] = useState<{
@@ -213,14 +218,33 @@ export function LiveCameraPanel({
     mode: "video" | "snapshot";
   } | null>(null);
   const [failedStream, setFailedStream] = useState<string | null>(null);
-  const cameras = useMemo(() => catalog?.cameras ?? [], [catalog]);
-  const demoCamera = cameras.find(camera => camera.id === "caltrans-d4-37" && camera.streaming_url);
+  const cameras = useMemo(
+    () =>
+      (catalog?.cameras ?? [])
+        .filter(isBayAreaCamera)
+        .slice(0, MAX_LIVE_CAMERAS),
+    [catalog],
+  );
+  const regions = useMemo(() => {
+    const present = new Set(cameras.map((camera) => camera.region_id));
+    return Object.entries(BAY_AREA_REGIONS)
+      .filter(([id]) => present.has(id))
+      .map(([id, name]) => ({ id, name }));
+  }, [cameras]);
+  const demoCamera = cameras.find(
+    (camera) => camera.id === "caltrans-d4-37" && camera.streaming_url,
+  );
   const previewRef = useRef<HTMLDivElement>(null);
   const visible = useMemo(
     () => filterLiveCameras(cameras, region, query),
     [cameras, region, query],
   );
   const selected = cameras.find((camera) => camera.id === selectedId);
+  const listed = visible.slice(0, listLimit);
+  const videoCount = cameras.filter((camera) => camera.streaming_url).length;
+  useEffect(() => {
+    setListLimit(CAMERA_PAGE_SIZE);
+  }, [query, region, cameras]);
   const showVideo = Boolean(
     selected?.streaming_url &&
     failedStream !== selectedId &&
@@ -250,22 +274,40 @@ export function LiveCameraPanel({
       <div className="live-camera-heading">
         <div>
           <span className="eyebrow">PUBLIC CAMERA NETWORK</span>
-          <h2>Public traffic CCTV</h2>
+          <h2>Bay Area traffic CCTV</h2>
         </div>
-        <span className="live-camera-count">{cameras.length} cameras</span>
+        <span className="live-camera-count">
+          {cameras.length} cameras · Bay Area
+        </span>
       </div>
+      <p className="live-camera-result-count">
+        {videoCount} advertised video links · {cameras.length} snapshot
+        endpoints
+      </p>
       <p className="live-camera-intro">
         Provider video where available, with snapshots as a fallback. Local YOLO
         watches the selected playing video for sustained signals and sends
         candidates to the review queue. Confirmation stays with you.
       </p>
-      {demoCamera && <button className="live-camera-shortcut" onClick={() => {
-        onSelect(demoCamera.id);
-        setPaused(false);
-        setFailedStream(null);
-        setMediaChoice({ cameraId: demoCamera.id, mode: "video" });
-        requestAnimationFrame(() => previewRef.current?.scrollIntoView({ block: "center", behavior: "auto" }));
-      }}>Open 6th Street live <span>I-80 · San Francisco</span></button>}
+      {demoCamera && (
+        <button
+          className="live-camera-shortcut"
+          onClick={() => {
+            onSelect(demoCamera.id);
+            setPaused(false);
+            setFailedStream(null);
+            setMediaChoice({ cameraId: demoCamera.id, mode: "video" });
+            requestAnimationFrame(() =>
+              previewRef.current?.scrollIntoView({
+                block: "center",
+                behavior: "auto",
+              }),
+            );
+          }}
+        >
+          Open 6th Street live <span>I-80 · San Francisco</span>
+        </button>
+      )}
       {loading ? (
         <p className="live-camera-empty" role="status">
           Loading the public camera catalog…
@@ -296,8 +338,8 @@ export function LiveCameraPanel({
                   onChange={(event) => setRegion(event.target.value)}
                   aria-label="Camera region"
                 >
-                  <option value="">All regions</option>
-                  {catalog?.regions.map((item) => (
+                  <option value="">All Bay Area counties</option>
+                  {regions.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name}
                     </option>
@@ -310,7 +352,7 @@ export function LiveCameraPanel({
               {catalog?.stale && <span>· dated catalog</span>}
             </div>
             <ul className="live-camera-list" aria-label="Public camera choices">
-              {visible.map((camera) => (
+              {listed.map((camera) => (
                 <li key={camera.id}>
                   <button
                     onClick={() => onSelect(camera.id)}
@@ -333,6 +375,24 @@ export function LiveCameraPanel({
                 </li>
               ))}
             </ul>
+            {visible.length > CAMERA_PAGE_SIZE && (
+              <div className="live-camera-refresh">
+                <span role="status">
+                  Showing {listed.length} of {visible.length}
+                </span>
+                {listed.length < visible.length && (
+                  <button
+                    onClick={() =>
+                      setListLimit((limit) => limit + CAMERA_PAGE_SIZE)
+                    }
+                  >
+                    Show{" "}
+                    {Math.min(CAMERA_PAGE_SIZE, visible.length - listed.length)}{" "}
+                    more
+                  </button>
+                )}
+              </div>
+            )}
             {!visible.length && (
               <p className="live-camera-empty">
                 No cameras match these filters.
@@ -506,8 +566,8 @@ export function LiveCameraPanel({
                       {cadenceLabel(selected.source_refresh_seconds)} published
                       refresh. A refreshed image is not continuous live video.
                       The provider may show an outage card. Updates pause when
-                      this tab is hidden. Automatic review candidates require playing video;
-                      snapshots provide detections only.
+                      this tab is hidden. Automatic review candidates require
+                      playing video; snapshots provide detections only.
                     </p>
                   </>
                 )}

@@ -245,11 +245,6 @@ def create_app(
                 raise HTTPException(404, "Source not found.")
             return detection_service.get(source_id)
 
-        @application.get("/api/camera-context")
-        def camera_context():
-            from .camera_context import camera_context_record
-            return camera_context_record()
-
         @application.get("/api/live-cameras")
         def live_cameras():
             return live_camera_service.catalog()

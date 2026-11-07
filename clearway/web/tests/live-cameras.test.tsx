@@ -9,6 +9,8 @@ import {
   readImageDetections,
   readLiveAlertMonitor,
   publicStreamUrl,
+  MAX_LIVE_CAMERAS,
+  BAY_AREA_REGIONS,
 } from "../src/liveCameras";
 import type {
   LiveCamera,
@@ -65,7 +67,7 @@ const camera = (id: string, region = "san-francisco"): LiveCamera => ({
   latitude: 37.78,
   longitude: -122.4,
   region_id: region,
-  region_name: region === "san-francisco" ? "San Francisco" : "Oakland",
+  region_name: region === "san-francisco" ? "San Francisco" : "Alameda",
   roadway: "I-80",
   direction: "East",
   provider: "Caltrans",
@@ -75,7 +77,7 @@ const camera = (id: string, region = "san-francisco"): LiveCamera => ({
   capture_time: null,
   source_refresh_seconds: 300,
 });
-const cameras = [camera("camera-a"), camera("camera-b", "oakland")];
+const cameras = [camera("camera-a"), camera("camera-b", "alameda")];
 const catalog: LiveCameraCatalog = {
   status: "available",
   provider: "Caltrans",
@@ -85,7 +87,7 @@ const catalog: LiveCameraCatalog = {
   refresh_interval_seconds: 30,
   regions: [
     { id: "san-francisco", name: "San Francisco" },
-    { id: "oakland", name: "Oakland" },
+    { id: "alameda", name: "Alameda" },
   ],
   cameras,
 };
@@ -288,7 +290,7 @@ describe("public camera data boundaries", () => {
   });
   it("filters only camera metadata and clamps provider retry intervals", () => {
     expect(
-      filterLiveCameras(cameras, "oakland", "i-80 east").map((item) => item.id),
+      filterLiveCameras(cameras, "alameda", "i-80 east").map((item) => item.id),
     ).toEqual(["camera-b"]);
     expect(
       filterLiveCameras(cameras, "", "bay bridge").map((item) => item.id),
@@ -821,7 +823,7 @@ describe("selected public camera preview", () => {
     await act(async () => root.render(<Controlled />));
     const select = container.querySelector<HTMLSelectElement>("select")!;
     await act(async () => {
-      select.value = "oakland";
+      select.value = "alameda";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(
@@ -1113,5 +1115,185 @@ describe("verified ByteTrack live overlays", () => {
     expect(
       container.querySelector('[data-testid="live-yolo-status"]')?.textContent,
     ).not.toContain("ByteTrack");
+  });
+});
+
+describe("expanded Bay Area camera catalog", () => {
+  const expanded = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      ...camera(
+        `caltrans-d4-${index + 1}`,
+        index % 2 ? "alameda" : "san-francisco",
+      ),
+      name: `Traffic camera ${index + 1}`,
+      streaming_url:
+        index % 2
+          ? null
+          : "https://wzmedia.dot.ca.gov/D4/E80_at_SAS_Tower.stream/playlist.m3u8",
+    }));
+  const expandedCatalog = (count = 126): LiveCameraCatalog => ({
+    ...catalog,
+    cameras: expanded(count),
+  });
+  const listButtons = () =>
+    container.querySelectorAll<HTMLButtonElement>(
+      '[aria-label="Public camera choices"] button',
+    );
+  const more = () =>
+    [...container.querySelectorAll("button")].find((button) =>
+      button.textContent?.startsWith("Show "),
+    )!;
+
+  it("accepts over100 up to the shared bound and rejects oversized catalogs", () => {
+    const parsed = readLiveCameraCatalog(expandedCatalog(MAX_LIVE_CAMERAS));
+    expect(parsed?.cameras).toHaveLength(MAX_LIVE_CAMERAS);
+    expect(parsed?.cameras.at(-1)?.id).toBe(`caltrans-d4-${MAX_LIVE_CAMERAS}`);
+    expect(
+      readLiveCameraCatalog(expandedCatalog(MAX_LIVE_CAMERAS + 1)),
+    ).toBeNull();
+  });
+
+  it("keeps only nine Bay counties with reasonable coordinates and canonical county names", () => {
+    const counties = Object.entries(BAY_AREA_REGIONS).map(([id], index) => ({
+      ...camera(`county-${index}`, id),
+      region_name: "Wrong label",
+    }));
+    const invalid = [
+      {
+        ...camera("north-carolina", "alameda"),
+        latitude: 35.994,
+        longitude: -78.89,
+      },
+      camera("outside-county", "santa-cruz"),
+      { ...camera("bad-latitude"), latitude: 39.1 },
+      { ...camera("bad-longitude"), longitude: -120.99 },
+      { ...camera("not-finite"), latitude: Number.NaN },
+    ];
+    const parsed = readLiveCameraCatalog({
+      ...catalog,
+      cameras: [...counties, ...invalid],
+    });
+    expect(parsed?.cameras).toHaveLength(9);
+    expect(parsed?.regions).toEqual(
+      Object.entries(BAY_AREA_REGIONS).map(([id, name]) => ({ id, name })),
+    );
+    expect(
+      parsed?.cameras.some((camera) => camera.region_name === "Wrong label"),
+    ).toBe(false);
+  });
+
+  it("pages camera metadata by50 while keeping all matches available to the map without fetching imagery", async () => {
+    const changed = vi.fn();
+    const data = expandedCatalog();
+    await act(async () =>
+      root.render(
+        <LiveCameraPanel
+          catalog={data}
+          selectedId={null}
+          onSelect={vi.fn()}
+          onVisibleCamerasChange={changed}
+        />,
+      ),
+    );
+    expect(listButtons()).toHaveLength(50);
+    expect(changed.mock.calls.at(-1)?.[0]).toHaveLength(126);
+    expect(container.textContent).toContain("126 cameras · Bay Area");
+    expect(container.textContent).toContain(
+      "63 advertised video links · 126 snapshot endpoints",
+    );
+    await act(async () => more().click());
+    expect(listButtons()).toHaveLength(100);
+    await act(async () => more().click());
+    expect(listButtons()).toHaveLength(126);
+    expect(container.textContent).toContain("Showing 126 of 126");
+    expect(request).not.toHaveBeenCalled();
+    const region = container.querySelector<HTMLSelectElement>(
+      '[aria-label="Camera region"]',
+    )!;
+    await act(async () => {
+      region.value = "alameda";
+      region.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(listButtons()).toHaveLength(50);
+    expect(changed.mock.calls.at(-1)?.[0]).toHaveLength(63);
+    expect(
+      changed.mock.calls
+        .at(-1)?.[0]
+        .every((camera: LiveCamera) => camera.region_id === "alameda"),
+    ).toBe(true);
+    await act(async () => more().click());
+    expect(listButtons()).toHaveLength(63);
+    await act(async () => {
+      region.value = "";
+      region.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(listButtons()).toHaveLength(50);
+    expect(changed.mock.calls.at(-1)?.[0]).toHaveLength(126);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("opens a map-selected camera outside the list page and filters without losing its preview or camera ID", async () => {
+    const data = expandedCatalog();
+    const changed = vi.fn();
+    vi.mocked(request).mockResolvedValue(snapshot("caltrans-d4-126"));
+    await act(async () =>
+      root.render(
+        <LiveCameraPanel
+          catalog={data}
+          selectedId="caltrans-d4-126"
+          onSelect={vi.fn()}
+          onVisibleCamerasChange={changed}
+        />,
+      ),
+    );
+    expect(listButtons()).toHaveLength(50);
+    expect(
+      [...listButtons()].some((button) =>
+        button.textContent?.includes("Traffic camera 126"),
+      ),
+    ).toBe(false);
+    expect(
+      container.querySelector(".live-preview-heading h3")?.textContent,
+    ).toBe("Traffic camera 126");
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(request).mock.calls[0][0]).toBe(
+      "/api/live-cameras/caltrans-d4-126/snapshot",
+    );
+    const region = container.querySelector<HTMLSelectElement>(
+      '[aria-label="Camera region"]',
+    )!;
+    await act(async () => {
+      region.value = "san-francisco";
+      region.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(changed.mock.calls.at(-1)?.[0]).toHaveLength(63);
+    expect(
+      container.querySelector(".live-preview-heading h3")?.textContent,
+    ).toBe("Traffic camera 126");
+    expect(region.value).toBe("san-francisco");
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not preview or map an out-of-region selection passed directly to the panel", async () => {
+    const outside = {
+      ...camera("ncdot-test", "alameda"),
+      latitude: 35.994,
+      longitude: -78.8986,
+    };
+    const changed = vi.fn();
+    await act(async () =>
+      root.render(
+        <LiveCameraPanel
+          catalog={{ ...catalog, cameras: [cameras[0], outside] }}
+          selectedId={outside.id}
+          onSelect={vi.fn()}
+          onVisibleCamerasChange={changed}
+        />,
+      ),
+    );
+    expect(listButtons()).toHaveLength(1);
+    expect(container.querySelector(".live-preview-heading")).toBeNull();
+    expect(changed.mock.calls.at(-1)?.[0]).toEqual([cameras[0]]);
+    expect(request).not.toHaveBeenCalled();
   });
 });

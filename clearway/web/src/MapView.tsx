@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Cartesian2,
   Cartesian3,
@@ -21,17 +21,12 @@ import {
 } from "cesium";
 import type { Incident, Source } from "./types";
 import { Icon } from "./Icon";
-import { request } from "./api";
-import {
-  readCameraContext,
-  type CameraContext,
-  type CameraContextPoint,
-} from "./mapContext";
+import { isBayAreaCamera, MAX_LIVE_CAMERAS } from "./liveCameras";
 import type { LiveCamera } from "./liveCameras";
 import "./MapView.css";
 
 type MapState = "basic" | "loading" | "photorealistic" | "unavailable";
-type MapViewMode = "replay" | "inventory" | "public";
+type MapViewMode = "replay" | "public";
 const EMPTY_LIVE_CAMERAS: LiveCamera[] = [];
 const EMPTY_INCIDENTS: Incident[] = [];
 const CAMERA_HIT_RADIUS = 24;
@@ -55,15 +50,6 @@ function nearestMapTarget(
     }
   }
   return nearest;
-}
-
-function positionedCamera(camera: LiveCamera): boolean {
-  return (
-    Number.isFinite(camera.latitude) &&
-    Number.isFinite(camera.longitude) &&
-    Math.abs(camera.latitude) <= 90 &&
-    Math.abs(camera.longitude) <= 180
-  );
 }
 
 const metrics = () =>
@@ -186,7 +172,10 @@ export function MapView({
   selection.current = onSelect;
   const liveSelection = useRef(onSelectLiveCamera);
   liveSelection.current = onSelectLiveCamera;
-  const livePoints = liveCameras.filter(positionedCamera).slice(0, 100);
+  const livePoints = useMemo(
+    () => liveCameras.filter(isBayAreaCamera).slice(0, MAX_LIVE_CAMERAS),
+    [liveCameras],
+  );
   const currentLivePoints = useRef<LiveCamera[]>(livePoints);
   currentLivePoints.current = livePoints;
   const selectedLive = livePoints.find(
@@ -222,31 +211,8 @@ export function MapView({
   const currentSource = useRef(source);
   currentSource.current = source;
   const initialSourceId = useRef("");
-  const [cameraContext, setCameraContext] = useState<CameraContext | null>(
-    null,
-  );
-  const [showCameras, setShowCameras] = useState(true);
-  const [selectedCamera, setSelectedCamera] =
-    useState<CameraContextPoint | null>(null);
-  const contextPoints = useRef<CameraContextPoint[]>([]);
-  contextPoints.current = cameraContext?.points ?? [];
-  const visibleLayers = useRef({
-    public: showPublicCameras,
-    inventory: showCameras,
-  });
-  visibleLayers.current = { public: showPublicCameras, inventory: showCameras };
-
-  useEffect(() => {
-    const abort = new AbortController();
-    request<unknown>("/api/camera-context", { signal: abort.signal })
-      .then((value) => {
-        if (!abort.signal.aborted) setCameraContext(readCameraContext(value));
-      })
-      .catch(() => {
-        if (!abort.signal.aborted) setCameraContext(null);
-      });
-    return () => abort.abort();
-  }, []);
+  const visibleLayers = useRef({ public: showPublicCameras });
+  visibleLayers.current = { public: showPublicCameras };
 
   useEffect(() => {
     if (!container.current || import.meta.env.VITE_MAP_OFFLINE === "true")
@@ -313,21 +279,11 @@ export function MapView({
             incidentSelection.current?.(id);
         } else if (
           typeof selected === "string" &&
-          selected.startsWith("context-camera:") &&
-          visibleLayers.current.inventory
-        ) {
-          const id = selected.slice("context-camera:".length);
-          setSelectedCamera(
-            contextPoints.current.find((point) => point.id === id) ?? null,
-          );
-        } else if (
-          typeof selected === "string" &&
           selected.startsWith("public-camera:") &&
           visibleLayers.current.public
         ) {
           const id = selected.slice("public-camera:".length);
           if (currentLivePoints.current.some((camera) => camera.id === id)) {
-            setSelectedCamera(null);
             liveSelection.current?.(id);
           }
         }
@@ -371,13 +327,6 @@ export function MapView({
           }
         };
         addTarget("selected-source", markerPosition.current);
-        if (visibleLayers.current.inventory)
-          for (const camera of contextPoints.current) {
-            addTarget(
-              `context-camera:${camera.id}`,
-              Cartesian3.fromDegrees(camera.longitude, camera.latitude, 3),
-            );
-          }
         if (visibleLayers.current.public)
           for (const camera of currentLivePoints.current) {
             addTarget(
@@ -631,29 +580,6 @@ export function MapView({
   useEffect(() => {
     const v = viewer.current;
     if (!v || v.isDestroyed()) return;
-    const points = cameraContext?.points ?? [];
-    for (const point of points) {
-      const entity =
-        v.entities.getById(`context-camera:${point.id}`) ??
-        v.entities.add({
-          id: `context-camera:${point.id}`,
-          position: Cartesian3.fromDegrees(point.longitude, point.latitude, 3),
-          point: {
-            pixelSize: 10,
-            color: Color.fromCssColorString("#8a877d"),
-            outlineWidth: 2,
-            outlineColor: Color.fromCssColorString("#f3f1ec"),
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          },
-        });
-      entity.show = showCameras;
-    }
-    v.scene.requestRender();
-  }, [ready, cameraContext, showCameras]);
-
-  useEffect(() => {
-    const v = viewer.current;
-    if (!v || v.isDestroyed()) return;
     const activeIds = new Set<string>();
     for (const camera of currentLivePoints.current) {
       const id = `public-camera:${camera.id}`;
@@ -745,7 +671,6 @@ export function MapView({
     const { longitude, latitude } = selectedLive;
     liveMarkerPosition.current = Cartesian3.fromDegrees(longitude, latitude, 3);
     setShowPublicCameras(true);
-    setSelectedCamera(null);
     setViewMode("public");
     v.camera.flyTo({
       destination: Cartesian3.fromDegrees(longitude, latitude - 0.006, 1700),
@@ -791,30 +716,11 @@ export function MapView({
       : source?.location.quality === "simulated"
         ? "Simulated placement"
         : "Approximate context";
-  const focusNetwork = () => {
-    const v = viewer.current;
-    const points = cameraContext?.points ?? [];
-    if (!v || v.isDestroyed() || !points.length) return;
-    setShowCameras(true);
-    setViewMode("inventory");
-    v.camera.flyTo({
-      destination: Rectangle.fromDegrees(
-        Math.min(...points.map((point) => point.longitude)) - 0.01,
-        Math.min(...points.map((point) => point.latitude)) - 0.01,
-        Math.max(...points.map((point) => point.longitude)) + 0.01,
-        Math.max(...points.map((point) => point.latitude)) + 0.01,
-      ),
-      duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? 0
-        : 0.7,
-    });
-  };
   const focusPublicNetwork = () => {
     const v = viewer.current;
     const points = currentLivePoints.current;
     if (!v || v.isDestroyed() || !points.length) return;
     setShowPublicCameras(true);
-    setSelectedCamera(null);
     setViewMode("public");
     v.camera.flyTo({
       destination: Rectangle.fromDegrees(
@@ -871,9 +777,7 @@ export function MapView({
           <h2>
             {viewMode === "public" && !fallback
               ? "Public traffic cameras"
-              : viewMode === "inventory" && !fallback
-                ? "Durham camera inventory"
-                : source?.location.label?.includes("Durham")
+              : source?.location.label?.includes("Durham")
                   ? "Durham, North Carolina"
                   : source?.location.quality === "known_camera"
                     ? "Source camera context"
@@ -890,9 +794,7 @@ export function MapView({
         <span>
           {viewMode === "public" && !fallback
             ? "Provider camera coordinates · separate from replay evidence"
-            : viewMode === "inventory" && !fallback
-              ? "NCDOT inventory · streams unverified"
-              : source?.location.quality === "known_camera"
+            : source?.location.quality === "known_camera"
                 ? "Camera position · not object coordinates"
                 : "Simulated placement · footage location unknown"}
         </span>
@@ -957,13 +859,6 @@ export function MapView({
               {roots} root · {tiles} tile requests observed
             </dd>
           </div>
-          <div>
-            <dt>NC inventory</dt>
-            <dd>
-              {cameraContext?.points.length ?? 0} locations · stream access
-              unverified
-            </dd>
-          </div>
           {!!livePoints.length && (
             <div>
               <dt>Public cameras</dt>
@@ -1020,87 +915,12 @@ export function MapView({
               Fit public camera network
             </button>
             <p>
-              Select a purple pin to open its video or snapshot preview. Pin
+              Select a blue pin to open its video or snapshot preview. Pin
               presence does not prove the camera is online.
             </p>
           </div>
         )}
-        {cameraContext?.status === "available" && (
-          <>
-            <label className="map-context-toggle">
-              <input
-                type="checkbox"
-                checked={showCameras}
-                onChange={(event) => {
-                  setShowCameras(event.target.checked);
-                  setSelectedCamera(null);
-                }}
-              />
-              Show Durham-area NCDOT locations
-            </label>
-            <button
-              className="map-context-network"
-              onClick={focusNetwork}
-              disabled={fallback}
-            >
-              Fit camera network
-            </button>
-            <p>
-              Inventory only · streams unverified · unrelated to this replay.
-              {cameraContext.stale ? " Snapshot may be stale." : ""}
-            </p>
-            <p>
-              {cameraContext.source_url && (
-                <a
-                  href={cameraContext.source_url}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {cameraContext.attribution}
-                </a>
-              )}
-              {cameraContext.fetched_at && (
-                <>
-                  {" "}
-                  · Retrieved{" "}
-                  {new Date(cameraContext.fetched_at).toLocaleString()}
-                </>
-              )}
-              {cameraContext.source_updated_at && (
-                <>
-                  {" "}
-                  · Source updated{" "}
-                  {new Date(
-                    cameraContext.source_updated_at,
-                  ).toLocaleDateString()}
-                </>
-              )}
-            </p>
-          </>
-        )}
       </details>
-      {selectedCamera && showCameras && !fallback && (
-        <aside
-          className="map-camera-detail"
-          aria-label="Camera inventory details"
-        >
-          <button
-            aria-label="Close camera inventory details"
-            onClick={() => setSelectedCamera(null)}
-          >
-            ×
-          </button>
-          <span className="eyebrow">NCDOT INVENTORY · NOT LIVE</span>
-          <strong>{selectedCamera.description || selectedCamera.name}</strong>
-          <span>
-            {selectedCamera.latitude.toFixed(5)},{" "}
-            {selectedCamera.longitude.toFixed(5)}
-          </span>
-          <small>
-            Camera location only. Not evidence for the replay incident.
-          </small>
-        </aside>
-      )}
       <div className="map-tools">
         <button
           className="map-tool"
@@ -1185,12 +1005,7 @@ export function MapView({
                   ? "Confirmed incident"
                   : "Incident candidate"
                 : "Replay camera"}
-              {!fallback && showCameras && !!cameraContext?.points.length && (
-                <>
-                  <i className="camera-legend-dot" />
-                  {cameraContext.points.length} NCDOT locations
-                </>
-              )}
+
             </>
           )}
         </span>

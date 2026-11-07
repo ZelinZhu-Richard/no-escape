@@ -1,11 +1,25 @@
 # Public traffic CCTV
 
-Clearway includes 100 official Caltrans District 4 camera locations nearest San Francisco/Oakland. Forty entries advertise an official HLS video URL; other cameras use refreshed snapshots. The catalog stores names, roads, counties, authentic coordinates, source cadence, and provider URLs. It does not store camera images. The existing twenty Durham-area NCDOT inventory points remain a separate metadata-only layer.
+Clearway includes **767 official Caltrans District 4 cameras across all nine Bay Area counties**, expanded from the previous 100-camera selection on November 7, 2026. **191 entries advertise official HLS video endpoints; 576 are snapshot-only.** The catalog contains names, roads, counties, published coordinates, source cadence and provider URLs, with no camera images. The NC inventory layer, dataset, API route and refresh command have been removed.
+
+| County | Cameras | Advertised video endpoints |
+| --- | ---: | ---: |
+| Alameda | 219 | 42 |
+| Contra Costa | 174 | 29 |
+| Marin | 40 | 10 |
+| Napa | 6 | 3 |
+| San Francisco | 33 | 26 |
+| San Mateo | 64 | 27 |
+| Santa Clara | 148 | 24 |
+| Solano | 53 | 17 |
+| Sonoma | 30 | 13 |
+
+The nine-county scope follows [MTC's Bay Area definition](https://511.org/about). Normalization and saved-catalog validation require these counties, matching county IDs, District 4 source URLs and Bay Area coordinate bounds. Out-of-service records and three publisher rows in Santa Cruz/San Joaquin are excluded. Metadata has a 1,000-camera/2MB bound; only the selected feed loads. These are catalog counts, not measured uptime.
 
 ## Use
 
 1. Open the local operator at `http://127.0.0.1:8000`.
-2. In **Public traffic CCTV**, search for a road/camera or filter by county. Select a camera to focus its map location. Purple map pins have enlarged click areas and bring the selected preview into view. Cyan North Carolina inventory pins have metadata only.
+2. In **Public traffic CCTV**, search for a road/camera or filter by county. Select a camera to focus its map location. Blue map pins have enlarged click areas and bring the selected preview into view. The list shows the first 50 matches; use **Show 50 more** to reveal another 50. All matching map pins remain selectable, including cameras not yet shown in the list.
 3. Read the source cadence and image timestamps. Close the preview to stop refreshing it. Switching to another application tab or hiding the browser pauses preview polling.
 4. To refresh the catalog, run `make live-camera-refresh`. The command skips a catalog less than one day old, updates metadata atomically, and never downloads camera images. Reload the page to use new catalog data. It needs no API key.
 
@@ -18,11 +32,11 @@ Clearway includes 100 official Caltrans District 4 camera locations nearest San 
 - **Stale / unavailable:** old source metadata or a failed refresh is disclosed. A previous image can remain only with its original timestamp and a stale label. No licensed replay image is substituted.
 - **In service reported:** the catalog lists the camera as operating. Individual images are checked only when selected; this is not a fleet uptime measurement.
 
-A successful JPEG response can itself be a provider outage card. Of three distinct cameras inspected during development, two showed traffic (one with a heavily obscured lens) and one showed “Temporarily Unavailable.” These spot checks are not a claim that all 100 cameras are currently usable. The UI displays the provider image and this limitation; it does not classify scene content or infer that a road is clear.
+A successful JPEG response can itself be a provider outage card. Of three distinct cameras inspected during development, two showed traffic (one with a heavily obscured lens) and one showed “Temporarily Unavailable.” These spot checks are not a claim that all catalog cameras are currently usable. The UI displays the provider image and this limitation; it does not classify scene content or infer that a road is clear.
 
 ## Video and local YOLO
 
-Where the provider publishes HLS, the selected visible camera can play actual video through native HLS or `hls.js`. The verified Bay Bridge example is **TVD33 — Bay Bridge SAS Tower West** (`caltrans-d4-53`): its playlist advanced, and a downloaded segment decoded to actual traffic at 352×240, approximately 30 fps. This is provider-buffered video, not a zero-latency guarantee. Forty advertised URLs do not establish forty working streams. Use the snapshot fallback if a camera cannot play reliably.
+Where the provider publishes HLS, the selected visible camera can play actual video through native HLS or `hls.js`. The verified Bay Bridge example is **TVD33 — Bay Bridge SAS Tower West** (`caltrans-d4-53`): its playlist advanced, and a downloaded segment decoded to actual traffic at 352×240, approximately 30 fps. This is provider-buffered video, not a zero-latency guarantee. Advertised URLs do not establish working streams. Use the snapshot fallback if a camera cannot play reliably.
 
 The player prefers managed `hls.js`/MSE playback where supported, with one bounded native-HLS attempt before falling back to snapshots. This repaired the observed embedded-browser reconnection problem. Camera 53 passed pause/resume and snapshot-to-video switching in the built-in browser after the change. Browser decoding may expose a different frame size than the advertised playlist resolution; detections use the actual decoded image dimensions.
 
@@ -41,8 +55,6 @@ Selected playing video now creates human-review candidates from sustained local 
 Source: [Caltrans CCTV documentation](https://cwwp2.dot.ca.gov/closed-circuit-television-cameras.html), [District 4 JSON catalog](https://cwwp2.dot.ca.gov/data/d4/cctv/cctvStatusD04.json), and [Caltrans conditions of use](https://dot.ca.gov/conditions-of-use). The CCTV documentation provides these feeds for application integration without charge and requests fair use. Attribution remains visible; availability is controlled by Caltrans.
 
 Only the selected camera is requested. The snapshot backend uses a fixed public host/path allowlist, blocks redirects, validates JPEG type/signature and size, limits time and request rate, and respects the source cadence. HLS video loads directly from the official provider with its supported CORS headers; no stream proxy or access-control bypass is added. Small in-memory caches are discarded when the server stops. There is no continuous image archive, bulk harvesting, browser credential use, paid provider access, or camera-key bypass. One trigger image per live candidate is retained locally (maximum 20 per run) and removed on reset. Public camera and frame-inference routes are available only on the loopback operator service, not the responder service.
-
-[DriveNC's developer documentation](https://www.drivenc.gov/developers/doc) requires a developer key for its [camera API](https://www.drivenc.gov/help/endpoint/cameras). No such key is configured. Do not relabel NCDOT inventory pins as working North Carolina streams. A future authenticated adapter should keep the key server-side and follow the provider's rate and usage requirements.
 
 ### Traffic model and camera text
 

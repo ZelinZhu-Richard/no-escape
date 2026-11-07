@@ -27,7 +27,12 @@ CATALOG_URL = "https://cwwp2.dot.ca.gov/data/d4/cctv/cctvStatusD04.json"
 PROVIDER_URL = "https://cwwp2.dot.ca.gov/closed-circuit-television-cameras.html"
 TERMS_URL = "https://dot.ca.gov/conditions-of-use"
 CATALOG_TTL = 86400
-MAX_CAMERAS = 100
+MAX_CAMERAS = 1000
+MAX_CATALOG_BYTES = 2_000_000
+BAY_AREA_COUNTIES = frozenset({
+    "Alameda", "Contra Costa", "Marin", "Napa", "San Francisco",
+    "San Mateo", "Santa Clara", "Solano", "Sonoma",
+})
 MAX_IMAGE_BYTES = 1_000_000
 MIN_REFRESH_SECONDS = 30
 NOTE = "Public Caltrans cameras, separate from licensed replays. Selected live video can produce conservative human-review candidates; snapshots alone do not trigger incidents."
@@ -97,6 +102,8 @@ def normalize_catalog(payload: dict, fetched_at: str) -> dict:
             if not valid_provider_url(image_url):
                 continue
             county = _text(loc["county"], 100)
+            if county not in BAY_AREA_COUNTIES:
+                continue
             interval = static.get("currentImageUpdateFrequency", "")
             # The official field is minutes, NOT seconds. Unknown cadence uses
             # a conservative five-minute cache rather than assuming live FPS.
@@ -128,7 +135,7 @@ def normalize_catalog(payload: dict, fetched_at: str) -> dict:
         "fetched_at": fetched_at,
         "attribution": "California Department of Transportation / Caltrans",
         "terms_summary": "Caltrans explicitly provides these CCTV datasets for application integration without charge. Follow its fair-use policy; no high-volume polling or archive is performed.",
-        "selection": "100 in-service-reported District 4 camera locations nearest the San Francisco/Oakland core. Availability of individual images is checked only when selected.",
+        "selection": "Up to 1000 in-service-reported Caltrans District 4 cameras across the nine Bay Area counties, ordered from the San Francisco/Oakland core. Individual feed availability is checked only when selected.",
         "note": NOTE, "cameras": cameras[:MAX_CAMERAS],
     }
 
@@ -166,13 +173,13 @@ class LiveCameraService:
         self._lock = threading.RLock()
         self._cache: OrderedDict[str, dict] = OrderedDict()
         # Deadlines outlive the four-image LRU, so cycling through five cameras
-        # cannot evade the publisher's refresh cadence. Catalog caps this at 100.
+        # cannot evade the publisher's refresh cadence. The catalog is bounded.
         self._deadlines: dict[str, dict] = {}
         self._attempts = deque()
 
     def _read(self) -> dict:
         path = self.catalog_path
-        if path.is_symlink() or not path.is_file() or path.stat().st_size > 300_000:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_CATALOG_BYTES:
             raise ValueError("Catalog unavailable")
         doc = json.loads(path.read_text())
         if doc.get("schema_version") != 1 or doc.get("source_url") != CATALOG_URL or doc.get("provider") != "Caltrans":
@@ -193,6 +200,9 @@ class LiveCameraService:
                 raise ValueError("Invalid camera provenance")
             for key in ("name", "region_id", "region_name", "roadway", "direction"):
                 _text(camera.get(key))
+            county = camera["region_name"]
+            if county not in BAY_AREA_COUNTIES or camera["region_id"] != county.lower().replace(" ", "-"):
+                raise ValueError("Camera outside the nine Bay Area counties")
             _coordinate(camera.get("latitude"), 36.8, 39.0)
             _coordinate(camera.get("longitude"), -123.5, -121.0)
             seconds = camera.get("source_refresh_seconds")

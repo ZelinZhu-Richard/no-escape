@@ -1,3 +1,16 @@
+export const MAX_LIVE_CAMERAS = 1000;
+export const BAY_AREA_REGIONS = {
+  alameda: "Alameda",
+  "contra-costa": "Contra Costa",
+  marin: "Marin",
+  napa: "Napa",
+  "san-francisco": "San Francisco",
+  "san-mateo": "San Mateo",
+  "santa-clara": "Santa Clara",
+  solano: "Solano",
+  sonoma: "Sonoma",
+} as const;
+
 export interface LiveCamera {
   id: string;
   name: string;
@@ -14,6 +27,20 @@ export interface LiveCamera {
   capture_time: string | null;
   source_refresh_seconds: number;
   streaming_url?: string | null;
+}
+
+export function isBayAreaCamera(
+  camera: Pick<LiveCamera, "latitude" | "longitude" | "region_id">,
+): boolean {
+  return (
+    Object.hasOwn(BAY_AREA_REGIONS, camera.region_id) &&
+    Number.isFinite(camera.latitude) &&
+    camera.latitude >= 36.8 &&
+    camera.latitude <= 39.0 &&
+    Number.isFinite(camera.longitude) &&
+    camera.longitude >= -123.5 &&
+    camera.longitude <= -121.0
+  );
 }
 
 export interface LiveCameraCatalog {
@@ -286,7 +313,7 @@ export function readLiveCameraCatalog(
     raw.mode !== "live_snapshot_catalog" ||
     !["available", "unavailable"].includes(String(raw.status)) ||
     !Array.isArray(raw.cameras) ||
-    raw.cameras.length > 100 ||
+    raw.cameras.length > MAX_LIVE_CAMERAS ||
     !Array.isArray(raw.regions)
   )
     return null;
@@ -308,7 +335,12 @@ export function readLiveCameraCatalog(
         typeof camera.longitude !== "number" ||
         !Number.isFinite(camera.longitude) ||
         Math.abs(camera.longitude) > 180 ||
-        !validId(camera.region_id)
+        !validId(camera.region_id) ||
+        !isBayAreaCamera({
+          latitude: camera.latitude,
+          longitude: camera.longitude,
+          region_id: camera.region_id,
+        })
       )
         continue;
       cameras.push({
@@ -317,7 +349,8 @@ export function readLiveCameraCatalog(
         latitude: camera.latitude,
         longitude: camera.longitude,
         region_id: camera.region_id,
-        region_name: safeText(camera.region_name, camera.region_id),
+        region_name:
+          BAY_AREA_REGIONS[camera.region_id as keyof typeof BAY_AREA_REGIONS],
         roadway: safeText(camera.roadway),
         direction: safeText(camera.direction),
         provider: safeText(camera.provider, "Public provider"),

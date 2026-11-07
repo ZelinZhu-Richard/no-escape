@@ -3,9 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MapView } from "../src/MapView";
 import { request } from "../src/api";
-import { readCameraContext } from "../src/mapContext";
 import type { Incident, Source } from "../src/types";
-import type { LiveCamera } from "../src/liveCameras";
+import { MAX_LIVE_CAMERAS, type LiveCamera } from "../src/liveCameras";
 import { ScreenSpaceEventType } from "cesium";
 
 const mocks = vi.hoisted(() => ({
@@ -90,24 +89,6 @@ const incident = {
   review_status: "candidate",
   evidence: [{ timestamp_seconds: 1, observation: "Roadway obstruction" }],
 } as Incident;
-const point = {
-  id: "ncdot-test",
-  name: "Official camera",
-  description: "NC 147",
-  latitude: 35.99,
-  longitude: -78.9,
-  quality: "official_inventory",
-  status: "metadata_only",
-};
-const context = {
-  status: "available",
-  mode: "inventory_snapshot",
-  fetched_at: "2026-11-07T16:00:00Z",
-  stale: false,
-  attribution: "NCDOT",
-  source_url: "https://www.ncdot.gov/",
-  points: [point],
-};
 const liveCamera: LiveCamera = {
   id: "caltrans-d4-7",
   name: "Test public camera",
@@ -146,7 +127,7 @@ beforeEach(() => {
   mocks.handlers.length = 0;
   mocks.createTiles.mockReset();
   mocks.project.mockReset();
-  vi.mocked(request).mockResolvedValue(context);
+  vi.mocked(request).mockReset();
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -173,7 +154,7 @@ describe("public snapshot map layer", () => {
     );
   };
 
-  it("updates public pins without replacing the viewer, inventory or replay incident", async () => {
+  it("updates public pins without replacing the viewer or replay incident", async () => {
     await renderLive([liveCamera]);
     const viewer = mocks.viewers[0];
     const cameraEntity = viewer.records.get(`public-camera:${liveCamera.id}`);
@@ -184,7 +165,6 @@ describe("public snapshot map layer", () => {
       cameraEntity,
     );
     expect(viewer.records.has("selected-source")).toBe(true);
-    expect(viewer.records.has("context-camera:ncdot-test")).toBe(true);
     expect(container.textContent).toContain("Public traffic cameras");
     expect(container.textContent).toContain("Separate replay evidence");
     await renderLive([]);
@@ -204,6 +184,30 @@ describe("public snapshot map layer", () => {
     expect(onReplay).not.toHaveBeenCalled();
   });
 
+  it("renders and selects cameras beyond the original hundred and fits the full matching network", async () => {
+    const cameras = Array.from({ length: 151 }, (_, index) => ({
+      ...liveCamera,
+      id: `caltrans-d4-${index + 1000}`,
+      longitude: -122.8 + index * 0.006,
+      latitude: 37.5 + index * 0.004,
+    }));
+    const onSelect = vi.fn();
+    await renderLive(cameras, null, onSelect);
+    const viewer = mocks.viewers[0];
+    const last = cameras.at(-1)!;
+    expect(viewer.records.has(`public-camera:${last.id}`)).toBe(true);
+    viewer.scene.pick.mockReturnValue({ id: { id: `public-camera:${last.id}` } });
+    await act(async () => mocks.handlers[0].input({ position: {} }));
+    expect(onSelect).toHaveBeenCalledWith(last.id);
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="map-public-fit"]')!.click());
+    const { Rectangle, Cartographic } = await import("cesium");
+    const bounds = viewer.camera.flyTo.mock.calls.at(-1)[0].destination;
+    for (const camera of [cameras[0], last]) {
+      expect(Rectangle.contains(bounds, Cartographic.fromDegrees(camera.longitude, camera.latitude))).toBe(true);
+    }
+    expect(mocks.viewers).toHaveLength(1);
+  });
+
   it("selects the nearest visible dot within a generous hit radius and shows a pointer", async () => {
     const onLive = vi.fn();
     const onReplay = vi.fn();
@@ -218,7 +222,6 @@ describe("public snapshot map layer", () => {
     Object.defineProperty(viewer.scene.canvas, "clientHeight", { value: 500 });
     mocks.project
       .mockReturnValueOnce({ x: 20, y: 20 })
-      .mockReturnValueOnce({ x: 100, y: 100 })
       .mockReturnValueOnce({ x: 250, y: 250 })
       .mockReturnValueOnce({ x: 280, y: 250 });
     viewer.scene.postRender.addEventListener.mock.calls[0][0]();
@@ -275,18 +278,23 @@ describe("public snapshot map layer", () => {
   });
 
   it("bounds the layer and filters invalid coordinates without claiming online availability", async () => {
-    const cameras = Array.from({ length: 101 }, (_, i) => ({
+    const cameras = Array.from({ length: MAX_LIVE_CAMERAS + 1 }, (_, i) => ({
       ...liveCamera,
       id: `camera-${i}`,
     }));
-    await renderLive([{ ...liveCamera, id: "bad", latitude: 100 }, ...cameras]);
+    await renderLive([
+      { ...liveCamera, id: "bad", latitude: 100 },
+      { ...liveCamera, id: "north-carolina", latitude: 35.994, longitude: -78.8986, region_id: "durham" },
+      ...cameras,
+    ]);
     const viewer = mocks.viewers[0];
     expect(
       [...viewer.records.keys()].filter((id) =>
         id.startsWith("public-camera:"),
       ),
-    ).toHaveLength(100);
+    ).toHaveLength(MAX_LIVE_CAMERAS);
     expect(viewer.records.has("public-camera:bad")).toBe(false);
+    expect(viewer.records.has("public-camera:north-carolina")).toBe(false);
     expect(container.textContent).toContain(
       "Pin presence does not prove the camera is online",
     );
@@ -295,7 +303,7 @@ describe("public snapshot map layer", () => {
     )!;
     await act(async () => toggle.click());
     expect(viewer.records.get("public-camera:camera-0").show).toBe(false);
-    expect(viewer.records.get("context-camera:ncdot-test").show).toBe(true);
+    expect(viewer.records.has("selected-source")).toBe(true);
   });
 });
 afterEach(async () => {
@@ -341,18 +349,13 @@ describe("map replay lifecycle", () => {
     expect(mocks.createTiles).not.toHaveBeenCalled();
   });
 
-  it("keeps context cameras separate and hides them without changing the replay marker", async () => {
+  it("does not fetch or show the removed North Carolina inventory while preserving replay provenance", async () => {
     await render(incident);
-    expect(container.textContent).toContain("Inventory only");
+    expect(request).not.toHaveBeenCalled();
+    expect(container.textContent).not.toMatch(/NCDOT|NC inventory|Inventory only/);
+    expect([...mocks.viewers[0].records.keys()]).toEqual(["selected-source"]);
     expect(container.textContent).toContain("Simulated placement");
-    const viewer = mocks.viewers[0];
-    expect(viewer.records.get("context-camera:ncdot-test").show).toBe(true);
-    const toggle = container.querySelector<HTMLInputElement>(
-      'input[type="checkbox"]',
-    )!;
-    await act(async () => toggle.click());
-    expect(viewer.records.get("context-camera:ncdot-test").show).toBe(false);
-    expect(viewer.records.has("selected-source")).toBe(true);
+    expect(container.textContent).toContain("Durham, North Carolina");
     expect(container.textContent).toContain("Google 3D is not configured");
   });
 
@@ -390,37 +393,6 @@ describe("map replay lifecycle", () => {
     expect(
       mocks.viewers[0].imageryLayers.addImageryProvider,
     ).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("camera inventory boundaries", () => {
-  it("does not display invalid coordinates, duplicate IDs, or live claims as inventory points", () => {
-    const result = readCameraContext({
-      ...context,
-      points: [
-        point,
-        point,
-        { ...point, id: "bad", latitude: 100 },
-        { ...point, id: "live", status: "live" },
-      ],
-    });
-    expect(result?.points).toEqual([point]);
-    expect(readCameraContext({ ...context, mode: "live" })).toBeNull();
-    expect(
-      readCameraContext({ ...context, status: "unavailable" })?.points,
-    ).toEqual([]);
-  });
-
-  it("rejects unsafe source links and marks missing freshness metadata as unknown", () => {
-    const result = readCameraContext({
-      ...context,
-      source_url: "javascript:alert(1)",
-      fetched_at: "not a date",
-      stale: null,
-    });
-    expect(result?.source_url).toBeNull();
-    expect(result?.fetched_at).toBeNull();
-    expect(result?.stale).toBe(true);
   });
 });
 

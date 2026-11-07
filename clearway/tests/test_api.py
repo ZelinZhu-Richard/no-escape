@@ -77,6 +77,12 @@ def first_incident(client):
     return response.json()["incidents"][0]
 
 
+def test_removed_nc_inventory_is_not_an_api_or_responder_route(services):
+    client, public, *_ = services
+    assert client.get("/api/camera-context").status_code == 404
+    assert public.get("/api/camera-context").status_code == 404
+
+
 def test_five_complete_cycles_are_clean(services):
     client, public, analyzer, _, _ = services
     run_ids = []

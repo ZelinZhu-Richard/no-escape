@@ -43,6 +43,10 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Bay Area public CCTV only — November 7, 2026
+
+The user requested removing NC public-camera points and expanding Bay Area endpoints. Interpret “May area” as Bay Area. Retire the NCDOT inventory dataset, route, refresh task and map controls. Use the official Caltrans District 4 catalog across Alameda, Contra Costa, Marin, Napa, San Francisco, San Mateo, Santa Clara, Solano and Sonoma; filter other counties, invalid coordinates/URLs and out-of-service entries. Retain up to 1,000 validated cameras, list pagination and all matching map pins. Advertised HLS availability is distinct from tested playback; preserve snapshot fallback, existing detections/tracking and selected-camera-only loading. Historical replay placement and retained incident evidence do not change. Update the existing PR and handoff after tests and browser verification. This supersedes the earlier requirement to retain 20 NC inventory points.
+
 ## Tiled replay detection and live ByteTrack — November 7, 2026
 
 The user authorized higher-resolution tiled detection for Dense traffic and ByteTrack for live CCTV, same-footage comparisons on Dense/Fremont, and an update to the existing PR. Dense traffic uses original 1920×1080 pixels with 768px overlapping crops plus a full-frame pass, a 0.50 output floor, boundary-fragment rejection and duplicate suppression. Prepare the 4fps cache locally; keep other replay sources unchanged and an explicit full-frame fallback. Bind tiling settings to cache provenance.
