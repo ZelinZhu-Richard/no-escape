@@ -1,70 +1,286 @@
+/* Map overlays: target tag, context drawer, camera network. */
 .map-world-label {
   position: absolute;
-  z-index: 3;
+  z-index: 4;
   transform: translate(-50%, -100%);
-  padding: 7px 10px;
-  border: 1px solid #bd9142;
-  border-radius: 4px;
-  background: #17262ef5;
-  color: #ffe0a0;
-  font: 600 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: .04em;
+  padding: 6px 10px 6px 18px;
+  border: 1px solid var(--line-3, #4a4840);
+  border-radius: 0;
+  background: rgba(10, 10, 9, 0.9);
+  color: var(--ink, #ede9dd);
+  font: 500 9px/1.2 var(--font-mono, ui-monospace, monospace);
+  font-stretch: 85%;
+  letter-spacing: 0.14em;
   white-space: nowrap;
-  box-shadow: 0 2px 9px #0007;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
 }
-.map-world-label[hidden] { display: none; }
-.map-world-label.is-confirmed { color: #b9f0d3; border-color: #79bf9c; }
-.map-world-label.is-public { color: #eed8ff; border-color: #b89ce9; max-width: 220px; text-overflow: ellipsis; overflow: hidden; }
-.map-shell:has(.map-context[open]) .map-world-label { visibility: hidden; }
-.map-world-label:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.map-world-label.is-candidate {
+  color: var(--hot-2, #ff7c55);
+  border-color: var(--hot, #ff4d1f);
+  box-shadow: 0 0 26px rgba(255, 77, 31, 0.32);
+}
+.map-world-label::before {
+  /* blinking status pip inside the tag */
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: cw-blink 1.2s steps(1) infinite;
+}
+.map-world-label::after {
+  /* leader line down to the point */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 1px;
+  height: 12px;
+  background: currentColor;
+  opacity: 0.8;
+}
+.map-world-label[hidden] {
+  display: none;
+}
+.map-world-label.is-confirmed {
+  color: var(--live, #c6ff3d);
+  border-color: var(--live, #c6ff3d);
+  box-shadow: 0 0 26px rgba(198, 255, 61, 0.22);
+}
+.map-world-label.is-public {
+  color: var(--ink, #ede9dd);
+  border-color: var(--cool, #9b97ff);
+  box-shadow: 0 0 22px rgba(155, 151, 255, 0.22);
+  max-width: 240px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.map-world-label.is-public::after {
+  display: none;
+}
+.map-shell:has(.map-context[open]) .map-world-label {
+  visibility: hidden;
+}
+.map-world-label:focus-visible {
+  outline: 2px solid var(--ink, #fff);
+  outline-offset: 3px;
+}
 .map-context {
   position: absolute;
-  top: 117px;
-  left: 20px;
+  top: 118px;
+  left: 24px;
   z-index: 5;
-  max-width: min(330px, calc(100% - 85px));
-  max-height: calc(100% - 185px);
+  max-width: min(340px, calc(100% - 90px));
+  max-height: calc(100% - 200px);
   overflow: auto;
-  color: #d5e1df;
-  border: 1px solid #4d626a;
-  border-radius: 4px;
-  background: #17262ef5;
-  font-size: 10px;
-  box-shadow: 0 2px 10px #0003;
+  color: var(--ink-2, #c4c0b3);
+  border: 1px solid var(--line-2, #33322c);
+  background: rgba(10, 10, 9, 0.92);
+  backdrop-filter: blur(8px);
+  font-size: 11px;
 }
-.map-context summary { cursor: pointer; padding: 7px 9px; user-select: none; position: sticky; top: 0; background: #17262e; }
-.map-context summary:focus-visible { outline: 2px solid #f2bd59; outline-offset: 3px; }
-.map-context[open] { z-index: 6; }
-.map-context dl { margin: 0 10px; }
+.map-context summary {
+  position: sticky;
+  top: 0;
+  padding: 8px 10px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  font-family: var(--font-mono, monospace);
+  font-stretch: 85%;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink, #ede9dd);
+  background: rgba(10, 10, 9, 0.96);
+}
+.map-context summary::-webkit-details-marker {
+  display: none;
+}
+.map-context summary::before {
+  content: "+ ";
+  color: var(--live, #c6ff3d);
+}
+.map-context[open] summary::before {
+  content: "− ";
+}
+.map-context[open] {
+  z-index: 6;
+}
+.map-context dl {
+  margin: 0 10px;
+}
 .map-context dl > div {
   display: grid;
-  grid-template-columns: 80px minmax(0, 1fr);
+  grid-template-columns: 96px minmax(0, 1fr);
   gap: 8px;
   padding: 6px 0;
-  border-top: 1px solid #35474d;
+  border-top: 1px solid var(--line, #23221e);
 }
-.map-context dt { color: #aebfc1; }
-.map-context dd { margin: 0; overflow-wrap: anywhere; }
-.map-context p { margin: 8px 10px 10px; line-height: 1.5; color: #c5d3d4; }
-.map-context a { color: #b5e5e7; text-decoration: underline; }
-.map-context-toggle { display: flex; gap: 7px; align-items: center; margin: 10px; line-height: 1.4; }
-.map-context-toggle input { accent-color: #6ed6df; }
-.map-context-network { margin: 0 10px; padding: 7px 10px; border: 1px solid #617d83; border-radius: 3px; background: #263f48; color: #dcebea; font-size: 10px; }
-.map-context-network:disabled { opacity: .5; cursor: default; }
-.map-context-network:focus-visible { outline: 2px solid #f2bd59; outline-offset: 2px; }
-.camera-legend-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #6ed6df; margin-left: 6px; }
-.public-camera-legend-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #b89ce9; }
-.map-public-layer { border-top: 1px solid #4d626a; border-bottom: 1px solid #4d626a; padding: 2px 0 0; }
-.map-public-shortcut { position: absolute; top: 117px; left: 157px; z-index: 4; display: flex; align-items: center; gap: 6px; padding: 7px 9px; border: 1px solid #88739e; border-radius: 4px; background: #272637f5; color: #eed8ff; font-size: 10px; }
-.map-public-shortcut:disabled { opacity: .5; }
-.map-public-shortcut:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-.map-camera-detail { position: absolute; top: 155px; left: 20px; z-index: 5; display: grid; gap: 7px; max-width: min(280px, calc(100% - 90px)); padding: 12px; border: 1px solid #6ed6df; border-radius: 5px; background: #132932f5; color: #dcebea; box-shadow: 0 3px 15px #0005; }
-.map-camera-detail > button { position: absolute; right: 3px; top: 3px; background: transparent; border: 0; color: #dcebea; width: 24px; height: 24px; font-size: 18px; }
-.map-camera-detail .eyebrow { font-size: 8px; color: #8ed9df; padding-right: 15px; }
-.map-camera-detail strong { font-size: 11px; line-height: 1.4; padding-right: 8px; }
-.map-camera-detail > span:not(.eyebrow), .map-camera-detail small { font-size: 9px; line-height: 1.5; color: #c3d4d4; }
-@media (max-width: 550px) {
-  .map-context { top: 102px; left: 12px; }
-  .map-public-shortcut { top: 102px; left: 148px; }
-  .map-camera-detail { top: 140px; left: 12px; }
+.map-context dt {
+  font-family: var(--font-mono, monospace);
+  font-stretch: 85%;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted, #8f8b80);
+  padding-top: 2px;
+}
+.map-context dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink, #ede9dd);
+}
+.map-context p {
+  margin: 8px 10px 10px;
+  line-height: 1.55;
+  color: var(--muted, #8f8b80);
+}
+.map-context a {
+  color: var(--ink, #ede9dd);
+  text-decoration: underline;
+}
+.map-context-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px;
+  line-height: 1.4;
+  color: var(--ink-2, #c4c0b3);
+}
+.map-context-toggle input {
+  accent-color: var(--live, #c6ff3d);
+}
+.map-context-network {
+  margin: 0 10px;
+  padding: 7px 10px;
+  font-family: var(--font-mono, monospace);
+  font-stretch: 85%;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink, #ede9dd);
+  background: transparent;
+  border: 1px solid var(--line-3, #4a4840);
+  border-radius: 2px;
+}
+.map-context-network:hover:not(:disabled) {
+  border-color: var(--live, #c6ff3d);
+  color: var(--live, #c6ff3d);
+}
+.map-context-network:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.camera-legend-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--teal, #5ee6d0);
+}
+.public-camera-legend-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cool, #9b97ff);
+}
+.map-public-layer {
+  padding: 2px 0 0;
+  border-top: 1px solid var(--line-2, #33322c);
+  border-bottom: 1px solid var(--line-2, #33322c);
+}
+.map-public-shortcut {
+  position: absolute;
+  top: 118px;
+  left: 170px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  font-family: var(--font-mono, monospace);
+  font-stretch: 85%;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink, #ede9dd);
+  border: 1px solid rgba(155, 151, 255, 0.55);
+  background: rgba(10, 10, 9, 0.88);
+  backdrop-filter: blur(6px);
+  border-radius: 0;
+}
+.map-public-shortcut svg {
+  color: var(--cool, #9b97ff);
+}
+.map-public-shortcut:hover:not(:disabled) {
+  border-color: var(--cool, #9b97ff);
+  background: rgba(155, 151, 255, 0.12);
+}
+.map-public-shortcut:disabled {
+  opacity: 0.5;
+}
+.map-camera-detail {
+  position: absolute;
+  top: 158px;
+  left: 24px;
+  z-index: 5;
+  display: grid;
+  gap: 7px;
+  max-width: min(290px, calc(100% - 90px));
+  padding: 13px;
+  color: var(--ink, #ede9dd);
+  border: 1px solid var(--teal, #5ee6d0);
+  background: rgba(10, 10, 9, 0.94);
+  box-shadow: 0 0 30px rgba(94, 230, 208, 0.14);
+}
+.map-camera-detail > button {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  font-size: 18px;
+  color: var(--muted, #8f8b80);
+  background: transparent;
+}
+.map-camera-detail > button:hover {
+  color: var(--ink, #ede9dd);
+}
+.map-camera-detail .eyebrow {
+  padding-right: 15px;
+  color: var(--teal, #5ee6d0);
+}
+.map-camera-detail strong {
+  padding-right: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  font-stretch: 80%;
+  line-height: 1.2;
+}
+.map-camera-detail > span:not(.eyebrow),
+.map-camera-detail small {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted, #8f8b80);
+}
+@media (max-width: 720px) {
+  .map-context {
+    top: 104px;
+    left: 16px;
+  }
+  .map-public-shortcut {
+    top: 104px;
+    left: 158px;
+  }
+  .map-camera-detail {
+    top: 144px;
+    left: 16px;
+  }
 }

@@ -61,20 +61,44 @@ function Brand({ compact = false }: { compact?: boolean }) {
       <span className="brand-symbol">
         <svg
           viewBox="0 0 32 32"
-          width="23"
-          height="23"
+          width="26"
+          height="26"
           fill="none"
           aria-hidden="true"
         >
-          <path d="M6 25 12 7h7l-6 18H6Z" fill="currentColor" />
-          <path d="m19 25 5-15 3 15h-8Z" fill="currentColor" opacity=".6" />
+          <circle cx="16" cy="16" r="11" stroke="currentColor" strokeWidth="1.6" />
+          <circle cx="16" cy="16" r="5.2" stroke="currentColor" strokeWidth="1.6" opacity=".55" />
+          <path d="M16 1.5v7M16 23.5v7M1.5 16h7M23.5 16h7" stroke="currentColor" strokeWidth="1.6" />
+          <circle className="brand-core" cx="16" cy="16" r="2.2" fill="currentColor" />
         </svg>
       </span>
-      <span>
-        clearway<span className="brand-period">.</span>
+      <span className="brand-word">
+        clearway<span className="brand-period">/</span>
       </span>
       {!compact && <span className="brand-separator" />}
     </div>
+  );
+}
+function Clock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <span className="topbar-clock mono" aria-label="Local time">
+      {now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      })}
+      <small>
+        {now
+          .toLocaleDateString([], { month: "short", day: "2-digit" })
+          .toUpperCase()}
+      </small>
+    </span>
   );
 }
 function Badge({
@@ -560,8 +584,19 @@ function Operator() {
         ? selectedAnalysis.mode
         : mode;
 
+  const pendingCount = runIncidents.filter(
+    (item) => item.review_status === "candidate",
+  ).length;
+  const alertState = pendingCount
+    ? "alert"
+    : confirmedCount
+      ? "confirmed"
+      : "idle";
+  const feedCount = liveCatalog?.cameras?.length ?? 0;
+
   return (
-    <div className="operator-app">
+    <div className={`operator-app state-${alertState} tab-${tab}`}>
+      <div className="alert-frame" aria-hidden="true" />
       <header className="topbar">
         <a className="brand-link" href="/" aria-label="Clearway incident desk">
           <Brand />
@@ -583,12 +618,31 @@ function Operator() {
             Label windows
           </button>
         </nav>
+        <div className="topbar-telemetry mono">
+          <span className="telemetry-cell">
+            <small>Feeds</small>
+            <b>{feedCount.toString().padStart(3, "0")}</b>
+          </span>
+          <span className="telemetry-cell">
+            <small>Queue</small>
+            <b>{runIncidents.length.toString().padStart(2, "0")}</b>
+          </span>
+          <span className={`telemetry-cell ${pendingCount ? "is-hot" : ""}`}>
+            <small>Pending</small>
+            <b>{pendingCount.toString().padStart(2, "0")}</b>
+          </span>
+          <span className="telemetry-cell">
+            <small>Cleared</small>
+            <b>{confirmedCount.toString().padStart(2, "0")}</b>
+          </span>
+        </div>
         <div className="topbar-status">
           <span className="status-dot" />
           Local demo
           <span className="topbar-shortid mono">
             {state ? `RUN ${shortId(state.run.id)}` : "CONNECTING"}
           </span>
+          <Clock />
         </div>
       </header>
       {error && (
@@ -605,12 +659,25 @@ function Operator() {
       ) : (
         <>
           <section className="desk-toolbar">
-            <div>
-              <div className="eyebrow">ROAD OPERATIONS / REVIEW WORKSPACE</div>
-              <h1>Every incident. A clearer picture.</h1>
-              <p>
-                See the evidence. Make the call. Keep the handoff connected.
-              </p>
+            <div className="desk-headline">
+              <span className="headline-signal" aria-hidden="true">
+                <i />
+              </span>
+              <div>
+                <div className="eyebrow">
+                  ROAD OPERATIONS / REVIEW WORKSPACE
+                </div>
+                <h1>
+                  {alertState === "alert"
+                    ? `${pendingCount} ${pendingCount === 1 ? "signal" : "signals"} awaiting your call`
+                    : alertState === "confirmed"
+                      ? "Incident confirmed. Handoff ready."
+                      : "All sectors quiet. Watching."}
+                </h1>
+                <p>
+                  See the evidence. Make the call. Keep the handoff connected.
+                </p>
+              </div>
             </div>
             <div className="run-controls">
               <label className="analysis-select">
@@ -725,51 +792,6 @@ function Operator() {
                   </button>
                 ))}
               </div>
-              <div className="rail-footnote">
-                <Icon name="shield" size={16} />
-                <p>
-                  Recorded demo scenes.
-                  <br />
-                  Every source keeps its original credit.
-                </p>
-              </div>
-            </aside>
-            <main className="center-column">
-              <Suspense
-                fallback={
-                  <section className="map-shell">
-                    <div className="loading-state">
-                      Preparing the spatial view…
-                    </div>
-                  </section>
-                }
-              >
-                <MapView
-                  source={evidenceSource}
-                  incident={incident}
-                  incidents={runIncidents}
-                  onSelect={() => openEvidence()}
-                  onSelectIncident={openEvidence}
-                  liveCameras={visibleLiveCameras}
-                  liveSelectedId={liveSelectedId}
-                  onSelectLiveCamera={selectMapCamera}
-                />
-              </Suspense>
-              <div
-                ref={livePreviewRef}
-                tabIndex={-1}
-                aria-label="Selected public camera preview"
-              >
-                <LiveCameraPanel
-                  runId={state?.run.id}
-                  catalog={liveCatalog}
-                  selectedId={liveSelectedId}
-                  onSelect={setLiveSelectedId}
-                  onVisibleCamerasChange={setVisibleLiveCameras}
-                  loading={liveLoading}
-                  catalogError={liveError}
-                />
-              </div>
               <section className="incident-tray">
                 <div className="tray-heading">
                   <div>
@@ -854,6 +876,51 @@ function Operator() {
                   </p>
                 )}
               </section>
+              <div className="rail-footnote">
+                <Icon name="shield" size={16} />
+                <p>
+                  Recorded demo scenes.
+                  <br />
+                  Every source keeps its original credit.
+                </p>
+              </div>
+            </aside>
+            <main className="center-column">
+              <Suspense
+                fallback={
+                  <section className="map-shell">
+                    <div className="loading-state">
+                      Preparing the spatial view…
+                    </div>
+                  </section>
+                }
+              >
+                <MapView
+                  source={evidenceSource}
+                  incident={incident}
+                  incidents={runIncidents}
+                  onSelect={() => openEvidence()}
+                  onSelectIncident={openEvidence}
+                  liveCameras={visibleLiveCameras}
+                  liveSelectedId={liveSelectedId}
+                  onSelectLiveCamera={selectMapCamera}
+                />
+              </Suspense>
+              <div
+                ref={livePreviewRef}
+                tabIndex={-1}
+                aria-label="Selected public camera preview"
+              >
+                <LiveCameraPanel
+                  runId={state?.run.id}
+                  catalog={liveCatalog}
+                  selectedId={liveSelectedId}
+                  onSelect={setLiveSelectedId}
+                  onVisibleCamerasChange={setVisibleLiveCameras}
+                  loading={liveLoading}
+                  catalogError={liveError}
+                />
+              </div>
             </main>
             <aside
               className="evidence-panel"
@@ -1133,8 +1200,8 @@ function Handoff({
             value={publicUrl}
             size={100}
             marginSize={3}
-            bgColor="#faf9f5"
-            fgColor="#15222a"
+            bgColor="#ede9dd"
+            fgColor="#0a0a09"
             title="Open this incident's responder brief"
           />
           <p>

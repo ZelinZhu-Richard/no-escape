@@ -24,9 +24,14 @@ export default defineConfig({
           rename: { stripBase: true },
         },
         {
-          src: "node_modules/@fontsource-variable/manrope/LICENSE",
+          src: "node_modules/@fontsource-variable/archivo/LICENSE",
           dest: "assets/licenses",
-          rename: { stripBase: true, name: "manrope-OFL.txt" },
+          rename: { stripBase: true, name: "archivo-OFL.txt" },
+        },
+        {
+          src: "node_modules/@fontsource-variable/martian-mono/LICENSE",
+          dest: "assets/licenses",
+          rename: { stripBase: true, name: "martian-mono-OFL.txt" },
         },
       ],
     }),

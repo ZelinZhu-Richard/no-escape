@@ -9,7 +9,8 @@ for (const path of [
   "cesium/Assets/approximateTerrainHeights.json",
   "assets/licenses/cesium-LICENSE.md",
   "assets/licenses/ThirdParty.json",
-  "assets/licenses/manrope-OFL.txt",
+  "assets/licenses/archivo-OFL.txt",
+  "assets/licenses/martian-mono-OFL.txt",
   "assets/licenses/bundled-dependencies.md",
   "assets/licenses/AGPL-3.0.txt",
 ]) {

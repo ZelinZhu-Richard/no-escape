@@ -99,37 +99,37 @@ function Diagram({
             <path
               d="M36 0H0V36"
               fill="none"
-              stroke="#273740"
+              stroke="#1d1d1a"
               strokeWidth=".6"
             />
           </pattern>
         </defs>
-        <rect width="800" height="600" fill="#17262e" />
+        <rect width="800" height="600" fill="#0b0b0a" />
         <rect width="800" height="600" fill="url(#grid)" />
-        <g fill="#203139" stroke="#2c4148" strokeWidth="1">
+        <g fill="#141412" stroke="#22221e" strokeWidth="1">
           <path d="M90 92h150v93H90zM285 92h105v93H285zM435 92h180v93H435zM90 228h150v116H90zM285 228h105v116H285zM435 228h180v116H435zM90 388h150v120H90zM285 388h105v120H285zM435 388h180v120H435z" />
         </g>
-        <g fill="none" stroke="#43565d" strokeWidth="18">
+        <g fill="none" stroke="#2a2a26" strokeWidth="18">
           <path d="M-40 204h890M-40 365h890M264-30v700M414-30v700M650-30v700" />
           <path d="M-50 540 850 110" strokeWidth="28" />
         </g>
-        <g fill="none" stroke="#809196" strokeWidth="1" strokeDasharray="8 12">
+        <g fill="none" stroke="#55534b" strokeWidth="1" strokeDasharray="8 12">
           <path d="M-40 204h890M-40 365h890M264-30v700M414-30v700M650-30v700" />
           <path d="M-50 540 850 110" />
         </g>
         <path
           d="m-50 540 850-430"
           fill="none"
-          stroke="#b6c6b4"
+          stroke="#c6ff3d"
           strokeWidth="4"
           opacity=".3"
         />
-        <circle cx="414" cy="318" r="65" fill="#f1b951" opacity=".07" />
+        <circle cx="414" cy="318" r="65" fill="#ff4d1f" opacity=".07" />
         <circle
           cx="414"
           cy="318"
           r="65"
-          stroke="#f1b951"
+          stroke="#ff4d1f"
           fill="none"
           strokeDasharray="3 7"
           opacity=".5"
@@ -137,7 +137,7 @@ function Diagram({
         <text
           x="75"
           y="565"
-          fill="#9aafb1"
+          fill="#8a877d"
           fontSize="13"
           fontFamily="monospace"
         >
@@ -281,8 +281,8 @@ export function MapView({
       });
       viewer.current = instance;
       metrics().viewer_initializations++;
-      instance.scene.backgroundColor = Color.fromCssColorString("#17262e");
-      instance.scene.globe.baseColor = Color.fromCssColorString("#23353d");
+      instance.scene.backgroundColor = Color.fromCssColorString("#0b0b0a");
+      instance.scene.globe.baseColor = Color.fromCssColorString("#121211");
       instance.scene.globe.enableLighting = false;
       instance.scene.screenSpaceCameraController.minimumZoomDistance = 70;
       instance.scene.screenSpaceCameraController.maximumZoomDistance = 22000000;
@@ -432,23 +432,44 @@ export function MapView({
         instance.scene.globe.show = true;
         if (basicAdded) return;
         basicAdded = true;
-        const imagery = new OpenStreetMapImageryProvider({
-          url: "https://tile.openstreetmap.org/",
-          maximumLevel: 19,
-          credit: new Credit(
-            '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
-            true,
-          ),
-        });
-        let errors = 0;
-        imagery.errorEvent.addEventListener(() => {
-          if (!disposed && ++errors >= 4) setFallback(true);
-        });
-        const layer = instance.imageryLayers.addImageryProvider(imagery);
-        layer.brightness = 0.48;
-        layer.saturation = 0.2;
-        layer.contrast = 1.25;
-        instance.scene.requestRender();
+        // Night basemap first (Stadia's dark style needs no key on localhost).
+        // If it fails, use darkened standard OpenStreetMap tiles; only when both
+        // fail does the map switch to the illustrative fallback.
+        const addLayer = (night: boolean) => {
+          if (!instance || disposed) return;
+          const imagery = new OpenStreetMapImageryProvider({
+            url: night
+              ? "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/"
+              : "https://tile.openstreetmap.org/",
+            maximumLevel: night ? 20 : 19,
+            credit: new Credit(
+              night
+                ? '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://openmaptiles.org/">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+                : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+              true,
+            ),
+          });
+          const layer = instance.imageryLayers.addImageryProvider(imagery);
+          let errors = 0;
+          imagery.errorEvent.addEventListener(() => {
+            if (disposed || ++errors !== 4) return;
+            if (night) {
+              instance?.imageryLayers.remove(layer, true);
+              addLayer(false);
+            } else setFallback(true);
+          });
+          if (night) {
+            layer.brightness = 1.05;
+            layer.contrast = 1.12;
+            layer.saturation = 0;
+          } else {
+            layer.brightness = 0.42;
+            layer.saturation = 0;
+            layer.contrast = 1.3;
+          }
+          instance.scene.requestRender();
+        };
+        addLayer(true);
       };
       const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
       if (ionToken && import.meta.env.VITE_PHOTOREALISTIC_TILES === "true") {
@@ -569,7 +590,11 @@ export function MapView({
     const longitude = source.location.longitude ?? -78.8986;
     const latitude = source.location.latitude ?? 35.994;
     const accent = Color.fromCssColorString(
-      incident?.review_status === "confirmed" ? "#9cd8ba" : "#f2bd59",
+      incident?.review_status === "confirmed"
+        ? "#c6ff3d"
+        : incident
+          ? "#ff4d1f"
+          : "#ede9dd",
     );
     const position = Cartesian3.fromDegrees(longitude, latitude, 3);
     markerPosition.current = position;
@@ -579,7 +604,7 @@ export function MapView({
         id: "selected-source",
         point: {
           outlineWidth: 4,
-          outlineColor: Color.fromCssColorString("#17262e"),
+          outlineColor: Color.fromCssColorString("#0b0b0a"),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
@@ -592,8 +617,8 @@ export function MapView({
     if (initialSourceId.current !== source.id) {
       setViewMode("replay");
       v.camera.flyTo({
-        destination: Cartesian3.fromDegrees(longitude, latitude - 0.005, 1450),
-        orientation: { heading: 0, pitch: CesiumMath.toRadians(-62), roll: 0 },
+        destination: Cartesian3.fromDegrees(longitude, latitude - 0.0062, 1100),
+        orientation: { heading: 0, pitch: CesiumMath.toRadians(-52), roll: 0 },
         duration:
           initialSourceId.current &&
           !window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -617,9 +642,9 @@ export function MapView({
           position: Cartesian3.fromDegrees(point.longitude, point.latitude, 3),
           point: {
             pixelSize: 10,
-            color: Color.fromCssColorString("#6ed6df"),
+            color: Color.fromCssColorString("#5ee6d0"),
             outlineWidth: 2,
-            outlineColor: Color.fromCssColorString("#102e37"),
+            outlineColor: Color.fromCssColorString("#0b0b0a"),
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         });
@@ -641,7 +666,7 @@ export function MapView({
           id,
           point: {
             outlineWidth: 2,
-            outlineColor: Color.fromCssColorString("#262039"),
+            outlineColor: Color.fromCssColorString("#0b0b0a"),
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         });
@@ -655,7 +680,7 @@ export function MapView({
         );
         entity.point.color = new ConstantProperty(
           Color.fromCssColorString(
-            camera.id === liveSelectedId ? "#eed8ff" : "#b89ce9",
+            camera.id === liveSelectedId ? "#f4f1e8" : "#9b97ff",
           ),
         );
       }
@@ -680,7 +705,7 @@ export function MapView({
           id,
           point: {
             outlineWidth: 3,
-            outlineColor: Color.fromCssColorString("#17262e"),
+            outlineColor: Color.fromCssColorString("#0b0b0a"),
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         });
@@ -698,11 +723,11 @@ export function MapView({
         entity.point.color = new ConstantProperty(
           Color.fromCssColorString(
             item.review_status === "confirmed"
-              ? "#9cd8ba"
+              ? "#c6ff3d"
               : item.review_status === "dismissed" ||
                   item.review_status === "resolved"
-                ? "#a0a9ae"
-                : "#f2bd59",
+                ? "#77746b"
+                : "#ff4d1f",
           ),
         );
       }
@@ -817,7 +842,7 @@ export function MapView({
         <button
           ref={markerLabel}
           hidden
-          className={`map-world-label ${incident?.review_status === "confirmed" ? "is-confirmed" : ""}`}
+          className={`map-world-label ${incident?.review_status === "confirmed" ? "is-confirmed" : incident ? "is-candidate" : ""}`}
           onClick={onSelect}
           data-testid="map-world-label"
         >
@@ -1117,7 +1142,7 @@ export function MapView({
         </button>
       </div>
       <button
-        className={`map-incident-callout ${incident ? "is-active" : ""}`}
+        className={`map-incident-callout ${incident ? "is-active" : ""} ${incident?.review_status === "confirmed" ? "is-confirmed" : ""}`}
         onClick={onSelect}
         data-testid="map-marker"
         aria-label={

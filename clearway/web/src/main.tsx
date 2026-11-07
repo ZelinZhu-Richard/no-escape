@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
-import "@fontsource-variable/manrope";
+import "@fontsource-variable/archivo/wdth.css";
+import "@fontsource-variable/martian-mono/wdth.css";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import "./styles.css";
 import { App } from "./App";
