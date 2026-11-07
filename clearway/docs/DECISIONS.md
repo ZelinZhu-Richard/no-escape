@@ -34,7 +34,7 @@ This records planning decisions, not completed application behavior. No overnigh
 - Confirm Google credit eligibility, endpoint, exact model access, and a nonzero cap if paid Gemini inference is desired.
 - Run actual analysis on selected footage, inspect outputs, and save genuine cache entries.
 - Submit human labels; no model-accuracy or cost-saving results exist yet.
-- Build and verify five complete replay/confirmation/reset cycles.
+- Repeat the verified five-cycle check after any morning changes.
 - Configure a public responder origin intentionally and pass the cellular phone test.
 - Verify event reuse requirements and the actual remaining schedule.
 
@@ -43,3 +43,26 @@ For future build decisions, append: time, affected step, observed blocker/eviden
 ## November 7, 2026 — Overnight build authorized
 
 The user explicitly authorized the build, a PR, and subagents. The repository is empty upstream; create a documentation baseline on main and put application changes on a feature branch for review. No API keys or Cesium token are present in the process environment. Start in labeled fixture mode with no paid inference and a basic map fallback. No public tunnel or deployment will run.
+
+## November 7, 2026, 08:26 UTC — Integration and review
+
+| Step / evidence | Judgment call and consequence |
+| --- | --- |
+| Source references | Read pinned GEV and HawkWatch source patterns; implement Clearway freshly. No source-project application code copied. Record exact inspected links in `REFERENCES.md`. |
+| Provider access unavailable | Implement a guarded Gemini Developer API adapter, genuine cache, request ledger, and explicit fixtures. Do not infer Vertex eligibility from Cloud credit. No provider requests made. Keep Claude/OpenAI/YOLO out of this run. |
+| Replay assets | Use the already verified 11.111-second Pexels obstruction clip with original credit and simulated placement. Add a checksum-checked restore script; keep all media ignored. |
+| Read-only handoff | Share run state through SQLite between loopback operator port 8000 and responder port 8001. Old run URLs and media expire after reset. No public endpoint exists overnight. |
+| Repeatability | Five real HTTP cycles pass against both services, including deduplication, idempotent confirmation, stale actions, expired evidence, and zero inference requests. Tests do not submit human labels. |
+| Review: independent gate accounting | A suppressed interval previously disappeared from gate metrics. Count local gate outcomes before filtering VLM predictions; add regression coverage for suppressed positives and reject fixture gate measurements. |
+| Review: interrupted conversion | Transcode into a temporary file, validate dimensions/duration/frame count/full decode, and replace the final derivative atomically. Do not trust an existing unverified derivative. |
+| Review: frontend polling | Prevent polls started during mutations from restoring stale state; invalidate pending reads at mutation completion. Allow reset during slow replay, ignore late results, and distinguish genuine negative output from fixture copy. Add focused transport-mocked regressions. |
+| Map test policy | Use the explicitly labeled offline diagram for repeated automated browser cycles. Validate the default basic map separately; preserve visible linked OpenStreetMap and Cesium attribution. No photorealistic token/service access was supplied. |
+| Distribution notices | Include bundled dependency licenses, Cesium notices, and Manrope OFL in build assets. Keep media/source licenses separate. |
+| Browser: Cesium runtime asset paths | The static-copy plugin preserved a `node_modules` prefix, producing missing runtime assets despite a successful bundle. Explicitly strip the prefix, verify actual emitted files during every build, and confirm HTTP 200 plus the rendered map/credits in the built-in browser. |
+| Evaluation | Zero human labels. Report `awaiting_labels`; do not manufacture precision, recall, model savings, or commercial results. |
+
+The final morning report records browser results, actual spend, PR state, and remaining human work. No protected data was accessed, no organizer message was sent, and no public tunnel or deployment was started.
+
+## November 7, 2026 — GitHub workflow authorization
+
+The initial feature-branch push was rejected because the existing GitHub OAuth connection lacks `workflow` scope. Preserve the optional workflow as `docs/ci-checks.example.yml`, amend the unpublished local commit, and push the implementation without changing account permissions. The template is not active CI; report only the verified local checks. The application/PR work remains authorized.

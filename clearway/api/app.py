@@ -1,0 +1,250 @@
+"""Run locally with ``uvicorn api.app:app --host 127.0.0.1 --port 8000``.
+
+Expose only ``api.app:responder_app`` (port 8001) through an intentionally
+started morning tunnel. It has no operator routes, docs, labels, or archive.
+"""
+
+from pathlib import Path
+import os
+from urllib.parse import urlsplit
+from uuid import UUID
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
+
+from .models import AnalysisResult, LabelRequest, ReplayRequest
+from .sources import SOURCES, media_path, source_record
+from .store import StateError, Store
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def _public_origin() -> tuple[str | None, str | None]:
+    configured = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if not configured:
+        return None, None
+    try:
+        url = urlsplit(configured)
+        if (
+            url.scheme != "https" or not url.hostname or url.username or url.password
+            or url.query or url.fragment or url.path not in ("", "/")
+        ):
+            raise ValueError()
+        _ = url.port
+    except ValueError:
+        return None, "PUBLIC_BASE_URL must be an HTTPS origin without credentials, path, query, or fragment."
+    return configured, None
+
+
+def _unavailable() -> dict:
+    return {
+        "mode": "unavailable", "status": "unavailable",
+        "message": "Analysis unavailable. Check local model configuration and the spend ledger; no result was substituted.",
+        "candidate": False, "title": "", "category": "",
+        "observations": [], "unknowns": ["No validated analysis result is available."],
+        "provenance": {"provider": None, "model": None, "fixture": False, "cache_key": None},
+    }
+
+
+def create_app(
+    *, data_dir: Path | str | None = None, analysis_service=None,
+    read_only: bool = False, web_dist: Path | str | None = None,
+) -> FastAPI:
+    data = Path(data_dir or os.environ.get("CLEARWAY_DATA_DIR", ROOT / "data")).resolve()
+    dist = Path(web_dist or ROOT / "web" / "dist").resolve()
+    store = Store(data)
+    if analysis_service is None and not read_only:
+        from .analysis import AnalysisService
+        analysis_service = AnalysisService(data)
+    public_url, public_error = _public_origin()
+    application = FastAPI(
+        title="Clearway responder" if read_only else "Clearway local operator",
+        docs_url=None, redoc_url=None, openapi_url=None,
+    )
+    application.state.store = store
+    application.state.analysis_service = analysis_service
+    application.state.data_dir = data
+
+    @application.middleware("http")
+    async def boundaries(request: Request, call_next):
+        if read_only and request.method not in ("GET", "HEAD"):
+            return JSONResponse({"detail": "Responder service is read-only."}, status_code=405)
+        if not read_only:
+            # Binding loopback is the primary boundary. Host/origin checks also
+            # prevent a remote web page from driving the local operator API.
+            host = request.url.hostname
+            if host not in ("127.0.0.1", "localhost", "::1", "testserver"):
+                return JSONResponse({"detail": "Use the local operator origin."}, status_code=403)
+            if request.method not in ("GET", "HEAD", "OPTIONS"):
+                origin = request.headers.get("origin")
+                if origin:
+                    try:
+                        parsed = urlsplit(origin)
+                        allowed = parsed.scheme in ("http", "https") and parsed.hostname in ("localhost", "127.0.0.1", "::1", "testserver")
+                    except ValueError:
+                        allowed = False
+                    if not allowed:
+                        return JSONResponse({"detail": "Cross-origin operator writes are not allowed."}, status_code=403)
+                if request.headers.get("content-type", "").split(";")[0].lower() != "application/json":
+                    return JSONResponse({"detail": "Operator writes require application/json."}, status_code=415)
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer" if read_only else "strict-origin-when-cross-origin"
+        return response
+
+    @application.exception_handler(StateError)
+    async def state_error(_request, error: StateError):
+        return JSONResponse({"detail": error.detail}, status_code=error.status)
+
+    def snapshot():
+        state = store.snapshot()
+        state["telemetry"] = analysis_service.telemetry() if analysis_service else {
+            "network_inference_calls": 0, "cache_hits": 0, "fixture_runs": 0,
+            "estimated_spend_usd": 0,
+        }
+        return state
+
+    def file_response(source_id: str, kind: str):
+        path = media_path(data, source_id, kind)
+        if path is None:
+            raise HTTPException(404, "Selected demo media is unavailable. Use the documented media setup.")
+        media_type = "image/jpeg" if kind == "poster" else ("video/webm" if path.suffix == ".webm" else "video/mp4")
+        return FileResponse(path, media_type=media_type)
+
+    def spa_response():
+        index = dist / "index.html"
+        if not index.is_file() or index.is_symlink():
+            raise HTTPException(503, "Frontend not built. Run npm ci and npm run build in clearway/web.")
+        return FileResponse(index, media_type="text/html")
+
+    @application.get("/api/respond/{run_id}/{incident_id}")
+    def responder(run_id: UUID, incident_id: UUID):
+        run, incident_key = str(run_id), str(incident_id)
+        incident = store.responder(run, incident_key)
+        prefix = f"/api/respond/{run}/{incident_key}/media"
+        source = source_record(data, incident["source_id"], prefix)
+        return {"incident": incident, "source": source, "run_id": run, "status": "active"}
+
+    @application.get("/api/respond/{run_id}/{incident_id}/media/{kind}")
+    def responder_media(run_id: UUID, incident_id: UUID, kind: str):
+        incident = store.responder(str(run_id), str(incident_id))
+        return file_response(incident["source_id"], kind)
+
+    @application.get("/respond/{run_id}/{incident_id}")
+    def responder_page(run_id: UUID, incident_id: UUID):
+        # The page must load for expired IDs so it can explain the 410 status.
+        return spa_response()
+
+    def asset_response(path: str, base: str):
+        folder = dist / base
+        asset = folder / path
+        if (
+            not asset.is_file() or asset.is_symlink()
+            or not asset.resolve().is_relative_to(folder.resolve())
+            or any(part.startswith(".") for part in Path(path).parts)
+        ):
+            raise HTTPException(404, "Asset not found.")
+        return FileResponse(asset)
+
+    @application.get("/assets/{path:path}")
+    def asset(path: str):
+        return asset_response(path, "assets")
+
+    @application.get("/cesium/{path:path}")
+    def cesium_asset(path: str):
+        return asset_response(path, "cesium")
+
+    if not read_only:
+        @application.get("/api/health")
+        def health():
+            return {"status": "ok"}
+
+        @application.get("/api/config")
+        def config():
+            return {
+                "public_base_url": public_url, "public_base_url_error": public_error,
+                "default_analysis_mode": "fixture", "map_mode": "basic",
+                "budgets": {"gemini": 0, "claude": 10, "openai": 0},
+                "model_configured": bool(os.environ.get("GEMINI_MODEL") and os.environ.get("GEMINI_MODEL_VERSION") and os.environ.get("GEMINI_API_KEY")),
+            }
+
+        @application.get("/api/sources")
+        def sources():
+            return {"sources": [source_record(data, sid) for sid in SOURCES]}
+
+        @application.get("/api/state")
+        def state():
+            return snapshot()
+
+        @application.post("/api/reset")
+        def reset():
+            store.reset()
+            return snapshot()
+
+        @application.post("/api/runs/{run_id}/replay")
+        def replay(run_id: UUID, body: ReplayRequest):
+            run = str(run_id)
+            token = store.reserve_replay(run, body.source_id, body.analysis_mode)
+            if token is None:
+                return snapshot()
+            try:
+                result = AnalysisResult.model_validate(analysis_service.analyze(body.source_id, body.analysis_mode)).model_dump()
+                if any(o["timestamp_seconds"] > SOURCES[body.source_id]["duration_seconds"] for o in result["observations"]):
+                    raise ValueError("Evidence is outside the clip.")
+                if body.analysis_mode == "cached" and result["mode"] not in ("cached", "unavailable"):
+                    raise ValueError("Cached mode cannot return another analysis mode.")
+                if body.analysis_mode == "fixture" and result["mode"] not in ("fixture", "unavailable"):
+                    raise ValueError("Fixture mode cannot return another analysis mode.")
+            except Exception:
+                # Provider errors may contain auth material; never reflect or log them.
+                result = _unavailable()
+            store.finish_replay(run, body.source_id, token, result, source_record(data, body.source_id))
+            return snapshot()
+
+        @application.post("/api/runs/{run_id}/incidents/{incident_id}/confirm")
+        def confirm(run_id: UUID, incident_id: UUID):
+            return store.review(str(run_id), str(incident_id), "confirm")
+
+        @application.post("/api/runs/{run_id}/incidents/{incident_id}/dismiss")
+        def dismiss(run_id: UUID, incident_id: UUID):
+            return store.review(str(run_id), str(incident_id), "dismiss")
+
+        @application.get("/api/media/{source_id}/{kind}")
+        def media(source_id: str, kind: str):
+            return file_response(source_id, kind)
+
+        @application.get("/api/labels")
+        def labels():
+            return {"labels": store.labels()}
+
+        @application.post("/api/labels", status_code=201)
+        def label(body: LabelRequest):
+            if body.end_seconds > SOURCES[body.source_id]["duration_seconds"]:
+                raise HTTPException(422, "Label interval extends beyond the source duration.")
+            return store.add_label(body.model_dump())
+
+        @application.get("/api/evaluation")
+        def evaluation():
+            entries = store.labels()
+            return {
+                "status": "awaiting_labels" if not entries else "labels_available",
+                "label_count": len(entries),
+                "scene_count": len({x["source_id"] for x in entries}),
+                "metrics": None,
+                "message": "Awaiting human labels." if not entries else "Labels saved. Run the frozen evaluation separately; no accuracy is inferred from labels alone.",
+                "natural_recall": "recall not measurable on natural data",
+            }
+
+        @application.get("/")
+        @application.get("/labels")
+        def operator_page():
+            return spa_response()
+
+    return application
+
+
+# Importing the read-only ASGI app does not create an additional analysis service.
+app = create_app()
+responder_app = create_app(read_only=True)

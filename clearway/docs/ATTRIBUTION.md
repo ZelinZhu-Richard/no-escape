@@ -2,10 +2,33 @@
 
 ## Project inspirations
 
-- [God's Eye View](https://github.com/bilawalsidhu/gods-eye-view), bilawalsidhu: inspiration for a spatial interface using Cesium and 3D city imagery. Its reviewed [license](https://github.com/bilawalsidhu/gods-eye-view/blob/c0a5d4141d4fa6f7648910cedd98654f2381989d/LICENSE) distinguishes source-code rights from third-party assets. No application code has been copied into Clearway in this planning work.
-- [HawkWatch / Treehacks2025](https://github.com/Grace-Shao/Treehacks2025), Grace-Shao and contributors: inspiration for visual observations and incident review. A license file was not found in the earlier review; do not assume permission to copy its code. No application code has been copied into Clearway in this planning work.
+- [God's Eye View](https://github.com/bilawalsidhu/gods-eye-view), bilawalsidhu: inspiration for a spatial interface using Cesium and 3D city imagery. Its reviewed [license](https://github.com/bilawalsidhu/gods-eye-view/blob/c0a5d4141d4fa6f7648910cedd98654f2381989d/LICENSE) distinguishes source-code rights from third-party assets. No GEV application code was copied into Clearway.
+- [HawkWatch / Treehacks2025](https://github.com/Grace-Shao/Treehacks2025), Grace-Shao and contributors: inspiration for visual observations and timestamped evidence review. A license file was not found in the reviewed tree; do not assume permission to copy its code or bundled videos. No HawkWatch application code was copied into Clearway.
 
-Hackathon eligibility is separate from software licensing. Record any future copied code, pinned revision, and applicable notices before submission. Add actual dependencies and versions after implementation; planned libraries are not yet installed Clearway dependencies.
+Clearway is a fresh implementation. Exact reviewed source files and revisions are in `REFERENCES.md`. Hackathon eligibility is separate from software licensing; record any future copied code, pinned revision, and applicable notices before submission.
+
+## Installed software and font
+
+Versions and license declarations below were checked against `web/package-lock.json`, installed package metadata/license files, and the installed Python distributions on November 7, 2026. This is a core dependency summary, not a complete transitive license inventory.
+
+| Component | Installed version | License verified in installed files |
+| --- | --- | --- |
+| React / React DOM | 19.3.1 / 19.3.1 | MIT; Meta Platforms, Inc. and affiliates |
+| CesiumJS | 1.147.0 | Apache-2.0; CesiumJS Contributors. Installed engine 26.5.0 and widgets 16.3.1 also declare Apache-2.0. |
+| qrcode.react | 4.2.0 | ISC; Paul O’Shannessy. Its bundled QR Code generator credits Project Nayuki under MIT. |
+| Manrope Variable (`@fontsource-variable/manrope`) | 5.2.8 package | SIL Open Font License 1.1; The Manrope Project Authors |
+| FastAPI / Pydantic | 0.162.0 / 2.14.3 | MIT |
+| Starlette / Uvicorn | 1.10.0 / 0.54.0 | BSD-3-Clause |
+| Vite / React Vite plugin / static-copy plugin | 8.3.6 / 6.2.1 / 4.1.1 | MIT; Vite's installed license file also lists its bundled third-party licenses |
+| TypeScript | 5.9.3 | Apache-2.0; retain its third-party notice file |
+| HTTPX / pytest (test dependencies) | 0.28.1 / 9.2.0 | BSD-3-Clause / MIT |
+| Vitest / jsdom (frontend test dependencies) | 5.1.0 / 31.0.0 | MIT / MIT, checked in installed package metadata |
+
+Evidence: each frontend package's `LICENSE`, `LICENSE.md`, or `LICENSE.txt` under `web/node_modules/`; Python `*.dist-info/licenses/` files in `.venv/`. Keep dependency notices with redistributed bundles rather than treating this summary as a replacement for the license texts.
+
+The Vite build is configured to emit `assets/licenses/bundled-dependencies.md` and copy `cesium-LICENSE.md`, Cesium's third-party JSON notices, and `manrope-OFL.txt` into `web/dist/assets/licenses/`. Preserve that folder when distributing the built frontend. Final build verification is recorded in `MORNING_REPORT.md`.
+
+The UI imports Manrope through Fontsource and serves its font assets locally. Font copyright: **Copyright 2019 The Manrope Project Authors (https://github.com/sharanda/manrope)**. Its full OFL text is in `web/node_modules/@fontsource-variable/manrope/LICENSE`; preserve that copyright and license with distributed font files. The font remains OFL-1.1, independently of Clearway's application source license.
 
 ## Selected positive footage
 
@@ -29,6 +52,8 @@ Three additional Pexels repair/tire clips were inspected but not selected. Their
 
 All paths here are relative to `clearway/`. Full provenance and checksums are in `footage-sources.json`. None of these clips is a live North Carolina observation, and none supplies calibrated coordinates for the selected obstruction.
 
-## Mapping attribution during implementation
+## Mapping attribution
 
-Preserve the on-screen Cesium and imagery-provider credits required by the actual configured services. Do not replace or obscure them with Clearway branding. Verify service access and terms independently of the source-project code license.
+The basic map uses Cesium's OpenStreetMap imagery provider. Keep the native Cesium credit container visible and unobscured, with **© OpenStreetMap contributors** linked to the [OSM copyright and license page](https://www.openstreetmap.org/copyright). OpenStreetMap data is available under ODbL; access to the community tile service also follows its separate [tile usage policy](https://operations.osmfoundation.org/policies/tiles/). Normal interactive viewing is different from bulk downloading or an offline tile archive.
+
+Do not replace provider credits with Clearway branding. The optional Google photorealistic tile configuration must also retain its provider credits and use separately eligible account access; it does not inherit permission from GEV's MIT code license. The locally drawn illustrative fallback is labeled as a schematic, not real imagery or measured road geometry.

@@ -62,7 +62,7 @@ Updated November 7, 2026. This revision adopts the useful parts of Claude's over
 
 | Items | Decision |
 | --- | --- |
-| 1–4: narrow scope, unattended judgments, fallbacks, no external publishing | Adopt for a future authorized overnight build. Continue reversible work using documented fallbacks, within permissions and budgets. Timebox a blocked step to 45 minutes at most. No deployments, organizer messages, or public tunnels during that run. |
+| 1–4: narrow scope, unattended judgments, fallbacks, no external publishing | Adopt for the authorized overnight build. Continue reversible work using documented fallbacks, within permissions and budgets. Timebox a blocked step to 45 minutes at most. No deployments, organizer messages, or public tunnels during that run. The separately authorized GitHub PR is allowed. |
 | 5–6: congestion instead of obstruction | Do not adopt. The missing-footage premise is resolved: a licensed obstruction clip is downloaded and visually checked. Retain road obstruction / utility work zone as the primary demo class. |
 | 7: YOLO gate plus Gemini | Optional after the core flow. Vehicle counts are not evidence of abnormal congestion without a comparable baseline and motion evidence. A vehicle gate may miss debris/tape; it must not be the only way the obstruction reaches analysis. |
 | 8: real vs. simulated map placement | Adopt. Use real coordinates only with source evidence. Selected obstruction footage has unknown coordinates; label its demo marker simulated. A known camera location is still not a measured object location. |
@@ -294,13 +294,14 @@ no_escape/
   clearway/
     docs/                 # plan decisions, footage sources, scenario, attribution
     data/                 # local media/cache/ledger, ignored in Git
-    web/                  # planned frontend
-    api/                  # planned backend
-    tests/                # planned workflow and integration checks
+    web/                  # React/Cesium interface and frontend checks
+    api/                  # FastAPI operator, responder, analysis, and storage
+    tests/                # API, budget/cache, evaluation, and media checks
+    scripts/              # local launcher, media restore, cycle verification, evaluation
   ECC/                    # existing local tool checkout, ignored in project Git
   ECC-codex-reviewed/     # existing local plugin package, ignored in project Git
 ```
 
-Repository remote: [ZelinZhu-Richard/no-escape](https://github.com/ZelinZhu-Richard/no-escape). Connecting the local remote does not publish files. Keep downloaded footage, caches, credentials, and unrelated tool-installation artifacts out of commits.
+Repository remote: [ZelinZhu-Richard/no-escape](https://github.com/ZelinZhu-Richard/no-escape). The documentation baseline is on `main`; the authorized overnight implementation is on `feat/clearway-overnight-demo` for a draft PR. Keep downloaded footage, caches, credentials, and unrelated tool-installation artifacts out of commits.
 
-Current completed work: judging criteria/tracks transcribed, planning and source review, licensed footage downloaded/inspected/decoded, reference scenario, folder relocation, and local Git connection. Application code, inference, labeling UI, reset tests, tunnel/cellular validation, evaluation metrics, and projection are still future work.
+Current implementation: the local operator/responder applications, licensed replay, evidence review, confirmation/reset lifecycle, human-labeling UI, fixture/genuine-cache separation, guarded Gemini Developer API adapter, evaluation script, and startup/media-restore tools exist. Actual model inference, human evaluation labels, public phone/cellular validation, photorealistic-service validation, and projection remain unfinished. See [MORNING_REPORT.md](MORNING_REPORT.md) for final tested behavior, commands, limitations, and PR status. Fixtures do not establish Computer Vision performance.
