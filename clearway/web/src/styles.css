@@ -2382,3 +2382,12 @@ h3 {
     scroll-behavior: auto !important;
   }
 }
+
+.source-notice {
+  padding: 10px 20px;
+  color: #9fadb2;
+  background: #0c161c;
+  text-align: center;
+  font-size: 11px;
+}
+.source-notice a { color: #b1dcca; }

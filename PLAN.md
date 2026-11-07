@@ -43,6 +43,12 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Public CCTV detection quality — November 7, 2026
+
+The user reported that the live YOLO results were poor. Compare genuine detections on the same public-camera frames, including false boxes on burned-in camera text, instead of treating update frequency as detection quality. Upgrade live CCTV independently of the saved replay detector. The user explicitly approved the AGPL-3.0 traffic-trained YOLO11 model. Select checksum-pinned YOLO11s VisDrone at 640 pixels and confidence 0.40 for live CCTV; preserve the replay Tiny model and caches. Keep YOLOX-M as an explicitly selectable Apache-weight alternative. Include the AGPL license and corresponding source link. Camera 689 alone excludes its observed title/timestamp regions, with the policy in provenance and visible in the UI.
+
+Make the live player larger, offer labels separately from boxes, show actual model/count/inference time, and provide a shortcut to the clearer I-80 at 6th Street view. Keep every other camera selectable and preserve source failure/snapshot behavior. Frame quality still limits distant or blurred vehicles; never turn detection counts into accuracy claims. Record development-frame comparisons separately from human-labeled evaluation, which remains pending.
+
 ## Live video and camera detections — November 7, 2026
 
 The user requested actual live video where the official source supports it, accepted snapshots as fallback, reported hard-to-use map pins, and authorized YOLO boxes on public feeds. This supersedes the earlier exclusion of local inference on selected cameras. Probe official HLS access without bypassing controls, play only the selected visible camera, and fall back honestly when video cannot load. Make map pins easier to hit and move focus to their camera preview.

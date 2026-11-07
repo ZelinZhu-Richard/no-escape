@@ -198,13 +198,13 @@ def test_catalog_becomes_stale_without_silent_refresh(tmp_path):
 def test_detector_receives_exact_snapshot_once_and_cache_preserves_hash(tmp_path):
     calls = []
     class Detector:
-        def analyze_jpeg(self, raw):
-            calls.append(raw)
+        def analyze_jpeg(self, raw, camera_id=None):
+            calls.append((raw, camera_id))
             return {"status": "available", "analysis_mode": "fresh", "image_sha256": hashlib.sha256(raw).hexdigest(), "boxes": [], "vehicle_count": 0, "person_count": 0}
     service = LiveCameraService(catalog_file(tmp_path), detector=Detector(), image_fetcher=lambda *_: (JPEG, {}), clock=lambda: NOW)
     fresh = service.snapshot("caltrans-d4-1")
     cached = service.snapshot("caltrans-d4-1")
-    assert calls == [JPEG]
+    assert calls == [(JPEG, "caltrans-d4-1")]
     assert fresh["image_sha256"] == fresh["detections"]["image_sha256"] == hashlib.sha256(JPEG).hexdigest()
     assert fresh["detections"]["analysis_mode"] == "fresh"
     assert cached["detections"]["analysis_mode"] == "cached"
@@ -214,7 +214,7 @@ def test_detector_receives_exact_snapshot_once_and_cache_preserves_hash(tmp_path
 @pytest.mark.parametrize("failure", ["raise", "mismatch"])
 def test_failed_or_mismatched_detection_never_breaks_image_or_substitutes_boxes(tmp_path, failure):
     class Detector:
-        def analyze_jpeg(self, raw):
+        def analyze_jpeg(self, raw, camera_id=None):
             if failure == "raise":
                 raise RuntimeError("private-provider-error")
             return {"status": "available", "image_sha256": "wrong-image", "boxes": [{"class_name": "person"}]}

@@ -16,6 +16,9 @@ const CLASSES = new Set([
   "motorcycle",
   "bus",
   "truck",
+  "van",
+  "tricycle",
+  "awning-tricycle",
 ]);
 
 export interface LiveDetectionFrame {

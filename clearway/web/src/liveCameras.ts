@@ -63,6 +63,7 @@ export interface ImageDetections {
     analyzed_at: string;
   };
   inference_ms: number | null;
+  excluded_regions?: { id: string; xyxy: [number, number, number, number] }[];
 }
 export const isImageHash = (value: unknown): value is string =>
   typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
@@ -171,6 +172,20 @@ export function readImageDetections(
   const vehicles = count(raw.vehicle_count),
     people = count(raw.person_count);
   if (vehicles === null || people === null) return null;
+  const excludedRegions: NonNullable<ImageDetections["excluded_regions"]> = [];
+  if (raw.excluded_regions !== undefined) {
+    if (!Array.isArray(raw.excluded_regions) || raw.excluded_regions.length > 8)
+      return null;
+    for (const item of raw.excluded_regions) {
+      const region = record(item);
+      if (!region || !validId(region.id) || !Array.isArray(region.xyxy) ||
+        region.xyxy.length !== 4 || !region.xyxy.every(
+          n => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1,
+        ) || region.xyxy[2] <= region.xyxy[0] || region.xyxy[3] <= region.xyxy[1])
+        return null;
+      excludedRegions.push({id: region.id, xyxy: region.xyxy as [number, number, number, number]});
+    }
+  }
   return {
     status: "available",
     analysis_mode: raw.analysis_mode as "fresh" | "cached",
@@ -178,6 +193,7 @@ export function readImageDetections(
     image_width: raw.image_width,
     image_height: raw.image_height,
     boxes,
+    excluded_regions: excludedRegions,
     vehicle_count: vehicles,
     person_count: people,
     model: { name: model.name, version: safeText(model.version) },

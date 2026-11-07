@@ -1489,6 +1489,12 @@ export function App() {
   const match = window.location.pathname.match(
     /^\/respond\/([^/]+)\/([^/]+)\/?$/,
   );
-  if (match) return <Responder runId={match[1]} incidentId={match[2]} />;
-  return <Operator />;
+  return <>
+    {match ? <Responder runId={match[1]} incidentId={match[2]} /> : <Operator />}
+    <div className="source-notice">
+      <a href="https://github.com/ZelinZhu-Richard/no-escape/tree/feat/clearway-overnight-demo" target="_blank" rel="noreferrer">Source code</a>
+      <span> · </span><a href="/assets/licenses/AGPL-3.0.txt" target="_blank" rel="noreferrer">AGPL-3.0</a>
+      <span> · No warranty</span>
+    </div>
+  </>;
 }

@@ -7,6 +7,7 @@ export default defineConfig({
     react(),
     viteStaticCopy({
       targets: [
+        { src: "../licenses/AGPL-3.0.txt", dest: "assets/licenses", rename: { stripBase: true } },
         ...["Workers", "ThirdParty", "Assets", "Widgets"].map((folder) => ({
           src: `node_modules/cesium/Build/Cesium/${folder}/**/*`,
           dest: "cesium",

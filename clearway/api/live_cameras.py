@@ -210,12 +210,12 @@ class LiveCameraService:
         except (OSError, ValueError, TypeError, KeyError, AttributeError):
             return False
 
-    def _detect(self, raw: bytes, image_hash: str) -> dict:
+    def _detect(self, raw: bytes, image_hash: str, camera_id: str) -> dict:
         unavailable = {"status": "unavailable", "analysis_mode": "unavailable", "image_sha256": image_hash, "message": "Local YOLO is unavailable for this exact image; no boxes substituted."}
         if self._detector is None:
             return unavailable
         try:
-            result = self._detector.analyze_jpeg(raw)
+            result = self._detector.analyze_jpeg(raw, camera_id=camera_id)
             if not isinstance(result, dict) or result.get("image_sha256") != image_hash:
                 return unavailable
             return result
@@ -281,7 +281,7 @@ class LiveCameraService:
                     pass
                 stale = modified is not None and (fetched-modified).total_seconds() > max(900, interval*2)
                 image_hash = hashlib.sha256(raw).hexdigest()
-                detections = self._detect(raw, image_hash)
+                detections = self._detect(raw, image_hash, camera_id)
                 result = {**base, "status": "available", "image_data_url": "data:image/jpeg;base64," + base64.b64encode(raw).decode("ascii"), "image_sha256": image_hash, "detections": detections, "fetched_at": fetched.isoformat(), "source_last_modified": modified.isoformat() if modified else None, "stale": stale, "refresh_after_seconds": interval, "source_refresh_seconds": interval, "message": "Latest provider snapshot fetched; exact capture time is unknown." if not stale else "Provider image metadata is old; this snapshot may be stale."}
                 next_fetch = self._monotonic()+interval
             except Exception:

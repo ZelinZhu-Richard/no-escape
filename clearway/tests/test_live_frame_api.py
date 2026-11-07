@@ -18,8 +18,8 @@ class Detector:
     def __init__(self):
         self.calls = []
 
-    def analyze_jpeg(self, raw):
-        self.calls.append(raw)
+    def analyze_jpeg(self, raw, camera_id=None):
+        self.calls.append((raw, camera_id))
         return {"image_sha256": hashlib.sha256(raw).hexdigest(), "status": "unavailable", "boxes": []}
 
 
@@ -41,9 +41,9 @@ def test_exact_frame_bytes_rate_limit_and_no_incident_mutation(service):
     response = client.post(URL, content=frame, headers=JPEG_HEADERS)
     assert response.status_code == 200
     assert response.json()["image_sha256"] == hashlib.sha256(frame).hexdigest()
-    assert detector.calls == [frame]
+    assert detector.calls == [(frame, "caltrans-d4-53")]
     assert client.post(URL, content=frame, headers=JPEG_HEADERS).status_code == 429
-    assert detector.calls == [frame]
+    assert detector.calls == [(frame, "caltrans-d4-53")]
     assert client.get("/api/state").json() == before
 
 
@@ -56,7 +56,7 @@ def test_motion_overlay_accepts_eight_fps_but_rejects_faster_calls(service, monk
         assert client.post(URL, content=b"frame", headers=JPEG_HEADERS).status_code == 200
         clock[0] += 0.124
         assert client.post(URL, content=b"too-soon", headers=JPEG_HEADERS).status_code == 429
-    assert detector.calls == [b"frame"] * 8
+    assert detector.calls == [(b"frame", "caltrans-d4-53")] * 8
 
 
 def test_unknown_camera_and_wrong_types_never_reach_detector(service):

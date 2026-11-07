@@ -11,6 +11,7 @@ for (const path of [
   "assets/licenses/ThirdParty.json",
   "assets/licenses/manrope-OFL.txt",
   "assets/licenses/bundled-dependencies.md",
+  "assets/licenses/AGPL-3.0.txt",
 ]) {
   const file = new URL(`../dist/${path}`, import.meta.url);
   assert((await stat(file)).size > 0, `Missing or empty build asset: ${path}`);

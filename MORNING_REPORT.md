@@ -1,5 +1,28 @@
 # Clearway morning handoff
 
+## Traffic-trained live CCTV upgrade — November 7, 2026
+
+**YOLO11s VisDrone is installed, selected, and verified on actual playing public CCTV**, following the user's explicit AGPL-3.0 approval. Open **Public traffic CCTV → Open 6th Street live** at `http://127.0.0.1:8000`. The no-reload operator/responder server is running locally; no public tunnel is running.
+
+The live player is larger, box labels are optional, and the visible summary reports the actual model, counts, inference time, input resolution, and update rate. Recorded replay keeps its existing YOLOX-Tiny caches. Only Telegraph camera689 excludes the inspected title/timestamp regions; dashed outlines and text disclose that filter, and its identity is included in cache provenance.
+
+### What was verified
+
+- **253 backend tests and 57 frontend tests passed.** The production build and emitted license/Cesium checks passed. Independent review found no material issues.
+- Five complete running-service HTTP replay/confirm/reset cycles passed with zero cloud inference calls: `clearway/data/verification/traffic-yolo11-api-cycles.json`.
+- Actual browser playback on 6th Street and Telegraph showed YOLO11s boxes directly on moving video at roughly 6–6.5 updates/s. Spot-check inference times were around 45–51 ms. Labels toggled without restarting video. Telegraph showed the graphics exclusions and no boxes on its title/timestamp in the inspected view.
+- Desktop and 390×844 video/overlay bounds matched, without mobile horizontal overflow. Local proof: `traffic-yolo11-desktop.jpg`, `traffic-yolo11-mobile.jpg`, and `traffic-yolo11-telegraph.jpg` under `clearway/data/verification/`.
+- On the same saved 6th Street development frame, the old detector returned 4 vehicles and the final profile returned 17. Telegraph returned 10 after excluding 10 graphic-centered boxes. These counts are not precision/recall or accuracy measurements; no human labels were fabricated. The blurred distant bridge frame still returned zero, despite visible traffic.
+
+### Run and remaining work
+
+Use the existing server. For a fresh checkout: `make setup`, `make detection-setup`, `make live-detect`, `make build`, then `make serve`. Restore recorded demo media/caches separately with `make footage` and `make detect`. `make live-detect` explicitly downloads and verifies the approved AGPL model; restart after changing profiles. `make live-detect-apache` selects the compared YOLOX-M weights instead, without changing the application license.
+
+AGPL text and public source links are included in the app and repository; model weights and camera images stay out of Git. **Provider inference spend remains $0.** The current server was intentionally restarted to load the approved model, with reload disabled. Camera access remains provider-dependent, and distant/blurred imagery can still miss vehicles. Detection is not danger classification or validated tracking.
+
+Human to-dos remain: add the Gemini key for approved bounded validation; provide the deferred Google 3D token; run the deferred physical cellular handoff test; label evaluation windows; check audible voice and rehearse. See [CCTV-QUALITY.md](clearway/docs/CCTV-QUALITY.md) for model provenance, settings, and limits. This section supersedes the earlier live-detector/model setup and test counts below.
+
+
 ## Live video, map clicks, and camera YOLO — November 7, 2026
 
 **Actual provider video is working.** Select **TVD33 — I-80: Bay Bridge SAS Tower West** in Public traffic CCTV. The built-in browser played its advancing HLS stream and produced real local YOLO detections on sampled frames. Forty catalog entries advertise video URLs; only the selected camera is loaded, and this is not a claim that every advertised stream works. Cameras without reliable video retain the five-minute snapshot fallback.

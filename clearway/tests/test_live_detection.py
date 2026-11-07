@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import hashlib
+import json
 import threading
 
 import pytest
@@ -185,3 +186,106 @@ def test_jpeg_header_parser_accepts_baseline_and_progressive():
     raw = jpeg()
     assert jpeg_dimensions(raw) == (640, 480)
     assert jpeg_dimensions(raw.replace(b"\xff\xc0", b"\xff\xc2")) == (640, 480)
+
+
+@pytest.mark.parametrize("config", [
+    "{broken json",
+    json.dumps({"schema_version": 1, "profile": "not-supported"}),
+    json.dumps({"schema_version": 1, "profile": "yolo11s-visdrone640"}),
+])
+def test_bad_profile_does_not_prevent_service_startup_or_silently_use_tiny(tmp_path, config):
+    folder = tmp_path / "models"
+    folder.mkdir()
+    (folder / "live-detector.json").write_text(config)
+    instance, detector, _ = service(tmp_path)
+    result = instance.analyze_jpeg(jpeg())
+    assert result["status"] == "unavailable"
+    assert result["reason"] == "configuration_unavailable"
+    assert detector.calls == 0
+
+
+def test_selected_model_metadata_and_cache_identity_change_with_profile(tmp_path):
+    from api.traffic_detection import PROFILES
+    medium, _, _ = service(tmp_path)
+    first = medium.analyze_jpeg(jpeg())
+    assert first["model"]["name"] == "YOLOX-M"
+    assert first["model"]["weights_sha256"] == PROFILES["yolox-m640"].sha256
+    assert first["model"]["input_size"] == [640, 640]
+    folder = tmp_path / "models"
+    folder.mkdir()
+    (folder / "live-detector.json").write_text(json.dumps({"schema_version": 1, "profile": "yolo11s-visdrone640", "agpl_choice_accepted": True}))
+    detector = Detector()
+    detector.detect = lambda _: [
+        {"class_name": "van", "native_class_name": "van", "confidence": 0.8, "xyxy": [0.1, 0.2, 0.6, 0.7]},
+        {"class_name": "person", "native_class_name": "people", "confidence": 0.7, "xyxy": [0.7, 0.2, 0.8, 0.8]},
+    ]
+    optional, _, _ = service(tmp_path, detector)
+    second = optional.analyze_jpeg(jpeg())
+    assert second["model"]["name"] == "YOLO11s VisDrone" and second["model"]["license"] == "AGPL-3.0"
+    assert second["model"]["weights_sha256"] == PROFILES["yolo11s-visdrone640"].sha256
+    assert second["vehicle_count"] == second["person_count"] == 1
+    assert second["boxes"][0]["native_class_name"] == "van"
+    assert second["provenance"]["configuration_sha256"] != first["provenance"]["configuration_sha256"]
+    assert second["image_sha256"] == first["image_sha256"]
+    # Selection is startup-scoped; no hidden runtime model switch occurs.
+    assert medium.analyze_jpeg(jpeg())["model"]["name"] == "YOLOX-M"
+
+
+def graphics_and_road_boxes():
+    return [
+        {"class_name": "car", "confidence": 0.8, "xyxy": [0.05, 0.02, 0.2, 0.06]},  # title digits
+        {"class_name": "car", "confidence": 0.8, "xyxy": [0.1, 0.94, 0.3, 0.98]},  # timestamp digits
+        {"class_name": "car", "confidence": 0.8, "xyxy": [0.2, 0.4, 0.35, 0.55]},  # roadway
+        {"class_name": "person", "confidence": 0.8, "xyxy": [0.3, 0.06, 0.4, 0.14]},  # overlaps title, center outside
+    ]
+
+
+def test_known_camera_graphics_exclusion_uses_centers_and_preserves_roadway(tmp_path):
+    detector = Detector()
+    detector.detect = lambda _: graphics_and_road_boxes()
+    instance, _, _ = service(tmp_path, detector)
+    result = instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-689")
+    assert result["status"] == "available"
+    assert result["boxes"] == graphics_and_road_boxes()[2:]
+    assert result["vehicle_count"] == result["person_count"] == 1
+    assert result["excluded_detection_count"] == 2
+    assert result["excluded_regions"] == [
+        {"id": "provider-title", "xyxy": [0, 0, 0.46, 0.08]},
+        {"id": "provider-timestamp", "xyxy": [0, 0.93, 0.52, 1]},
+    ]
+    assert result["camera_id"] == result["provenance"]["camera_id"] == "caltrans-d4-689"
+    assert result["provenance"]["exclusion_policy"] == "caltrans-d4-689-burned-in-graphics-v1"
+    assert result["image_sha256"] == hashlib.sha256(jpeg()).hexdigest()
+
+
+@pytest.mark.parametrize("camera_id", [None, "caltrans-d4-37", "caltrans-d4-689-2"])
+def test_graphics_exclusion_is_not_applied_to_other_or_unknown_cameras(tmp_path, camera_id):
+    detector = Detector()
+    detector.detect = lambda _: graphics_and_road_boxes()
+    instance, _, _ = service(tmp_path, detector)
+    result = instance.analyze_jpeg(jpeg(), camera_id=camera_id)
+    assert result["boxes"] == graphics_and_road_boxes()
+    assert result["excluded_detection_count"] == 0
+    assert result["excluded_regions"] == []
+    assert result["provenance"]["exclusion_policy"] == "none-v1"
+
+
+def test_identical_jpeg_from_different_cameras_has_isolated_cache_and_policy(tmp_path):
+    class GraphicsDetector(Detector):
+        def detect(self, image):
+            self.calls += 1
+            return graphics_and_road_boxes()
+    instance, detector, _ = service(tmp_path, GraphicsDetector())
+    masked = instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-689")
+    other = instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-37")
+    unspecified = instance.analyze_jpeg(jpeg())
+    assert detector.calls == 3
+    assert masked["analysis_mode"] == other["analysis_mode"] == unspecified["analysis_mode"] == "fresh"
+    assert len(masked["boxes"]) == 2 and len(other["boxes"]) == len(unspecified["boxes"]) == 4
+    assert len({r["provenance"]["configuration_sha256"] for r in (masked, other, unspecified)}) == 3
+    assert len({r["provenance"]["model_configuration_sha256"] for r in (masked, other, unspecified)}) == 1
+    masked["excluded_regions"][0]["xyxy"][2] = 1  # returned data cannot alter cached policy
+    cached = instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-689")
+    assert cached["analysis_mode"] == "cached" and detector.calls == 3
+    assert cached["excluded_regions"][0]["xyxy"] == [0, 0, 0.46, 0.08]
+    assert len(cached["boxes"]) == 2

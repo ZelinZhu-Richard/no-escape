@@ -53,8 +53,10 @@ export function useVerifiedSnapshotDetections(snapshot: LiveSnapshot | null) {
 
 export function LiveImageBoxes({
   detections,
+  labels = true,
 }: {
   detections: ImageDetections;
+  labels?: boolean;
 }) {
   const width = detections.image_width,
     height = detections.image_height;
@@ -67,6 +69,12 @@ export function LiveImageBoxes({
       aria-hidden="true"
       data-testid="live-yolo-boxes"
     >
+      {detections.excluded_regions?.map((region) => {
+        const [x1, y1, x2, y2] = region.xyxy;
+        return <rect key={region.id} className="live-excluded-region"
+          x={x1 * width} y={y1 * height} width={(x2 - x1) * width}
+          height={(y2 - y1) * height} />;
+      })}
       {detections.boxes.map((box, index) => {
         const [x1, y1, x2, y2] = box.xyxy;
         const label = `${box.class_name} ${Math.round(box.confidence * 100)}%`;
@@ -93,7 +101,7 @@ export function LiveImageBoxes({
               height={(y2 - y1) * height}
               className="detection-box"
             />
-            <rect
+            {labels && <><rect
               x={x}
               y={y}
               width={labelWidth}
@@ -108,7 +116,7 @@ export function LiveImageBoxes({
               fontFamily="monospace"
             >
               {label}
-            </text>
+            </text></>}
           </g>
         );
       })}
@@ -136,6 +144,7 @@ export function LiveDetectionCounts({
           ? ""
           : ` · ${Math.round(detections.inference_ms)} ms`}
       </span>
+      {!!detections.excluded_regions?.length && <span>Camera text regions excluded</span>}
     </div>
   );
 }

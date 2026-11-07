@@ -212,6 +212,8 @@ export function LiveCameraPanel({
   } | null>(null);
   const [failedStream, setFailedStream] = useState<string | null>(null);
   const cameras = useMemo(() => catalog?.cameras ?? [], [catalog]);
+  const demoCamera = cameras.find(camera => camera.id === "caltrans-d4-37" && camera.streaming_url);
+  const previewRef = useRef<HTMLDivElement>(null);
   const visible = useMemo(
     () => filterLiveCameras(cameras, region, query),
     [cameras, region, query],
@@ -255,6 +257,13 @@ export function LiveCameraPanel({
         analyzes the selected camera only; no cloud model calls or incident
         alerts run here.
       </p>
+      {demoCamera && <button className="live-camera-shortcut" onClick={() => {
+        onSelect(demoCamera.id);
+        setPaused(false);
+        setFailedStream(null);
+        setMediaChoice({ cameraId: demoCamera.id, mode: "video" });
+        requestAnimationFrame(() => previewRef.current?.scrollIntoView({ block: "center", behavior: "auto" }));
+      }}>Open 6th Street live <span>I-80 · San Francisco</span></button>}
       {loading ? (
         <p className="live-camera-empty" role="status">
           Loading the public camera catalog…
@@ -328,7 +337,7 @@ export function LiveCameraPanel({
               </p>
             )}
           </div>
-          <div className="live-camera-preview" aria-live="off">
+          <div className="live-camera-preview" aria-live="off" ref={previewRef}>
             {selected ? (
               <>
                 <div className="live-preview-heading">

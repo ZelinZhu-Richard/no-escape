@@ -38,6 +38,11 @@ function moving(): LiveTrackedFrame {
 }
 
 describe("short-horizon live YOLO overlay", () => {
+  it("retains mixed traffic classes from a configured live detector", () => {
+    const kinds = ["car", "van", "tricycle", "awning-tricycle", "person"];
+    const result = tracked(frame(1, kinds.map((kind, index) => box(index * .15, kind))));
+    expect(projectLiveFrame(result, 1.05, 1050).boxes.map(item => item.class_name)).toEqual(kinds);
+  });
   it("shows new real boxes without inventing movement from one observation", () => {
     const result = projectLiveFrame(tracked(frame(1)), 1.08, 1080);
     expect(result.boxes).toEqual([box(0.2)]);

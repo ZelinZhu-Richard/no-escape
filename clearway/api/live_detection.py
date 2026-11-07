@@ -14,12 +14,12 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 import threading
 import time
 
-from .detection import (
-    CLASS_NAMES, CONFIDENCE, MODEL_NAME, MODEL_SHA256, MODEL_VERSION, NMS_IOU,
-    PREPROCESSING_VERSION, VEHICLE_NAMES, YoloDetector,
+from .traffic_detection import (
+    DetectorProfile, TrafficDetectionError, TrafficDetector, selected_profile,
 )
 
 MAX_IMAGE_BYTES = 1_000_000
@@ -30,6 +30,14 @@ CACHE_TTL_SECONDS = 300
 FAILURE_RETRY_SECONDS = 30
 SCHEMA_VERSION = "clearway-live-detections-v1"
 SOF_MARKERS = frozenset({0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF})
+# These rectangles cover the observed provider graphics on this camera only.
+# They are not a generic road ROI and must not follow other camera selections.
+GRAPHICS_CAMERA_ID = "caltrans-d4-689"
+GRAPHICS_EXCLUSION_POLICY = "caltrans-d4-689-burned-in-graphics-v1"
+GRAPHICS_EXCLUSIONS = (
+    ("provider-title", (0.0, 0.0, 0.46, 0.08)),
+    ("provider-timestamp", (0.0, 0.93, 0.52, 1.0)),
+)
 LIMITATIONS = [
     "Boxes describe this exact image, not a later video frame or continuous tracking.",
     "Detections may miss or misclassify objects; no injury, danger, identity, or calibrated lane membership is inferred.",
@@ -83,23 +91,48 @@ def _decode(detector, raw: bytes):
     return detector.cv2.imdecode(detector.np.frombuffer(raw, dtype=detector.np.uint8), detector.cv2.IMREAD_COLOR)
 
 
-def _validated_boxes(boxes: object) -> list[dict]:
+def _validated_boxes(boxes: object, profile: DetectorProfile) -> list[dict]:
     if not isinstance(boxes, list) or len(boxes) > 300:
         raise ValueError("Invalid detector output.")
     normalized = []
+    allowed_classes = set(dict(profile.display_classes).values())
+    display_names = dict(profile.display_classes)
+    native_mapping = {native: display_names[index] for index, native in profile.native_classes}
     for item in boxes:
-        if not isinstance(item, dict) or item.get("class_name") not in CLASS_NAMES.values():
+        if not isinstance(item, dict) or item.get("class_name") not in allowed_classes:
             raise ValueError("Invalid detector class.")
         confidence, coords = item.get("confidence"), item.get("xyxy")
-        if type(confidence) not in (float, int) or not math.isfinite(confidence) or not CONFIDENCE <= confidence <= 1:
+        if type(confidence) not in (float, int) or not math.isfinite(confidence) or not profile.confidence <= confidence <= 1:
             raise ValueError("Invalid detector confidence.")
         if (not isinstance(coords, list) or len(coords) != 4
                 or any(type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1 for value in coords)
                 or coords[0] >= coords[2] or coords[1] >= coords[3]):
             raise ValueError("Invalid detector coordinates.")
-        normalized.append({"class_name": item["class_name"], "confidence": float(confidence),
-                           "xyxy": [float(value) for value in coords]})
+        clean = {"class_name": item["class_name"], "confidence": float(confidence),
+                 "xyxy": [float(value) for value in coords]}
+        if "native_class_name" in item:
+            if native_mapping.get(item["native_class_name"]) != item["class_name"]:
+                raise ValueError("Invalid detector native class.")
+            clean["native_class_name"] = item["native_class_name"]
+        normalized.append(clean)
     return normalized
+
+
+def _exclusion_context(camera_id: str | None) -> dict:
+    if camera_id is not None and (not isinstance(camera_id, str)
+                                  or not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", camera_id)):
+        raise ValueError("Invalid camera identifier.")
+    regions = [{"id": identifier, "xyxy": list(rect)} for identifier, rect in GRAPHICS_EXCLUSIONS] if camera_id == GRAPHICS_CAMERA_ID else []
+    return {"camera_id": camera_id,
+            "exclusion_policy": GRAPHICS_EXCLUSION_POLICY if regions else "none-v1",
+            "excluded_regions": regions}
+
+
+def _outside_graphics(box: dict, regions: list[dict]) -> bool:
+    x1, y1, x2, y2 = box["xyxy"]
+    center_x, center_y = (x1 + x2) / 2, (y1 + y2) / 2
+    return not any(rect[0] <= center_x <= rect[2] and rect[1] <= center_y <= rect[3]
+                   for rect in (region["xyxy"] for region in regions))
 
 
 class LiveDetectionService:
@@ -112,7 +145,11 @@ class LiveDetectionService:
     def __init__(self, data_dir: Path, *, detector_factory=None, image_decoder=None,
                  monotonic=None, clock=None):
         self.data_dir = Path(data_dir)
-        self._factory = detector_factory or YoloDetector
+        try:
+            self._profile = selected_profile(self.data_dir)
+        except TrafficDetectionError:
+            self._profile = None
+        self._factory = detector_factory or (lambda weights: TrafficDetector(weights, self._profile))
         self._decode = image_decoder or _decode
         self._monotonic = monotonic or time.monotonic
         self._clock = clock or (lambda: datetime.now(timezone.utc))
@@ -120,12 +157,8 @@ class LiveDetectionService:
         self._detector = None
         self._retry_after = 0.0
         self._cache: OrderedDict[str, dict] = OrderedDict()
-        self._config = {
-            "model": MODEL_NAME, "model_version": MODEL_VERSION, "weights_sha256": MODEL_SHA256,
-            "preprocessing_version": PREPROCESSING_VERSION,
-            "confidence_threshold": CONFIDENCE, "nms_iou": NMS_IOU,
-            "classes": CLASS_NAMES, "schema_version": SCHEMA_VERSION,
-        }
+        self._config = {**(self._profile.configuration() if self._profile else {"profile": "unavailable"}),
+                        "schema_version": SCHEMA_VERSION}
         self._config_sha = hashlib.sha256(json.dumps(self._config, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
     def _unavailable(self, message: str, reason: str, *, image_sha: str | None = None, retry: int | None = None) -> dict:
@@ -140,14 +173,25 @@ class LiveDetectionService:
             result["retry_after_seconds"] = retry
         return result
 
-    def analyze_jpeg(self, raw: bytes) -> dict:
+    def analyze_jpeg(self, raw: bytes, camera_id: str | None = None) -> dict:
         started = self._monotonic()
+        try:
+            context = _exclusion_context(camera_id)
+        except ValueError:
+            return self._unavailable("Camera identifier is invalid; no detection was run.", "invalid_camera")
         try:
             width, height = jpeg_dimensions(raw)
         except (ValueError, TypeError):
             return self._unavailable("Image is not a supported, bounded JPEG; no detection was run.", "invalid_image")
         image_sha = hashlib.sha256(raw).hexdigest()
-        cache_key = hashlib.sha256(f"{image_sha}:{self._config_sha}".encode()).hexdigest()
+        if self._profile is None:
+            return self._unavailable("The selected local detector configuration is invalid; no fallback was used.",
+                                     "configuration_unavailable", image_sha=image_sha)
+        configuration_sha = hashlib.sha256(json.dumps(
+            {"model_configuration_sha256": self._config_sha, **context},
+            sort_keys=True, separators=(",", ":"),
+        ).encode()).hexdigest()
+        cache_key = hashlib.sha256(f"{image_sha}:{configuration_sha}".encode()).hexdigest()
         if not self._slot.acquire(blocking=False):
             return self._unavailable("Local detector is busy; retry with the next selected frame.", "busy", image_sha=image_sha, retry=1)
         try:
@@ -165,7 +209,7 @@ class LiveDetectionService:
                                          image_sha=image_sha, retry=max(1, math.ceil(self._retry_after - now)))
             try:
                 if self._detector is None:
-                    self._detector = self._factory(self.data_dir / "models" / "yolox_tiny.onnx")
+                    self._detector = self._factory(self.data_dir / "models" / self._profile.filename)
                 image = self._decode(self._detector, raw)
                 if image is None or len(image.shape) != 3 or image.shape[2] != 3:
                     return self._unavailable("JPEG could not be decoded; no detection was run.", "invalid_image", image_sha=image_sha)
@@ -174,21 +218,25 @@ class LiveDetectionService:
                         or decoded_width * decoded_height > MAX_IMAGE_PIXELS):
                     return self._unavailable("Decoded image dimensions do not match the JPEG header.", "invalid_image", image_sha=image_sha)
                 inference_started = self._monotonic()
-                boxes = _validated_boxes(self._detector.detect(image))
+                boxes = _validated_boxes(self._detector.detect(image), self._profile)
+                unfiltered_count = len(boxes)
+                boxes = [box for box in boxes if _outside_graphics(box, context["excluded_regions"])]
                 inference_ms = round(max(0, (self._monotonic() - inference_started) * 1000), 3)
                 result = {
                     "schema_version": SCHEMA_VERSION, "status": "available", "analysis_mode": "fresh",
                     "image_sha256": image_sha, "image_width": decoded_width, "image_height": decoded_height,
-                    "boxes": boxes, "vehicle_count": sum(box["class_name"] in VEHICLE_NAMES for box in boxes),
+                    "camera_id": camera_id, "excluded_regions": context["excluded_regions"],
+                    "excluded_detection_count": unfiltered_count - len(boxes),
+                    "boxes": boxes, "vehicle_count": sum(box["class_name"] != "person" for box in boxes),
                     "person_count": sum(box["class_name"] == "person" for box in boxes),
-                    "model": {"name": MODEL_NAME, "version": MODEL_VERSION, "weights_sha256": MODEL_SHA256,
-                              "license": "Apache-2.0", "runtime": "ONNX Runtime CPU",
-                              "runtime_version": self._detector.runtime_version},
+                    "model": self._profile.metadata(self._detector.runtime_version),
                     "provenance": {"kind": "local_yolo_image", "fixture": False,
-                                   "image_sha256": image_sha, "configuration_sha256": self._config_sha,
-                                   "preprocessing_version": PREPROCESSING_VERSION,
+                                   "image_sha256": image_sha, "configuration_sha256": configuration_sha,
+                                   "model_configuration_sha256": self._config_sha,
+                                   "camera_id": camera_id, "exclusion_policy": context["exclusion_policy"],
+                                   "preprocessing_version": self._profile.preprocessing_version,
                                    "analyzed_at": self._clock().isoformat()},
-                    "confidence_threshold": CONFIDENCE, "inference_ms": inference_ms,
+                    "confidence_threshold": self._profile.confidence, "inference_ms": inference_ms,
                     "request_ms": round(max(0, (self._monotonic() - started) * 1000), 3),
                     "limitations": list(LIMITATIONS),
                 }

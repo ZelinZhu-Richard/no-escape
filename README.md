@@ -34,7 +34,7 @@ No keys are required for the fixture workflow. Frozen cached mode uses only genu
 
 The map includes **100 public Caltrans traffic-camera points** around San Francisco/Oakland, with county/search filters and selected-camera previews. Click a purple pin to open its preview; enlarged hit areas and automatic scrolling make the selection visible. Forty catalog entries advertise **HLS video**, including the verified **TVD33 — Bay Bridge SAS Tower West**. Supported cameras play the provider's live video; other cameras and failed streams use the labeled five-minute snapshot fallback.
 
-The existing local YOLOX model draws boxes **directly over the playing live video**, using frequent sampled detections and short motion estimates between them. Boxes follow the playback clock and disappear when results become stale or playback pauses. Snapshot boxes remain bound to their exact image. Missing detection resources show unavailable state. Only the selected visible camera loads, with no cloud inference, camera archive, or automatic incident claims. Availability and image quality remain provider-controlled. See [LIVE-CAMERAS.md](clearway/docs/LIVE-CAMERAS.md).
+The traffic-trained YOLO11s VisDrone model draws boxes **directly over the playing live video**, using frequent sampled detections and short motion estimates between them. Boxes follow the playback clock and disappear when results become stale or playback pauses. Snapshot boxes remain bound to their exact image. Run `make live-detect` to prepare its pinned local weights. The player is wider, labels are optional, and **Open 6th Street live** selects a tested traffic view. Missing detection resources show unavailable state. Only the selected visible camera loads, with no cloud inference, camera archive, or automatic incident claims. Availability and image quality remain provider-controlled. See [LIVE-CAMERAS.md](clearway/docs/LIVE-CAMERAS.md).
 
 The separate 20 dated NCDOT camera inventory locations remain metadata only; DriveNC's camera API needs a developer key. `make camera-refresh` refreshes that inventory, and `make live-camera-refresh` refreshes the Caltrans catalog (at most daily by default, without fetching images). Both networks are unrelated to the recorded incident evidence. Google photorealistic 3D is prepared but awaits the team's Cesium token; activation steps are in [MAP-SETUP.md](clearway/docs/MAP-SETUP.md).
 
@@ -71,3 +71,7 @@ Never put keys in command logs, source files, or a committed environment file. L
 ## References
 
 [God's Eye View](https://github.com/bilawalsidhu/gods-eye-view) informs the map-to-detail interaction; [HawkWatch](https://github.com/Grace-Shao/Treehacks2025) informs timestamped video evidence. Clearway is a fresh implementation. See [REFERENCES.md](clearway/docs/REFERENCES.md) for inspected source patterns and [PITCH.md](clearway/docs/PITCH.md) for the draft table script.
+
+## License
+
+Clearway source is available under [AGPL-3.0](LICENSE), following the approved traffic-trained model choice. Third-party libraries, models, and footage retain their respective licenses; see [ATTRIBUTION.md](clearway/docs/ATTRIBUTION.md). Model weights and source media are restored separately and are not bundled in Git. The app links to its source and full license.

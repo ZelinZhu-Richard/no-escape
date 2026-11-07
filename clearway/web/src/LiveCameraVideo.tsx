@@ -21,6 +21,8 @@ export function LiveCameraVideo({
   const [visible, setVisible] = useState(document.visibilityState !== "hidden");
   const [playback, setPlayback] = useState("connecting");
   const [yoloEnabled, setYoloEnabled] = useState(true);
+  const [showLabels, setShowLabels] = useState(false);
+  const [frameSize, setFrameSize] = useState<[number, number] | null>(null);
   const [notice, setNotice] = useState("");
   useEffect(() => {
     const changed = () => setVisible(document.visibilityState !== "hidden");
@@ -118,6 +120,7 @@ export function LiveCameraVideo({
         livePlaylist || element.duration === Infinity ? "live" : "playing",
       );
       setNotice("");
+      setFrameSize([element.videoWidth, element.videoHeight]);
       diagnostic("playing", "decoded_media_playing");
     };
     const paused = () => {
@@ -260,13 +263,13 @@ export function LiveCameraVideo({
             data-wall-age-ms={overlay.wallAgeMs}
             data-source-id={camera.id}
           >
-            <LiveImageBoxes detections={overlay.detections} />
+            <LiveImageBoxes detections={overlay.detections} labels={showLabels} />
           </div>
         )}
         <span className="live-image-status">{status.toUpperCase()}</span>
       </div>
       <p className="live-camera-disclosure">
-        Provider HLS stream · capture time and delivery delay unknown. This
+        {frameSize ? `${frameSize[0]} × ${frameSize[1]} source · ` : ""}Provider HLS stream · capture time and delivery delay unknown. This
         video stops loading when the tab is hidden.
       </p>
       {notice && (
@@ -293,7 +296,15 @@ export function LiveCameraVideo({
         >
           {yoloEnabled ? "Pause YOLO" : "Enable YOLO"}
         </button>
+        <button aria-pressed={showLabels} onClick={() => setShowLabels(value => !value)}>
+          {showLabels ? "Hide labels" : "Show labels"}
+        </button>
       </div>
+      {overlay.detections && <div className="live-detection-summary" data-testid="live-detection-summary">
+        <span><b>{overlay.detections.vehicle_count}</b> vehicles · <b>{overlay.detections.person_count}</b> people</span>
+        <span>{overlay.detections.model.name} · {overlay.detections.inference_ms === null ? "local inference" : `${Math.round(overlay.detections.inference_ms)} ms inference`}</span>
+        {!!overlay.detections.excluded_regions?.length && <span>Camera text regions excluded</span>}
+      </div>}
       {overlay.message && (
         <p className="live-snapshot-notice" role="status">
           {overlay.message}

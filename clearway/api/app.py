@@ -262,7 +262,7 @@ def create_app(
                 raw.extend(chunk)
             if live_detection_service is None:
                 raise HTTPException(503, "Local camera detection is unavailable.")
-            return await run_in_threadpool(live_detection_service.analyze_jpeg, bytes(raw))
+            return await run_in_threadpool(live_detection_service.analyze_jpeg, bytes(raw), camera_id=camera_id)
 
         @application.get("/api/state")
         def state():

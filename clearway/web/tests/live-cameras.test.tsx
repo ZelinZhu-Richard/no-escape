@@ -156,6 +156,13 @@ const advance = async (milliseconds: number) => {
 };
 
 describe("public camera data boundaries", () => {
+  it("preserves bounded camera-text exclusions and rejects invalid regions", () => {
+    const regions = [{ id: "provider-title", xyxy: [0, 0, 0.46, 0.08] }];
+    expect(readImageDetections({ ...detection(), excluded_regions: regions }, verifiedHash)?.excluded_regions).toEqual(regions);
+    for (const xyxy of [[0, 0, 2, 1], [0.5, 0, 0.1, 1], [0, 0, NaN, 1]]) {
+      expect(readImageDetections({ ...detection(), excluded_regions: [{ id: "provider-title", xyxy }] }, verifiedHash)).toBeNull();
+    }
+  });
   it("only allows official HLS sources and source-bound genuine local detections", () => {
     expect(
       publicStreamUrl(
@@ -330,6 +337,12 @@ describe("selected public camera preview", () => {
         ?.getAttribute("viewBox"),
     ).toBe("0 0 352 240");
     expect(container.querySelector(".live-video-view img")).toBeNull();
+    expect(container.querySelector(".live-stream-frame svg text")).toBeNull();
+    expect(container.querySelector('[data-testid="live-detection-summary"]')?.textContent).toContain("1 vehicles");
+    const showLabels = [...container.querySelectorAll("button")].find(button => button.textContent === "Show labels")!;
+    await act(async () => showLabels.click());
+    expect(container.querySelector(".live-stream-frame svg text")?.textContent).toContain("car");
+    expect(hlsMock.instances).toHaveLength(1);
     await act(async () => {
       visibility.mockReturnValue("hidden");
       document.dispatchEvent(new Event("visibilitychange"));
