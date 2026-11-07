@@ -144,6 +144,7 @@ export function LiveDetectionCounts({
           ? ""
           : ` · ${Math.round(detections.inference_ms)} ms`}
       </span>
+      {detections.model.selection === "camera_override" && <span>Camera-specific model</span>}
       {!!detections.excluded_regions?.length && <span>Camera text regions excluded</span>}
     </div>
   );

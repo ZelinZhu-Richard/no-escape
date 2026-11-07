@@ -159,6 +159,12 @@ const advance = async (milliseconds: number) => {
 };
 
 describe("public camera data boundaries", () => {
+  it("preserves explicit camera model selection without inventing it for legacy evidence", () => {
+    const raw = {...detection(), model: {name: "YOLOX-M", version: "test", selection: "camera_override"}};
+    expect(readImageDetections(raw, verifiedHash)?.model).toEqual(raw.model);
+    expect(readImageDetections(detection(), verifiedHash)?.model.selection).toBeUndefined();
+    expect(readImageDetections({...raw, model: {...raw.model, selection: "automatic"}}, verifiedHash)?.model.selection).toBeUndefined();
+  });
   it("rejects malformed live alert status instead of inventing monitoring", () => {
     const valid = {phase: "watching", observed_seconds: 4, incident_id: null, message: "Watching"};
     expect(readLiveAlertMonitor(valid)).toEqual(valid);

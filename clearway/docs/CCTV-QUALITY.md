@@ -1,6 +1,30 @@
 # Public CCTV detection quality
 
-Live CCTV uses **YOLO11s VisDrone, 640×640, confidence 0.40**, following the user's explicit AGPL-3.0 approval. Recorded demos retain YOLOX-Tiny and their existing caches. The live page shows the actual model, vehicle/person counts, inference time, source resolution, and update frequency. Labels toggle without restarting the stream.
+Live CCTV defaults to **YOLO11s VisDrone, 640×640, confidence 0.40**, following the user's explicit AGPL-3.0 approval. Fremont has the explicit YOLOX-M selection described below. The live page shows the actual model, vehicle/person counts, inference time, source resolution, and update frequency. Labels toggle without restarting the stream.
+
+## Fremont correction — November 7, 2026
+
+The user reported missed vehicles on TVD01 — I-80 at Fremont (`caltrans-d4-49`). Browser inspection reproduced just 1–3 detections while the stream and overlay continued at about 6 updates/s. The installed VisDrone model performed poorly on this view; it was not a stalled player.
+
+One bounded official HLS segment supplied three development frames. The stream has 704×480 coded pixels with 10:11 sample aspect ratio; the browser presents 704×528 and captures 640×480 JPEGs. Comparisons used the same aspect-corrected 640×480 images, JPEG quality 80, and existing pinned profiles:
+
+| Development frame | VisDrone 640, confidence 0.40 | YOLOX-M 640, confidence 0.30 |
+| --- | ---: | ---: |
+| 1 | 1 vehicle | 10 vehicles |
+| 2 | 4 vehicles | 13 vehicles |
+| 3 | 0 vehicles | 7 vehicles |
+
+Visual checks showed more near/mid-distance vehicles covered by YOLOX-M. Distant, blurred and occluded cars remain missed; some boxes can span neighboring vehicles. These are development counts, not labeled accuracy or evidence of an incident. Cropped/tiled variants did not consistently improve coverage and were not selected. No profile thresholds or motion-retention limits were relaxed.
+
+`make live-detect` now prepares the approved default plus an explicit Fremont-only YOLOX-M override. On an existing installation with both pinned weights already present:
+
+```sh
+clearway/.venv/bin/python clearway/scripts/setup_live_detector.py --profile yolox-m640 --camera-id caltrans-d4-49
+```
+
+Restart the operator after changing the selector. The UI says **YOLOX-M · Camera-specific model** on Fremont; other cameras retain their default. `camera_profiles` entries in the ignored local selector preserve the global selection and other overrides. Profile-specific weights, thresholds and preprocessing enter evidence/cache provenance; runtimes and failure cooldowns are isolated by model while all inference shares one bounded slot. Missing weights fail visibly without a substitute or an automatic download.
+
+After the no-reload restart, actual Fremont video displayed the new model at approximately 6 updates/s and 69–73 ms inference in spot checks. The existing run and all three incidents survived. Local diagnostic files remain ignored under `.local/fremont-quality/`, with browser proof in `clearway/data/verification/fremont-live-yolo.jpg`.
 
 ## What changed
 
@@ -33,7 +57,7 @@ make build
 make serve
 ```
 
-`make live-detect` downloads the pinned YOLO11s weights, verifies SHA-256, and writes `clearway/data/models/live-detector.json` with the explicit AGPL choice. Restart the operator after changing profile. The user approved this selection on November 7, 2026. Full AGPL text is included in the repository and built app; the UI links to license and corresponding source. Third-party notices remain separate. Model weights are restored separately, not committed.
+`make live-detect` prepares pinned YOLO11s weights plus YOLOX-M for Fremont, verifies SHA-256, and writes `clearway/data/models/live-detector.json` with the explicit AGPL choice. Restart the operator after changing profile. The user approved this selection on November 7, 2026. Full AGPL text is included in the repository and built app; the UI links to license and corresponding source. Third-party notices remain separate. Model weights are restored separately, not committed.
 
 Model source: [RISEF/yolov11s-visdrone, pinned revision](https://huggingface.co/RISEF/yolov11s-visdrone/tree/16d8d1709ae6fd7a9920398fbed5612e6208e0f0). Artifact: `weights/best.onnx`. SHA-256: `5abd18e5b630c330e68fe56b2bdc3875b10fbea07fe6912bde3cb9e68b58ca23`. Runtime: ONNX Runtime CPU, without the Ultralytics Python package.
 

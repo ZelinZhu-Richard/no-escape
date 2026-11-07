@@ -306,6 +306,7 @@ export function LiveCameraVideo({
       {overlay.detections && <div className="live-detection-summary" data-testid="live-detection-summary">
         <span><b>{overlay.detections.vehicle_count}</b> vehicles · <b>{overlay.detections.person_count}</b> people</span>
         <span>{overlay.detections.model.name} · {overlay.detections.inference_ms === null ? "local inference" : `${Math.round(overlay.detections.inference_ms)} ms inference`}</span>
+        {overlay.detections.model.selection === "camera_override" && <span>Camera-specific model</span>}
         {!!overlay.detections.excluded_regions?.length && <span>Camera text regions excluded</span>}
       </div>}
       {overlay.message && (

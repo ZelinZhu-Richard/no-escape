@@ -31,6 +31,7 @@ detect:
 
 live-detect:
 	clearway/.venv/bin/python clearway/scripts/setup_live_detector.py --profile yolo11s-visdrone640 --download --accept-agpl
+	clearway/.venv/bin/python clearway/scripts/setup_live_detector.py --profile yolox-m640 --camera-id caltrans-d4-49 --download
 
 live-detect-apache:
 	clearway/.venv/bin/python clearway/scripts/setup_live_detector.py --profile yolox-m640 --download

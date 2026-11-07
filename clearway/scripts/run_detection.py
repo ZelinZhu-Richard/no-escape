@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Prepare genuine, pinned YOLOX overlays without any paid model calls."""
+"""Prepare genuine source-specific YOLO overlays without paid model calls.
+
+Dense traffic uses the explicitly installed YOLO11s VisDrone model; other
+registered clips retain YOLOX-Tiny. No live-camera selector is changed.
+"""
 from pathlib import Path
 import argparse
 import json
@@ -9,7 +13,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from api.configuration import load_local_environment  # noqa: E402
-from api.detection import DetectionError, DetectionService, download_model, prepare_detections  # noqa: E402
+from api.detection import DetectionError, DetectionService, download_model, prepare_detections, replay_profile  # noqa: E402
 from api.sources import SOURCES, media_path  # noqa: E402
 
 
@@ -17,7 +21,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", choices=[*SOURCES, "all"], default="road-obstruction")
     parser.add_argument("--fps", type=float, default=4.0)
-    parser.add_argument("--download-model", action="store_true", help="Download checksum-pinned official YOLOX weights if missing.")
+    parser.add_argument("--download-model", action="store_true", help="Download pinned Tiny weights for selected Tiny clips if missing; traffic weights use explicit live-detector setup.")
     parser.add_argument("--force", action="store_true", help="Recompute an existing genuine cache.")
     args = parser.parse_args()
     load_local_environment()
@@ -31,7 +35,7 @@ def main():
             sources = [source for source in sources if source not in unavailable]
             if not sources:
                 raise DetectionError("No registered footage is available; restore licensed footage first.")
-        if args.download_model:
+        if args.download_model and any(replay_profile(source) is None for source in sources):
             download_model(data)
         service = DetectionService(data)
         for source in sources:

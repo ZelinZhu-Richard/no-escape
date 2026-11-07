@@ -1,5 +1,15 @@
 # Clearway morning handoff
 
+## Fremont and Dense traffic corrections — November 7, 2026
+
+**Fremont CCTV:** the stream was healthy but the VisDrone model missed visible frontal vehicles. Fremont now explicitly selects pinned YOLOX-M; all other camera defaults remain unchanged. Three matched browser-resolution development frames produced **10/13/7 boxes versus 1/4/0** with VisDrone. The live browser displayed the selected model at about 6 updates/s and 69–73 ms inference. Distant/blurred cars and some neighboring-vehicle boxes remain a limitation. These counts are not accuracy metrics.
+
+**Dense traffic replay:** playback was already functional, but Tiny produced only six boxes across the entire 45-sample cache. Its source-specific cache is rebuilt with the approved VisDrone model at 4 fps; matched 1/4/8-second frames have **69/41/51 boxes versus zero**. Other replay caches stay Tiny. Labels are optional, off by default for Dense traffic so they do not obscure the roadway. False boxes on lane markings and overlapping boxes remain. The source's fixture intentionally creates no incident candidate; the evidence panel now reports that completed result instead of continuing to say “Start the scene.” Saved local detections and fixture incident outcomes stay distinct.
+
+**Verification:** 316 backend tests, 86 frontend tests, TypeScript/production build and emitted asset checks passed. Independent read-only review found no material issues. The built-in browser verified genuine Fremont video, Dense traffic advancing past 5 seconds with saved boxes, the label toggle, and the completed fixture message. Two announced no-reload restarts loaded the successive backend fixes; the existing run and its three incidents were retained. No provider calls, model downloads, public tunnel or deployment was used.
+
+The app remains at `http://127.0.0.1:8000/`. Fresh setup order: `make setup`, `make footage`, `make detection-setup`, `make live-detect`, `make detect`, `make build`, `make serve`. Dense traffic is optional media and is already present locally; `make footage` does not restore it on a new checkout. Rebuild its cache with `clearway/.venv/bin/python clearway/scripts/run_detection.py --source traffic-jam --force` after restoring that licensed source and installing weights. Camera-specific setup details are in [CCTV-QUALITY.md](clearway/docs/CCTV-QUALITY.md); replay results in [VISION.md](clearway/docs/VISION.md). Local ignored browser proofs: `clearway/data/verification/fremont-live-yolo.jpg` and `dense-traffic-fixed.jpg`.
+
 ## Dispatch UI verification — November 7, 2026
 
 The teammate's merged Dispatch UI (`8671380`) is pulled and rebuilt locally. Verification found and fixed desktop evidence navigation, a misleading idle monitoring headline, hidden replay-estimate/error disclosures, and unreadable live-evidence metadata. **294 backend and 78 frontend tests, production build and asset/license checks passed.**

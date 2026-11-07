@@ -289,3 +289,66 @@ def test_identical_jpeg_from_different_cameras_has_isolated_cache_and_policy(tmp
     assert cached["analysis_mode"] == "cached" and detector.calls == 3
     assert cached["excluded_regions"][0]["xyxy"] == [0, 0, 0.46, 0.08]
     assert len(cached["boxes"]) == 2
+
+
+def camera_selection(tmp_path):
+    folder = tmp_path / "models"
+    folder.mkdir()
+    path = folder / "live-detector.json"
+    path.write_text(json.dumps({"schema_version": 1, "profile": "yolo11s-visdrone640",
+        "agpl_choice_accepted": True, "camera_profiles": {"caltrans-d4-49": {"profile": "yolox-m640"}}}))
+    return path
+
+
+def test_camera_profile_uses_its_own_runtime_threshold_taxonomy_and_provenance(tmp_path):
+    path = camera_selection(tmp_path)
+    factories = []
+    medium, drone = Detector(), Detector()
+    medium.detect = lambda _: [{"class_name": "car", "native_class_name": "car",
+                               "confidence": 0.35, "xyxy": [0.1, 0.2, 0.6, 0.7]}]
+    drone.detect = lambda _: [{"class_name": "van", "native_class_name": "van",
+                              "confidence": 0.8, "xyxy": [0.1, 0.2, 0.6, 0.7]}]
+    def factory(weights):
+        factories.append(weights.name)
+        return medium if weights.name == "yolox_m.onnx" else drone
+    instance, _, _ = service(tmp_path, factory=factory)
+    fremont = instance.analyze_jpeg(jpeg(), "caltrans-d4-49")
+    other = instance.analyze_jpeg(jpeg(), "caltrans-d4-37")
+    assert fremont["status"] == other["status"] == "available"
+    assert fremont["model"]["name"] == "YOLOX-M"
+    assert other["model"]["name"] == "YOLO11s VisDrone"
+    assert fremont["confidence_threshold"] == 0.3 and other["confidence_threshold"] == 0.4
+    assert fremont["provenance"]["profile_selection"] == fremont["model"]["selection"] == "camera_override"
+    assert other["model"]["selection"] == "default"
+    assert fremont["provenance"]["model_configuration_sha256"] != other["provenance"]["model_configuration_sha256"]
+    assert fremont["provenance"]["configuration_sha256"] != other["provenance"]["configuration_sha256"]
+    assert fremont["image_sha256"] == other["image_sha256"]
+    assert instance.analyze_jpeg(jpeg(), "caltrans-d4-49")["analysis_mode"] == "cached"
+    assert factories == ["yolox_m.onnx", "yolo11s_visdrone.onnx"]
+    # Edits only apply after restart; a fresh service must not reuse the old model identity.
+    raw = json.loads(path.read_text()); raw.pop("camera_profiles"); path.write_text(json.dumps(raw))
+    assert instance.analyze_jpeg(jpeg(nonce=b"later"), "caltrans-d4-49")["model"]["name"] == "YOLOX-M"
+    restarted, _, _ = service(tmp_path, factory=factory)
+    new = restarted.analyze_jpeg(jpeg(), "caltrans-d4-49")
+    assert new["model"]["name"] == "YOLO11s VisDrone"
+    assert new["provenance"]["configuration_sha256"] != fremont["provenance"]["configuration_sha256"]
+
+
+def test_missing_camera_model_does_not_substitute_or_block_default_model(tmp_path):
+    camera_selection(tmp_path)
+    attempts = []
+    def factory(weights):
+        attempts.append(weights.name)
+        if weights.name == "yolox_m.onnx":
+            raise RuntimeError("private-native-error")
+        return Detector()
+    instance, _, ticks = service(tmp_path, factory=factory)
+    missing = instance.analyze_jpeg(jpeg(), "caltrans-d4-49")
+    assert missing["reason"] == "runtime_unavailable" and not missing["boxes"]
+    assert "private-native" not in str(missing)
+    assert instance.analyze_jpeg(jpeg(), "caltrans-d4-37")["model"]["name"] == "YOLO11s VisDrone"
+    assert instance.analyze_jpeg(jpeg(), "caltrans-d4-49")["status"] == "unavailable"
+    assert attempts == ["yolox_m.onnx", "yolo11s_visdrone.onnx"]
+    ticks[0] += FAILURE_RETRY_SECONDS + 1
+    instance.analyze_jpeg(jpeg(), "caltrans-d4-49")
+    assert attempts == ["yolox_m.onnx", "yolo11s_visdrone.onnx", "yolox_m.onnx"]

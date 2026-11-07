@@ -963,6 +963,12 @@ button.timestamp:hover {
   border: 1px solid var(--ink);
   background: var(--card);
 }
+.detection-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
 .unknowns summary {
   position: relative;
   display: flex;
@@ -1212,7 +1218,11 @@ button.timestamp:hover {
   margin-top: 22px;
 }
 .fixture-note p {
-  display: none;
+  display: block;
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
 }
 
 /* Lower band: location + feeds */

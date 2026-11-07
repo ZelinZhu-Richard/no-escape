@@ -43,6 +43,12 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Fremont and Dense traffic corrections — November 7, 2026
+
+The user reported missed vehicles on Fremont CCTV and a nonworking Dense traffic source. Inspect the actual images and player before changing models. Use explicit camera-specific local profiles: Fremont (`caltrans-d4-49`) selects the already pinned Apache-2.0 YOLOX-M model after same-frame visual comparisons; other cameras keep the approved YOLO11s VisDrone default. Preserve model-specific preprocessing, thresholds, provenance, cache identity and failure isolation, and show the selected model honestly. No runtime model downloads or paid inference.
+
+Dense traffic video plays, but its Tiny saved detections miss visible vehicles. Rebuild that source's genuine timestamped cache with the approved VisDrone model while preserving other replay caches. Keep object detection separate from the fixture incident result: when the selected fixture completes without a candidate, say so in its evidence panel even if other incidents are queued. Do not invent a congestion emergency. Verify real playback/boxes, selected-source result text, existing incident retention, and appropriate regression checks before updating the PR and handoff.
+
 ## Live CCTV review candidates — November 7, 2026
 
 The user now authorizes connecting live detections to incident alerts, map markers, and the evidence/confirmation workflow. This supersedes the prior viewing-only restriction on creating public-camera candidates. Monitor only the selected, visible, playing video; snapshots remain detection-only. Use bounded local temporal rules for a possible stationary vehicle (at least 12 seconds) or sustained person presence (at least 3 seconds). Do not infer a collision, injury, exact lane, or danger from these rules. High vehicle count alone is not an alert.

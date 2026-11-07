@@ -55,7 +55,7 @@ export interface ImageDetections {
   }[];
   vehicle_count: number;
   person_count: number;
-  model: { name: string; version: string };
+  model: { name: string; version: string; selection?: "default" | "camera_override" };
   provenance: {
     kind: "local_yolo_image";
     fixture: false;
@@ -213,7 +213,9 @@ export function readImageDetections(
     excluded_regions: excludedRegions,
     vehicle_count: vehicles,
     person_count: people,
-    model: { name: model.name, version: safeText(model.version) },
+    model: { name: model.name, version: safeText(model.version),
+      ...(model.selection === "default" || model.selection === "camera_override"
+        ? { selection: model.selection } : {}) },
     provenance: {
       kind: "local_yolo_image",
       fixture: false,

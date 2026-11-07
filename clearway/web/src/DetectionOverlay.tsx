@@ -75,8 +75,13 @@ export function DetectionOverlay({
   const [message, setMessage] = useState("Loading saved detections…");
   const [time, setTime] = useState(0);
   const [visible, setVisible] = useState(true);
+  const [showLabels, setShowLabels] = useState(sourceId !== "traffic-jam");
   const [rect, setRect] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const sampleTime = useRef(-1);
+
+  useEffect(() => {
+    setShowLabels(sourceId !== "traffic-jam");
+  }, [sourceId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -241,7 +246,7 @@ export function DetectionOverlay({
                   height={height}
                   className="detection-box"
                 />
-                <rect
+                {showLabels && <><rect
                   x={labelX}
                   y={labelY}
                   width={labelWidth}
@@ -255,7 +260,7 @@ export function DetectionOverlay({
                   className="detection-label"
                 >
                   {label}
-                </text>
+                </text></>}
               </g>
             );
           })}
@@ -267,7 +272,7 @@ export function DetectionOverlay({
             <i className={`tiny-dot ${data ? "" : "unavailable"}`} />
             YOLO · {data ? "saved detections" : "unavailable"}
           </span>
-          <button
+          <div className="detection-controls"><button
             className="detection-toggle"
             onClick={() => setVisible((value) => !value)}
             disabled={!data}
@@ -275,6 +280,14 @@ export function DetectionOverlay({
           >
             {visible ? "Hide boxes" : "Show boxes"}
           </button>
+          <button
+            className="detection-toggle"
+            onClick={() => setShowLabels((value) => !value)}
+            disabled={!data || !visible}
+            aria-pressed={showLabels}
+          >
+            {showLabels ? "Hide labels" : "Show labels"}
+          </button></div>
         </div>
         {data ? (
           <>

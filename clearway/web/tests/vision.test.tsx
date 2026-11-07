@@ -126,6 +126,24 @@ function Harness({ sourceId = "road-obstruction" }: { sourceId?: string }) {
 }
 
 describe("visible detection replay", () => {
+  it("keeps Dense traffic boxes visible without crowded labels and lets operators reveal them", async () => {
+    vi.mocked(request).mockResolvedValue(detections("traffic-jam"));
+    await act(async () => root.render(<Harness sourceId="traffic-jam" />));
+    const video = container.querySelector("video")!;
+    vi.spyOn(video, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, width: 400, height: 225,
+    } as DOMRect);
+    await act(async () => video.dispatchEvent(new Event("loadedmetadata")));
+    expect(container.querySelectorAll(".detection-box")).toHaveLength(1);
+    expect(container.querySelector(".detection-label")).toBeNull();
+    const labels = Array.from(container.querySelectorAll("button")).find(b => b.textContent === "Show labels")!;
+    await act(async () => labels.click());
+    expect(container.querySelector(".detection-label")?.textContent).toBe("car 90%");
+    expect(container.querySelectorAll(".detection-box")).toHaveLength(1);
+    await act(async () => labels.click());
+    expect(container.querySelector(".detection-label")).toBeNull();
+    expect(container.querySelectorAll(".detection-box")).toHaveLength(1);
+  });
   it("uses the current past sample without drawing future or stale gap boxes", () => {
     const data = detections();
     expect(frameAtTime(data, -1)).toBeNull();
