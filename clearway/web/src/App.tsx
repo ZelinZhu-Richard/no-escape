@@ -66,10 +66,33 @@ function Brand({ compact = false }: { compact?: boolean }) {
           fill="none"
           aria-hidden="true"
         >
-          <circle cx="16" cy="16" r="11" stroke="currentColor" strokeWidth="1.6" />
-          <circle cx="16" cy="16" r="5.2" stroke="currentColor" strokeWidth="1.6" opacity=".55" />
-          <path d="M16 1.5v7M16 23.5v7M1.5 16h7M23.5 16h7" stroke="currentColor" strokeWidth="1.6" />
-          <circle className="brand-core" cx="16" cy="16" r="2.2" fill="currentColor" />
+          <circle
+            cx="16"
+            cy="16"
+            r="11"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <circle
+            cx="16"
+            cy="16"
+            r="5.2"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            opacity=".55"
+          />
+          <path
+            d="M16 1.5v7M16 23.5v7M1.5 16h7M23.5 16h7"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <circle
+            className="brand-core"
+            cx="16"
+            cy="16"
+            r="2.2"
+            fill="currentColor"
+          />
         </svg>
       </span>
       <span className="brand-word">
@@ -621,6 +644,26 @@ function Operator() {
             Label windows
           </button>
         </nav>
+        <section className="desk-toolbar">
+          <div className="desk-headline">
+            <span className="headline-signal" aria-hidden="true">
+              <i />
+            </span>
+            <div>
+              <div className="eyebrow">ROAD OPERATIONS / REVIEW WORKSPACE</div>
+              <h1>
+                {alertState === "alert"
+                  ? `${pendingCount} ${pendingCount === 1 ? "signal" : "signals"} awaiting your call`
+                  : alertState === "confirmed"
+                    ? "Incident confirmed. Handoff ready."
+                    : "All sectors quiet. Watching."}
+              </h1>
+              <p>
+                See the evidence. Make the call. Keep the handoff connected.
+              </p>
+            </div>
+          </div>
+        </section>
         <div className="topbar-telemetry mono">
           <span className={`telemetry-cell ${pendingCount ? "is-hot" : ""}`}>
             <small>Pending</small>
@@ -653,140 +696,155 @@ function Operator() {
         <Labeling sources={sources} onBack={() => setTab("desk")} />
       ) : (
         <>
-          <section className="desk-toolbar">
-            <div className="desk-headline">
-              <span className="headline-signal" aria-hidden="true">
-                <i />
-              </span>
-              <div>
-                <div className="eyebrow">
-                  ROAD OPERATIONS / REVIEW WORKSPACE
-                </div>
-                <h1>
-                  {alertState === "alert"
-                    ? `${pendingCount} ${pendingCount === 1 ? "signal" : "signals"} awaiting your call`
-                    : alertState === "confirmed"
-                      ? "Incident confirmed. Handoff ready."
-                      : "All sectors quiet. Watching."}
-                </h1>
-                <p>
-                  See the evidence. Make the call. Keep the handoff connected.
-                </p>
-              </div>
-            </div>
-            <div className="run-controls">
-              <label className="analysis-select">
-                <span className="sr-only">Analysis mode</span>
-                <select
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as AnalysisMode)}
-                  disabled={Boolean(pending)}
-                  aria-label="Analysis mode"
-                >
-                  <option value="fixture">Fixture walkthrough</option>
-                  <option value="cached">Frozen model cache</option>
-                  <option
-                    value="fresh"
-                    disabled={!config?.model_configured}
-                    title={config?.model_readiness?.message}
-                  >
-                    Fresh inference
-                    {!config?.model_configured ? " · unavailable" : ""}
-                  </option>
-                </select>
-              </label>
-              <button
-                className="secondary-button reset-button"
-                onClick={() => void reset()}
-                disabled={pending === "reset" || !state}
-                data-testid="reset-demo"
-              >
-                <Icon name="reset" />
-                <span>{pending === "reset" ? "Resetting…" : "Reset demo"}</span>
-              </button>
-              <button
-                className="primary-button"
-                onClick={() => void replay()}
-                disabled={Boolean(pending) || !state || !source}
-                data-testid="start-replay"
-              >
-                <Icon name="play" size={17} />
-                <span>
-                  {pending === "replay" ? "Preparing…" : "Start replay"}
-                </span>
-              </button>
-            </div>
-          </section>
+          <div className="stage" aria-label="City map stage">
+            <Suspense
+              fallback={
+                <section className="map-shell">
+                  <div className="loading-state">
+                    Preparing the spatial view…
+                  </div>
+                </section>
+              }
+            >
+              <MapView
+                source={evidenceSource}
+                incident={incident}
+                incidents={runIncidents}
+                onSelect={() => openEvidence()}
+                onSelectIncident={openEvidence}
+                liveCameras={visibleLiveCameras}
+                liveSelectedId={liveSelectedId}
+                onSelectLiveCamera={selectMapCamera}
+              />
+            </Suspense>
+          </div>
           <div className="workspace-grid">
-            <aside className="source-rail" aria-label="Replay sources">
-              <div className="rail-heading">
-                <h2>Replay sources</h2>
-                <span className="count-label">
-                  {sources.length.toString().padStart(2, "0")}
-                </span>
-              </div>
-              <p className="rail-intro">Recorded scenes, ready to review.</p>
-              <div className="source-list">
-                {sources.map((s, index) => (
+            <div className="dock" aria-label="Control deck">
+              <div className="dock-controls">
+                <div className="run-controls">
+                  <label className="analysis-select">
+                    <span className="sr-only">Analysis mode</span>
+                    <select
+                      value={mode}
+                      onChange={(e) => setMode(e.target.value as AnalysisMode)}
+                      disabled={Boolean(pending)}
+                      aria-label="Analysis mode"
+                    >
+                      <option value="fixture">Fixture walkthrough</option>
+                      <option value="cached">Frozen model cache</option>
+                      <option
+                        value="fresh"
+                        disabled={!config?.model_configured}
+                        title={config?.model_readiness?.message}
+                      >
+                        Fresh inference
+                        {!config?.model_configured ? " · unavailable" : ""}
+                      </option>
+                    </select>
+                  </label>
                   <button
-                    key={s.id}
-                    className={`source-card ${sourceId === s.id ? "selected" : ""}`}
-                    onClick={() => {
-                      // Source browsing must not expire another camera's evidence.
-                      autoSelectCandidate.current = false;
-                      cancelReplayPlayback();
-                      videoRef.current?.pause();
-                      setSourceId(s.id);
-                      setSelectedId(
-                        state?.incidents.find((item) => item.source_id === s.id)
-                          ?.id ?? null,
-                      );
-                      setPlaybackKey((key) => key + 1);
-                    }}
-                    disabled={Boolean(pending)}
-                    aria-pressed={sourceId === s.id}
-                    aria-label={`Select ${sourceName(s.id)}`}
+                    className="secondary-button reset-button"
+                    onClick={() => void reset()}
+                    disabled={pending === "reset" || !state}
+                    data-testid="reset-demo"
                   >
-                    <div className="source-thumb">
-                      {s.media_available && s.poster_available !== false && (
-                        <img
-                          src={s.poster_url}
-                          alt=""
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      )}
-                      <span className="thumb-icon">
-                        <Icon name="camera" size={22} />
-                      </span>
-                      <span className="source-number mono">
-                        CAM {String(index + 1).padStart(2, "0")}
-                      </span>
-                      <span className="duration mono">
-                        {timeLabel(s.duration_seconds)}
-                      </span>
-                    </div>
-                    <div className="source-card-text">
-                      <strong>{sourceName(s.id)}</strong>
-                      <small>{sourceHint(s.id)}</small>
-                      <span className="source-availability">
-                        <i
-                          className={
-                            s.media_available
-                              ? "tiny-dot"
-                              : "tiny-dot unavailable"
-                          }
-                        />
-                        {s.media_available
-                          ? "Recorded replay"
-                          : "Media unavailable"}
-                        {sourceId === s.id && <Icon name="check" size={13} />}
-                      </span>
-                    </div>
+                    <Icon name="reset" />
+                    <span>
+                      {pending === "reset" ? "Resetting…" : "Reset demo"}
+                    </span>
                   </button>
-                ))}
+                  <button
+                    className="primary-button"
+                    onClick={() => void replay()}
+                    disabled={Boolean(pending) || !state || !source}
+                    data-testid="start-replay"
+                  >
+                    <Icon name="play" size={17} />
+                    <span>
+                      {pending === "replay" ? "Preparing…" : "Start replay"}
+                    </span>
+                  </button>
+                </div>
               </div>
+              <aside className="source-rail" aria-label="Replay sources">
+                <div className="rail-heading">
+                  <h2>Replay sources</h2>
+                  <span className="count-label">
+                    {sources.length.toString().padStart(2, "0")}
+                  </span>
+                </div>
+                <p className="rail-intro">Recorded scenes, ready to review.</p>
+                <div className="source-list">
+                  {sources.map((s, index) => (
+                    <button
+                      key={s.id}
+                      className={`source-card ${sourceId === s.id ? "selected" : ""}`}
+                      onClick={() => {
+                        // Source browsing must not expire another camera's evidence.
+                        autoSelectCandidate.current = false;
+                        cancelReplayPlayback();
+                        videoRef.current?.pause();
+                        setSourceId(s.id);
+                        setSelectedId(
+                          state?.incidents.find(
+                            (item) => item.source_id === s.id,
+                          )?.id ?? null,
+                        );
+                        setPlaybackKey((key) => key + 1);
+                      }}
+                      disabled={Boolean(pending)}
+                      aria-pressed={sourceId === s.id}
+                      aria-label={`Select ${sourceName(s.id)}`}
+                    >
+                      <div className="source-thumb">
+                        {s.media_available && s.poster_available !== false && (
+                          <img
+                            src={s.poster_url}
+                            alt=""
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        )}
+                        <span className="thumb-icon">
+                          <Icon name="camera" size={22} />
+                        </span>
+                        <span className="source-number mono">
+                          CAM {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <span className="duration mono">
+                          {timeLabel(s.duration_seconds)}
+                        </span>
+                      </div>
+                      <div className="source-card-text">
+                        <strong>{sourceName(s.id)}</strong>
+                        <small>{sourceHint(s.id)}</small>
+                        <span className="source-availability">
+                          <i
+                            className={
+                              s.media_available
+                                ? "tiny-dot"
+                                : "tiny-dot unavailable"
+                            }
+                          />
+                          {s.media_available
+                            ? "Recorded replay"
+                            : "Media unavailable"}
+                          {sourceId === s.id && <Icon name="check" size={13} />}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="rail-footnote">
+                  <Icon name="shield" size={16} />
+                  <p>
+                    Recorded demo scenes.
+                    <br />
+                    Every source keeps its original credit.
+                  </p>
+                </div>
+              </aside>
               <section className="incident-tray">
                 <div className="tray-heading">
                   <div>
@@ -871,36 +929,6 @@ function Operator() {
                   </p>
                 )}
               </section>
-              <div className="rail-footnote">
-                <Icon name="shield" size={16} />
-                <p>
-                  Recorded demo scenes.
-                  <br />
-                  Every source keeps its original credit.
-                </p>
-              </div>
-            </aside>
-            <main className="center-column">
-              <Suspense
-                fallback={
-                  <section className="map-shell">
-                    <div className="loading-state">
-                      Preparing the spatial view…
-                    </div>
-                  </section>
-                }
-              >
-                <MapView
-                  source={evidenceSource}
-                  incident={incident}
-                  incidents={runIncidents}
-                  onSelect={() => openEvidence()}
-                  onSelectIncident={openEvidence}
-                  liveCameras={visibleLiveCameras}
-                  liveSelectedId={liveSelectedId}
-                  onSelectLiveCamera={selectMapCamera}
-                />
-              </Suspense>
               <button
                 className={`cctv-toggle ${cctvVisible ? "is-open" : ""}`}
                 aria-expanded={cctvVisible}
@@ -925,23 +953,23 @@ function Operator() {
                   <Icon name="chevron" size={14} />
                 </span>
               </button>
-              <div
-                ref={livePreviewRef}
-                tabIndex={-1}
-                aria-label="Selected public camera preview"
-                className={`cctv-drawer ${cctvVisible ? "is-open" : ""}`}
-              >
-                <LiveCameraPanel
-                  runId={state?.run.id}
-                  catalog={liveCatalog}
-                  selectedId={liveSelectedId}
-                  onSelect={setLiveSelectedId}
-                  onVisibleCamerasChange={setVisibleLiveCameras}
-                  loading={liveLoading}
-                  catalogError={liveError}
-                />
-              </div>
-            </main>
+            </div>
+            <div
+              ref={livePreviewRef}
+              tabIndex={-1}
+              aria-label="Selected public camera preview"
+              className={`cctv-drawer ${cctvVisible ? "is-open" : ""}`}
+            >
+              <LiveCameraPanel
+                runId={state?.run.id}
+                catalog={liveCatalog}
+                selectedId={liveSelectedId}
+                onSelect={setLiveSelectedId}
+                onVisibleCamerasChange={setVisibleLiveCameras}
+                loading={liveLoading}
+                catalogError={liveError}
+              />
+            </div>
             <aside
               className="evidence-panel"
               ref={evidenceRef}
