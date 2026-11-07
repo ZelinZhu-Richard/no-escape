@@ -1,0 +1,201 @@
+{
+  "selection_status": "Positive footage secured: road obstruction / utility work zone visually verified. Full-length 1080p H.264 MP4 prepared and decoded. Automated incident inference remains untested.",
+  "clips": [
+    {
+      "id": "traffic-jam",
+      "filename": "traffic-jam.webm",
+      "title": "Traffic Jam",
+      "creator": "Melvin Loi",
+      "creator_url": "https://www.flickr.com/photos/54943237@N04/",
+      "source_url": "https://www.flickr.com/photos/54943237@N04/51068986922/",
+      "commons_url": "https://commons.wikimedia.org/wiki/File:Traffic_Jam.webm",
+      "download_url": "https://upload.wikimedia.org/wikipedia/commons/3/32/Traffic_Jam.webm",
+      "license": "CC BY-SA 2.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/2.0/",
+      "duration_seconds": 11.2,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "candidate_role": "traffic-density / congestion replay development",
+      "review_notes": "Sampled frames show an elevated multi-lane traffic view with moving vehicles and some camera motion. No breakdown, lane obstruction, crash, or calibrated location has been verified. Do not treat the title as an incident label.",
+      "location": null,
+      "attribution": "Traffic Jam — Melvin Loi, via Flickr/Wikimedia Commons, CC BY-SA 2.0. Original download unchanged.",
+      "review_derivative": "traffic-jam-review.jpg",
+      "relative_path": "clearway/data/footage/traffic-jam.webm",
+      "bytes": 19051619,
+      "sha1": "e65ec51564b3115d98800d5304a6788a9a684c8d",
+      "sha256": "38794e5ec0f4cb8408715028d312dbdaa70922428fb68e0890ce8d4c1847f98d",
+      "video_decode_exit_code": 0,
+      "decoder_notes": "Truncating packet of size 55 to 54",
+      "review_method": "Six sampled frames inspected; complete video stream decoded. No model inference run.",
+      "retrieved_on": "2026-11-07",
+      "analysis_mode": "unanalysed",
+      "source_mode": "licensed_recorded_replay",
+      "derivative_notice": "Review contact sheet contains resized extracted frames; retain source attribution and source license when shared."
+    },
+    {
+      "id": "street-traffic",
+      "filename": "street-traffic.webm",
+      "title": "Street traffic",
+      "creator": "Editor (YouTube channel)",
+      "creator_url": "https://www.youtube.com/user/Editor",
+      "source_url": "https://www.youtube.com/watch?v=_7sCYyxw4Ic",
+      "commons_url": "https://commons.wikimedia.org/wiki/File:Street_traffic.webm",
+      "download_url": "https://upload.wikimedia.org/wikipedia/commons/7/70/Street_traffic.webm",
+      "license": "CC BY 3.0",
+      "license_url": "https://creativecommons.org/licenses/by/3.0/",
+      "duration_seconds": 35.004,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "candidate_role": "ordinary street-traffic / false-alert control development",
+      "review_notes": "Sampled frames show buses, other vehicles, signal-controlled stops, and pedestrians. This is a candidate control, not a human-annotated negative benchmark. Road geometry and historical camera alignment have not been calibrated.",
+      "location": {
+        "latitude": 37.79456,
+        "longitude": -122.39467,
+        "provenance": "Camera coordinates listed by Wikimedia Commons; not independently validated."
+      },
+      "attribution": "Street traffic — Editor (YouTube), via Wikimedia Commons, CC BY 3.0. Original download unchanged.",
+      "review_derivative": "street-traffic-review.jpg",
+      "relative_path": "clearway/data/footage/street-traffic.webm",
+      "bytes": 26490572,
+      "sha1": "7f916030f14d84a65aa92077339f472897915fef",
+      "sha256": "e5facb24baf755f0c1193999d823e99f6032661ad2bdef5cc28cc1cbbfde03e2",
+      "video_decode_exit_code": 0,
+      "decoder_notes": "",
+      "review_method": "Six sampled frames inspected; complete video stream decoded. No model inference run.",
+      "retrieved_on": "2026-11-07",
+      "analysis_mode": "unanalysed",
+      "source_mode": "licensed_recorded_replay",
+      "derivative_notice": "Review contact sheet contains resized extracted frames; retain source attribution and source license when shared."
+    },
+    {
+      "id": "road-obstruction",
+      "title": "Utility Workers Clearing Storm Debris on Road",
+      "creator": "Ibrahim Bennett",
+      "creator_url": "https://www.pexels.com/@ibrahim-bennett-2187162/",
+      "source_url": "https://www.pexels.com/video/utility-workers-clearing-storm-debris-on-road-30567549/",
+      "download_url": "https://videos.pexels.com/video-files/30567549/13090396_3840_2160_30fps.mp4",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "terms_url": "https://www.pexels.com/terms-of-service/",
+      "retrieved_on": "2026-11-07",
+      "source_page_date": "2025-02-04",
+      "capture_time": null,
+      "location": null,
+      "candidate_role": "Selected positive replay: visible road obstruction / utility work zone",
+      "review_notes": "Eleven sampled frames show utility trucks occupying the roadway, yellow tape spanning the road, and branches/debris on pavement. Use the label road obstruction / work zone. The clip does not establish a mechanical stall, collision, injury, incident onset, clearance, or complete lane count. Slight camera movement; no calibrated coordinates. Source describes storm cleanup, which is source context rather than a diagnosis from pixels.",
+      "review_method": "One-frame-per-second contact sheet inspected, plus a full-size frame at 5 seconds; complete original decoded during transcode and complete derived video decoded separately. No model inference run.",
+      "video_decode_exit_code": 0,
+      "analysis_mode": "unanalysed_by_model",
+      "source_mode": "licensed_recorded_replay",
+      "attribution": "Utility Workers Clearing Storm Debris on Road — Ibrahim Bennett / Pexels. Pexels License. Demo version resized to 1920x1080 and re-encoded to H.264; full duration and playback speed retained.",
+      "review_derivative": "storm-obstruction-30567549-review.jpg",
+      "poster": "road-obstruction-poster.jpg",
+      "original": {
+        "filename": "storm-obstruction-30567549-original.mp4",
+        "relative_path": "clearway/data/footage/storm-obstruction-30567549-original.mp4",
+        "bytes": 72124733,
+        "sha256": "6f15ee0a49ece90bf2cc8b99567c9ab10217fedd52aab2e835579468137351f0",
+        "duration_seconds": 11.1111,
+        "resolution": [
+          3840,
+          2160
+        ],
+        "codec": "h264",
+        "frame_rate": "30000/1001"
+      },
+      "demo": {
+        "filename": "road-obstruction-demo.mp4",
+        "relative_path": "clearway/data/footage/road-obstruction-demo.mp4",
+        "bytes": 11820000,
+        "sha256": "18f70ceb2da626cbd9c386750a25549a9b76476f9f0b69c4a79aa30a8c5fe390",
+        "duration_seconds": 11.1111,
+        "resolution": [
+          1920,
+          1080
+        ],
+        "codec": "h264",
+        "frame_rate": "30000/1001"
+      },
+      "human_reviewed_interval_seconds": [
+        0.5,
+        10.5
+      ],
+      "model_output": null,
+      "distribution_notes": "Keep the raw download out of public source repositories and stock/download libraries. Display within the Clearway evidence/review experience with source and replay labels. Pexels terms restrict standalone redistribution, misleading endorsement, and commercial uses involving depicted brands; this is not an unrestricted downstream advertising clearance."
+    }
+  ],
+  "reuse_requirements": [
+    "Retain creator, title, source URL, license URL, and change notices.",
+    "Share adapted Traffic Jam media under CC BY-SA 2.0 or a compatible license, as applicable.",
+    "Do not describe any of these clips as a live North Carolina feed.",
+    "Do not use prerecorded nonlocal footage with current DriveNC events as if they corroborate the same event.",
+    "Pexels assets retain the Pexels License; do not label them Creative Commons or relicense them as project code. See selected clip distribution notes and source terms."
+  ],
+  "selected_demo_clip_id": "road-obstruction",
+  "reviewed_alternatives": [
+    {
+      "filename": "repairing-broken-car-4513856-original.mp4",
+      "relative_path": "clearway/data/footage/repairing-broken-car-4513856-original.mp4",
+      "bytes": 18903152,
+      "sha256": "7eda52cdc996c26eab7d2163344b7e635bfc72ae48337f0e57d11e13260e3f7a",
+      "duration_seconds": 6.9,
+      "resolution": [
+        3840,
+        2160
+      ],
+      "codec": "h264",
+      "frame_rate": "30/1",
+      "creator": "Ton Souza",
+      "title": "Repairing Broken Car",
+      "source_url": "https://www.pexels.com/video/repairing-broken-car-4513856/",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "decision": "Not selected: repair close-up, most of the vehicle and road are outside the frame.",
+      "review_derivative": "repairing-broken-car-4513856-review.jpg"
+    },
+    {
+      "filename": "stopped-car-8865243-original.mp4",
+      "relative_path": "clearway/data/footage/stopped-car-8865243-original.mp4",
+      "bytes": 64027014,
+      "sha256": "aa784abc31c275e6abdd861488983a5a7533e25399589e5cc70c0dc8154ccf43",
+      "duration_seconds": 37.0,
+      "resolution": [
+        4096,
+        2160
+      ],
+      "codec": "h264",
+      "frame_rate": "25/1",
+      "creator": "MART PRODUCTION",
+      "title": "A Young Man Looking under the Hood of his Car",
+      "source_url": "https://www.pexels.com/video/a-young-man-looking-under-the-hood-of-his-car-8865243/",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "decision": "Not selected: clear open-hood repair scene, but tight framing and camera movement make lane occupancy unobservable.",
+      "review_derivative": "stopped-car-8865243-review.jpg"
+    },
+    {
+      "filename": "roadside-tire-38835987-original.mp4",
+      "relative_path": "clearway/data/footage/roadside-tire-38835987-original.mp4",
+      "bytes": 16912372,
+      "sha256": "5dab9e4fa8c785901f4c58f05aee06e229d86f3bdac18dfa39e5bedbb6a08638",
+      "duration_seconds": 6.56,
+      "resolution": [
+        3840,
+        2160
+      ],
+      "codec": "h264",
+      "frame_rate": "25/1",
+      "creator": "Clément Proust",
+      "title": "Car Breakdown with Spare Tire Discussion",
+      "source_url": "https://www.pexels.com/video/car-breakdown-with-spare-tire-discussion-38835987/",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "decision": "Not selected: stationary car and detached tire visible, but paved setting could be a rest/parking area; no verified travel-lane obstruction.",
+      "review_derivative": "roadside-tire-38835987-review.jpg"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "id": "licensed-road-obstruction-v1",
+  "status": "Footage ready; human-reviewed reference scenario, not a model result",
+  "video": "data/footage/road-obstruction-demo.mp4",
+  "poster": "data/footage/road-obstruction-poster.jpg",
+  "source_clip_id": "road-obstruction",
+  "source_mode": "licensed_recorded_replay",
+  "display_badge": "LICENSED RECORDED REPLAY",
+  "duration_seconds": 11.1111,
+  "location": null,
+  "capture_time": null,
+  "event_onset_time": null,
+  "review_interval_seconds": [
+    0.5,
+    10.5
+  ],
+  "suggested_analysis_timestamps_seconds": [
+    1,
+    4,
+    8
+  ],
+  "reference_observations": [
+    "Utility vehicles occupy the road.",
+    "Yellow tape spans the roadway.",
+    "Branches and debris are visible on the pavement."
+  ],
+  "expected_candidate": {
+    "category": "road_obstruction",
+    "title": "Possible road obstruction / utility work zone",
+    "blocked_lane_count": null,
+    "mechanical_stall": null,
+    "injuries": null,
+    "requires_operator_confirmation": true
+  },
+  "reference_label_status": "Human-reviewed expected behavior only; never display this fixture as model-generated inference.",
+  "acceptance_checks": [
+    "Decode and play the clip at its original speed.",
+    "Analyze actual frames and show returned evidence alongside the replay.",
+    "Describe visible road obstruction; do not invent a stalled engine, crash, injury, lane count, location, or onset time.",
+    "Keep any manually placed map location labeled simulated.",
+    "Require operator confirmation before generating a shareable demo brief.",
+    "On replay restart, clear temporal state; looping does not add independent evidence or extend observed incident duration."
+  ],
+  "evaluation_scope": "One demonstration event, not an accuracy benchmark. Detection processing latency can be measured from analysis start; real-world time-to-detect from event onset cannot be measured from this clip.",
+  "attribution": "Utility Workers Clearing Storm Debris on Road — Ibrahim Bennett / Pexels. Pexels License. Demo version resized to 1920x1080 and re-encoded to H.264; full duration and playback speed retained.",
+  "source_url": "https://www.pexels.com/video/utility-workers-clearing-storm-debris-on-road-30567549/",
+  "license_url": "https://www.pexels.com/license/"
+}

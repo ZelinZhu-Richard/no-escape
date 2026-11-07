@@ -1,0 +1,39 @@
+# Local tool installations and their private installation bookkeeping.
+/ECC/
+/ECC-codex-reviewed/
+/ECC-INSTALLATION.txt
+/ecc-config-before-digests.json
+/ecc-installed-package-hashes.json
+/prepare-ecc-reviewed.py
+/.local/
+
+# Protected data is never published by a broad add operation.
+/holdout/
+
+# Credentials and machine-local settings.
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*service-account*.json
+credentials.json
+.DS_Store
+
+# Dependency, build, and test outputs.
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+
+# clearway/data/.gitignore excludes footage, caches, databases, and ledgers.
