@@ -146,11 +146,13 @@ function Video({
   videoRef,
   replayKey,
   showDetections = false,
+  playRequest,
 }: {
   source: Source;
   videoRef?: RefObject<HTMLVideoElement | null>;
   replayKey?: string;
   showDetections?: boolean;
+  playRequest?: number;
 }) {
   const [failed, setFailed] = useState(false);
   const [aspectRatio, setAspectRatio] = useState(16 / 9);
@@ -160,6 +162,19 @@ function Video({
     setFailed(false);
     setAspectRatio(16 / 9);
   }, [source.video_url]);
+  useEffect(() => {
+    const video = effectiveRef.current;
+    if (playRequest === undefined || !video || failed) return;
+    // This runs after the requested source's actual element has mounted.
+    // A ref read in the Start replay click still points at the previous evidence.
+    try {
+      video.currentTime = 0;
+      void video.play().catch(() => {});
+    } catch {
+      // The native controls remain usable if autoplay is unavailable.
+    }
+    return () => video.pause();
+  }, [effectiveRef, failed, playRequest, replayKey, source.video_url]);
   if (!source.media_available || failed)
     return (
       <div className="media-missing">
@@ -215,6 +230,25 @@ function Operator() {
   const [pending, setPending] = useState("");
   const [tab, setTab] = useState<"desk" | "labels">("desk");
   const [playbackKey, setPlaybackKey] = useState(0);
+  const [sourceAnalyses, setSourceAnalyses] = useState<
+    Record<
+      string,
+      {
+        runId: string;
+        result: State["analysis"];
+      }
+    >
+  >({});
+  const [replayPlayback, setReplayPlayback] = useState<{
+    id: number;
+    sourceId: string;
+    runId: string;
+  } | null>(null);
+  const replayPlaybackId = useRef(0);
+  const cancelReplayPlayback = useCallback(() => {
+    ++replayPlaybackId.current;
+    setReplayPlayback(null);
+  }, []);
   const [liveCatalog, setLiveCatalog] = useState<LiveCameraCatalog | null>(
     null,
   );
@@ -409,12 +443,14 @@ function Operator() {
       writeInFlight.current = "reset";
       setPending("reset");
       setError("");
+      cancelReplayPlayback();
       videoRef.current?.pause();
       try {
         const result = await post<State>("/api/reset");
         if (mounted.current && generation === epoch.current) {
           setState(result);
           autoSelectCandidate.current = true;
+          setSourceAnalyses({});
           setSelectedId(null);
           setPlaybackKey((k) => k + 1);
           if (nextSource) setSourceId(nextSource);
@@ -431,7 +467,7 @@ function Operator() {
         }
       }
     },
-    [],
+    [cancelReplayPlayback],
   );
 
   const replay = async () => {
@@ -439,12 +475,17 @@ function Operator() {
     const generation = ++epoch.current;
     writeInFlight.current = "replay";
     const runId = state.run.id;
+    const playbackId = ++replayPlaybackId.current;
     setPending("replay");
     setError("");
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      void videoRef.current.play().catch(() => {});
-    }
+    // Keep the requested replay visible even when a live or other-source
+    // incident was selected. Do not wait for inference before playing it.
+    autoSelectCandidate.current = false;
+    setSelectedId(
+      state.incidents.find((i) => i.source_id === sourceId)?.id ?? null,
+    );
+    setPlaybackKey((key) => key + 1);
+    setReplayPlayback({ id: playbackId, sourceId, runId });
     try {
       const result = await post<State>(`/api/runs/${runId}/replay`, {
         source_id: sourceId,
@@ -452,9 +493,14 @@ function Operator() {
       });
       if (mounted.current && generation === epoch.current) {
         setState(result);
-        setSelectedId(
-          result.incidents.find((i) => i.source_id === sourceId)?.id ?? null,
-        );
+        setSourceAnalyses((current) => ({
+          ...current,
+          [sourceId]: { runId: result.run.id, result: result.analysis },
+        }));
+        if (replayPlaybackId.current === playbackId)
+          setSelectedId(
+            result.incidents.find((i) => i.source_id === sourceId)?.id ?? null,
+          );
       }
     } catch (e) {
       if (generation === epoch.current) setError(errorMessage(e));
@@ -500,6 +546,7 @@ function Operator() {
     }
   };
   const openEvidence = (id?: string) => {
+    cancelReplayPlayback();
     if (id ?? incident?.id) setSelectedId(id ?? incident!.id);
     evidenceRef.current?.focus({ preventScroll: true });
     if (window.innerWidth < 1100)
@@ -519,11 +566,15 @@ function Operator() {
   };
   const confirmedCount =
     state?.incidents.filter((i) => i.review_status === "confirmed").length ?? 0;
+  const selectedAnalysis =
+    sourceAnalyses[sourceId]?.runId === state?.run.id
+      ? sourceAnalyses[sourceId]?.result
+      : undefined;
   const displayedMode: AnalysisMode =
-    state?.analysis.status === "unavailable"
+    selectedAnalysis?.status === "unavailable"
       ? "unavailable"
-      : state?.analysis.status === "complete"
-        ? state.analysis.mode
+      : selectedAnalysis?.status === "complete"
+        ? selectedAnalysis.mode
         : mode;
 
   return (
@@ -541,7 +592,10 @@ function Operator() {
           </button>
           <button
             className={tab === "labels" ? "nav-button active" : "nav-button"}
-            onClick={() => setTab("labels")}
+            onClick={() => {
+              cancelReplayPlayback();
+              setTab("labels");
+            }}
           >
             Label windows
           </button>
@@ -635,6 +689,7 @@ function Operator() {
                     onClick={() => {
                       // Source browsing must not expire another camera's evidence.
                       autoSelectCandidate.current = false;
+                      cancelReplayPlayback();
                       videoRef.current?.pause();
                       setSourceId(s.id);
                       setSelectedId(
@@ -789,18 +844,18 @@ function Operator() {
                       <Icon name="layers" size={21} />
                     </span>
                     <p>
-                      {state?.analysis.status === "unavailable"
+                      {selectedAnalysis?.status === "unavailable"
                         ? "Analysis is unavailable for this scene."
-                        : state?.analysis.status === "complete"
-                          ? state.analysis.mode === "fixture"
+                        : selectedAnalysis?.status === "complete"
+                          ? selectedAnalysis.mode === "fixture"
                             ? "This fixture produced no incident candidate."
-                            : state.analysis.mode === "cached"
+                            : selectedAnalysis.mode === "cached"
                               ? "The saved model result contains no incident candidate."
                               : "Fresh analysis produced no incident candidate."
                           : "Start a replay to bring its evidence into the review queue."}
                       <small>
-                        {state?.analysis.status === "complete"
-                          ? state.analysis.mode === "fixture"
+                        {selectedAnalysis?.status === "complete"
+                          ? selectedAnalysis.mode === "fixture"
                             ? "Fixture behavior is not a measured detection result."
                             : "No candidate does not establish that the scene is safe. Review the source footage."
                           : "The demo keeps source, analysis, and review status separate."}
@@ -808,9 +863,9 @@ function Operator() {
                     </p>
                   </div>
                 )}
-                {state?.analysis.message && (
+                {selectedAnalysis?.message && (
                   <p className="analysis-message" role="status">
-                    {state.analysis.message}
+                    {selectedAnalysis.message}
                   </p>
                 )}
               </section>
@@ -844,6 +899,12 @@ function Operator() {
                         source={evidenceSource}
                         videoRef={videoRef}
                         replayKey={`${evidenceSource.id}-${state?.run.id}-${playbackKey}`}
+                        playRequest={
+                          replayPlayback?.sourceId === evidenceSource.id &&
+                          replayPlayback.runId === state?.run.id
+                            ? replayPlayback.id
+                            : undefined
+                        }
                         showDetections
                       />
                       <div className="video-toplabel">
@@ -995,12 +1056,16 @@ function Operator() {
                         </span>
                       </div>
                       <div className="fixture-note">
-                        <ModeBadge mode={displayedMode} />
+                        {selectedAnalysis ? (
+                          <ModeBadge mode={displayedMode} />
+                        ) : (
+                          <Badge kind="muted">Not analyzed in this view</Badge>
+                        )}
                         <p>
                           {displayedMode === "unavailable"
                             ? "Analysis is unavailable. No model result was generated or retrieved for this scene."
                             : mode === "fixture"
-                              ? "This walkthrough uses a labeled fixture. It exercises the workflow without paid model calls."
+                              ? "The next replay uses a labeled fixture to exercise the workflow without paid model calls."
                               : mode === "cached"
                                 ? "Frozen cache only. A missing genuine model result will be shown as unavailable."
                                 : "Fresh analysis can call the configured model within the server budget. Review its observations before confirming."}

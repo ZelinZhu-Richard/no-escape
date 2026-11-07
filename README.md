@@ -42,6 +42,8 @@ The separate 20 dated NCDOT camera inventory locations remain metadata only; Dri
 
 Media is intentionally absent from Git. `make footage` restores the obstruction, street-traffic control, and person-roadway clips from documented sources, verifies original SHA-256 hashes, and creates the local replay derivatives. Licenses and modifications are in [ATTRIBUTION.md](clearway/docs/ATTRIBUTION.md). The current development machine already has these files.
 
+Run `make setup` before `make footage`. Both restoration scripts load `clearway/.env` and honor `CLEARWAY_DATA_DIR`, with process variables taking precedence. Media and download receipts are written to that directory so the API, detector, and Gemini sampler find the same files.
+
 The additional dense-traffic clip is a development candidate and is optional. Missing media is visible in the UI. None of the clips establishes natural-scene accuracy or a real-time North Carolina incident.
 
 ## Checks

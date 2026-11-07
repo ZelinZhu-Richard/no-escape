@@ -1,5 +1,17 @@
 # Clearway morning handoff
 
+## PR review fixes — November 7, 2026
+
+The user requested the Codex review be checked, all findings fixed, and PR #1 merged. GitHub Codex reported two issues, and a local Codex review of the full PR found one additional provenance issue. All three are addressed:
+
+- **Replay selection:** Start replay mounts and plays the source selected in the replay rail, including when another clip or live incident was open. Later navigation/reset cancels playback intent, and late analysis responses cannot steal the operator's selection.
+- **Analysis provenance:** A preview without an associated result says “Not analyzed in this view.” Source/run-bound results replace the unrelated last run-level analysis badge; incident evidence retains its own provenance.
+- **Footage setup:** Both restoration scripts load the same local configuration as the API and honor `CLEARWAY_DATA_DIR`, including process-variable precedence. Original media, derivatives, posters and receipts share the configured directory. `make footage` uses the application virtual environment after `make setup`.
+
+Verification: **290 backend tests and 72 frontend tests passed**, plus the production build and emitted assets/license checks. Twelve new regression cases cover replay source selection, live evidence, cancellation/reset races, source provenance, and both scripts' default/.env/process directory behavior. A built-in-browser reproduction selected person evidence while the replay rail selected obstruction; Start replay then played the obstruction video, with advancing playback time. Local screenshot: `clearway/data/verification/pr1-replay-review-fix.jpg`. The two fixture candidates remain available in the current local demo run. No server restart or paid inference was needed.
+
+The user-authorized merge supersedes earlier draft-only instructions. Gemini credentials/validation, the Google 3D token, physical cellular handoff testing, and human evaluation labels remain deferred; merging does not complete those tasks. GitHub CI remains an inactive example, so the reported checks are local.
+
 ## Live CCTV → review candidates — November 7, 2026
 
 **Selected playing CCTV now creates reviewable candidates from sustained local detections.** A possible stationary vehicle requires at least 12 seconds; repeated person visibility requires at least 3 seconds. Both require distinct frames, consistent boxes, confidence/size thresholds, and advancing video/server clocks. These are local temporal rules, not calibrated lane, crash, injury, or danger classification. Traffic density alone does not alert.

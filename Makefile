@@ -20,8 +20,8 @@ verify:
 	python3 clearway/scripts/verify_cycles.py
 
 footage:
-	python3 clearway/scripts/fetch_footage.py --with-control
-	python3 clearway/scripts/fetch_person_footage.py
+	clearway/.venv/bin/python clearway/scripts/fetch_footage.py --with-control
+	clearway/.venv/bin/python clearway/scripts/fetch_person_footage.py
 
 detection-setup:
 	clearway/.venv/bin/python -m pip install -r clearway/detection-requirements.txt

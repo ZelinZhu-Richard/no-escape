@@ -9,12 +9,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from api.configuration import load_local_environment  # noqa: E402
 
 
 def digest(path: Path) -> str:
@@ -61,10 +67,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--with-control", action="store_true")
     args = parser.parse_args()
-    root = Path(__file__).resolve().parents[1]
-    manifest = json.loads((root / "docs/footage-sources.json").read_text())
+    load_local_environment()
+    data = Path(os.environ.get("CLEARWAY_DATA_DIR", ROOT / "data"))
+    manifest = json.loads((ROOT / "docs/footage-sources.json").read_text())
     selected = next(item for item in manifest["clips"] if item["id"] == "road-obstruction")
-    media = root / "data/footage"
+    media = data / "footage"
     media.mkdir(parents=True, exist_ok=True)
     allowed_hosts = {"videos.pexels.com", "upload.wikimedia.org"}
 
@@ -117,7 +124,7 @@ def main() -> None:
         "reference_demo_sha256": selected["demo"]["sha256"],
         "note": "Original checksum is verified. Re-encoding bytes can vary with ffmpeg versions; local derivative hash is recorded separately.",
     }
-    (root / "data/footage-download-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    (data / "footage-download-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print("Licensed replay is available locally. Do not commit the media files.")
 
 

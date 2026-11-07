@@ -14,10 +14,15 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.parse
 import urllib.request
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from api.configuration import load_local_environment  # noqa: E402
 
 MAX_BYTES = 100_000_000
 DOWNLOAD_SECONDS = 90
@@ -182,11 +187,12 @@ def prepare_poster(demo: Path, target: Path) -> None:
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parents[1]
-    manifest = json.loads((root / "docs/person-footage-candidate.json").read_text())
+    load_local_environment()
+    data = Path(os.environ.get("CLEARWAY_DATA_DIR", ROOT / "data"))
+    manifest = json.loads((ROOT / "docs/person-footage-candidate.json").read_text())
     if manifest["id"] != "person-roadway":
         raise ValueError("This restoration command supports only the selected person-roadway source.")
-    media = root / "data/footage"
+    media = data / "footage"
     original = download_original(manifest["download_url"], media / "person-roadway-original.mp4", manifest["original"]["sha256"])
     demo = media / "person-roadway-demo.mp4"
     prepare_derivative(original, demo, manifest["replay"]["sha256"])
@@ -196,7 +202,7 @@ def main() -> None:
         "local_demo_sha256": digest(demo), "reference_demo_sha256": manifest["replay"]["sha256"],
         "note": "Original checksum verified. Encoding bytes can vary with ffmpeg versions; nonidentical derivatives require metadata and full decode validation. No evaluation labels created.",
     }
-    (root / "data/person-footage-download-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    (data / "person-footage-download-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(f"Ready: {manifest['title']} — {manifest['author']}")
     print(f"License: {manifest['license_url']}")
     print("Person in roadway replay verified locally. Media remains excluded from Git.")

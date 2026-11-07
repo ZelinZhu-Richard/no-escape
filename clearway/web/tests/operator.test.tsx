@@ -89,6 +89,7 @@ const deferred = <T,>() => {
 let container: HTMLDivElement;
 let root: Root;
 let currentState: State;
+let availableSources: Source[];
 let nextState: (() => Promise<State>) | undefined;
 let stateReads: number;
 
@@ -98,13 +99,14 @@ beforeEach(() => {
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
   currentState = stateFor();
+  availableSources = [source];
   nextState = undefined;
   stateReads = 0;
   vi.mocked(request).mockReset();
   vi.mocked(post).mockReset();
   vi.mocked(request).mockImplementation(async (path: string) => {
     if (path === "/api/config") return config;
-    if (path === "/api/sources") return { sources: [source] };
+    if (path === "/api/sources") return { sources: availableSources };
     if (path === "/api/state") {
       stateReads++;
       return nextState ? nextState() : currentState;
@@ -227,6 +229,8 @@ describe("operator mutation and polling consistency", () => {
       message: "No cache entry",
     };
     await mount();
+    vi.mocked(post).mockResolvedValue(currentState);
+    await click("start-replay");
     expect(container.textContent).toContain("Analysis unavailable");
     expect(container.textContent).not.toContain("Cached model result");
     expect(container.textContent).not.toContain("This fixture produced");
@@ -277,5 +281,209 @@ describe("operator mutation and polling consistency", () => {
     nextState = undefined;
     await tick();
     expect(container.textContent).not.toContain("Connection interrupted.");
+  });
+});
+
+describe("requested replay playback and source provenance", () => {
+  const secondSource: Source = {
+    ...source,
+    id: "street-traffic",
+    video_url: "/other.webm",
+    media_available: true,
+  };
+  const secondIncident: Incident = {
+    ...candidate,
+    id: "other-candidate",
+    source_id: secondSource.id,
+    title: "Other replay incident",
+  };
+  const readyMedia = () => {
+    availableSources = [{ ...source, media_available: true }, secondSource];
+    const played: HTMLMediaElement[] = [];
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(
+      function () {
+        played.push(this);
+        return Promise.resolve();
+      },
+    );
+    const paused = vi
+      .spyOn(HTMLMediaElement.prototype, "pause")
+      .mockImplementation(() => {});
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => ({ matches: true })),
+    });
+    return { played, paused };
+  };
+  const card = (title: string) =>
+    Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        '[data-testid="incident-card"]',
+      ),
+    ).find((button) => button.textContent?.includes(title))!;
+
+  it("mounts and plays the requested source before analysis when another replay incident is displayed", async () => {
+    const { played } = readyMedia();
+    currentState = stateFor("oldrun01", [candidate, secondIncident]);
+    await mount();
+    await act(async () => card(secondIncident.title).click());
+    const oldVideo = container.querySelector<HTMLVideoElement>("video")!;
+    expect(oldVideo.getAttribute("src")).toBe("/other.webm");
+    const result = deferred<State>();
+    vi.mocked(post).mockReturnValue(result.promise);
+    await click("start-replay");
+    const requestedVideo = container.querySelector<HTMLVideoElement>("video")!;
+    expect(requestedVideo.getAttribute("src")).toBe("/fixture.webm");
+    expect(played).toEqual([requestedVideo]);
+    expect(played).not.toContain(oldVideo);
+    expect(post).toHaveBeenCalledWith("/api/runs/oldrun01/replay", {
+      source_id: "road-obstruction",
+      analysis_mode: "fixture",
+    });
+    await act(async () => result.resolve(currentState));
+    expect(container.querySelector("video")).toBe(requestedVideo);
+    expect(played).toEqual([requestedVideo]);
+  });
+
+  it("starts the requested replay after replacing live frozen evidence without losing the live candidate", async () => {
+    const { played } = readyMedia();
+    const live: Incident = {
+      ...candidate,
+      id: "live-candidate",
+      source_id: "camera-live",
+      source_mode: "live",
+      analysis_mode: "fresh",
+      live_source: {
+        ...source,
+        id: "camera-live",
+        source_mode: "live",
+        title: "Live camera",
+        video_url: "",
+        media_available: false,
+      },
+    };
+    currentState = stateFor("oldrun01", [live]);
+    await mount();
+    expect(container.querySelector("video")).toBeNull();
+    const result = deferred<State>();
+    vi.mocked(post).mockReturnValue(result.promise);
+    await click("start-replay");
+    const video = container.querySelector<HTMLVideoElement>("video")!;
+    expect(video.getAttribute("src")).toBe("/fixture.webm");
+    expect(played).toEqual([video]);
+    await act(async () =>
+      result.resolve(stateFor("oldrun01", [live, candidate])),
+    );
+    expect(container.querySelector("video")).toBe(video);
+    expect(played).toEqual([video]);
+    expect(
+      container.querySelectorAll('[data-testid="incident-card"]'),
+    ).toHaveLength(2);
+  });
+
+  it("cancels a queued autoplay when selection changes before the commit and ignores a late replay response", async () => {
+    const { played } = readyMedia();
+    currentState = stateFor("oldrun01", [candidate, secondIncident]);
+    await mount();
+    await act(async () => card(secondIncident.title).click());
+    const result = deferred<State>();
+    vi.mocked(post).mockReturnValue(result.promise);
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="start-replay"]')!
+        .click();
+      card(secondIncident.title).click();
+    });
+    expect(played).toHaveLength(0);
+    await act(async () => result.resolve(currentState));
+    expect(container.querySelector("video")?.getAttribute("src")).toBe(
+      "/other.webm",
+    );
+    expect(played).toHaveLength(0);
+  });
+
+  it("stops requested playback on reset and does not restart it when the old replay response arrives", async () => {
+    const { played, paused } = readyMedia();
+    await mount();
+    const result = deferred<State>();
+    vi.mocked(post).mockImplementation(async (path) =>
+      path.endsWith("/replay") ? result.promise : stateFor("newrun02"),
+    );
+    await click("start-replay");
+    const oldVideo = played[0];
+    expect(played).toHaveLength(1);
+    await click("reset-demo");
+    expect(paused.mock.instances).toContain(oldVideo);
+    const resetVideo = container.querySelector("video");
+    expect(resetVideo).not.toBe(oldVideo);
+    await act(async () => result.resolve(stateFor("oldrun01", [candidate])));
+    expect(container.querySelector("video")).toBe(resetVideo);
+    expect(played).toEqual([oldVideo]);
+    expect(container.textContent).toContain("RUN NEWRUN02");
+  });
+
+  it("preserves a later evidence selection while replay analysis is pending", async () => {
+    const { played, paused } = readyMedia();
+    currentState = stateFor("oldrun01", [candidate, secondIncident]);
+    await mount();
+    const result = deferred<State>();
+    vi.mocked(post).mockReturnValue(result.promise);
+    await click("start-replay");
+    const requestedVideo = played[0];
+    await act(async () => card(secondIncident.title).click());
+    expect(paused.mock.instances).toContain(requestedVideo);
+    expect(container.querySelector("video")?.getAttribute("src")).toBe(
+      "/other.webm",
+    );
+    await act(async () => result.resolve(currentState));
+    expect(container.querySelector("video")?.getAttribute("src")).toBe(
+      "/other.webm",
+    );
+    expect(played).toEqual([requestedVideo]);
+  });
+
+  it("does not attribute a prior fresh no-candidate analysis to an untouched source", async () => {
+    readyMedia();
+    currentState.analysis = {
+      mode: "fresh",
+      status: "complete",
+      message: "A prior source returned no candidate",
+    };
+    await mount();
+    const evidence = () =>
+      container.querySelector('[data-testid="evidence-panel"]')!;
+    expect(evidence().textContent).toContain("Not analyzed in this view");
+    const freshResult = stateFor();
+    freshResult.analysis = {
+      mode: "fresh",
+      status: "complete",
+      message: "Fresh result for road obstruction",
+    };
+    vi.mocked(post).mockResolvedValue(freshResult);
+    await click("start-replay");
+    expect(evidence().textContent).toContain("Fresh inference");
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Select Ordinary street traffic"]',
+        )!
+        .click(),
+    );
+    expect(evidence().textContent).toContain("Not analyzed in this view");
+    expect(evidence().textContent).not.toContain("Fresh inference");
+    expect(container.textContent).not.toContain(
+      "Fresh result for road obstruction",
+    );
+    await tick();
+    expect(evidence().textContent).not.toContain("Fresh inference");
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Select Road obstruction"]',
+        )!
+        .click(),
+    );
+    expect(evidence().textContent).toContain("Fresh inference");
   });
 });
