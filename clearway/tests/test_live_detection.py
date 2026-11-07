@@ -65,6 +65,39 @@ def test_exact_image_hash_cache_never_reuses_boxes_for_different_bytes(tmp_path)
     assert list(tmp_path.iterdir()) == []  # Neither frames nor results archived.
 
 
+def test_tracking_pool_is_separate_from_high_confidence_counts_and_cache(tmp_path):
+    high = {"class_name": "car", "confidence": .8, "xyxy": [.1, .2, .3, .4]}
+    low = {"class_name": "car", "confidence": .2, "xyxy": [.6, .2, .8, .4]}
+    class PoolDetector(Detector):
+        def detect(self, image, *, confidence_floor=None):
+            self.calls += 1
+            return [high, low] if confidence_floor == .1 else [high]
+    instance, detector, _ = service(tmp_path, detector=PoolDetector())
+    still = instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-49")
+    moving = instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-49", tracking=True)
+    assert moving["boxes"] == still["boxes"] == [high]
+    assert moving["vehicle_count"] == still["vehicle_count"] == 1
+    assert moving["tracking_candidates"] == [high, low]
+    assert "tracking_candidates" not in still
+    assert moving["provenance"]["configuration_sha256"] != still["provenance"]["configuration_sha256"]
+    cached = instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-49", tracking=True)
+    assert cached["analysis_mode"] == "cached" and detector.calls == 2
+    cached["tracking_candidates"].clear()
+    assert len(instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-49", tracking=True)["tracking_candidates"]) == 2
+
+
+def test_low_tracking_candidates_still_obey_camera_graphics_exclusions(tmp_path):
+    class PoolDetector(Detector):
+        def detect(self, image, *, confidence_floor=None):
+            return [{"class_name": "car", "confidence": .2, "xyxy": [.1, .01, .2, .04]},
+                    {"class_name": "car", "confidence": .2, "xyxy": [.6, .2, .8, .4]}]
+    instance, _, _ = service(tmp_path, detector=PoolDetector())
+    result = instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-689", tracking=True)
+    assert result["boxes"] == [] and result["vehicle_count"] == 0
+    assert len(result["tracking_candidates"]) == 1
+    assert result["tracking_candidates"][0]["xyxy"] == [.6, .2, .8, .4]
+
+
 def test_returned_objects_cannot_mutate_cached_results(tmp_path):
     instance, _, _ = service(tmp_path)
     first = instance.analyze_jpeg(jpeg())

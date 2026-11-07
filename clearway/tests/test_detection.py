@@ -234,7 +234,7 @@ def test_dense_preparation_uses_installed_traffic_model_and_records_actual_prove
     monkeypatch.setattr(detection, "TrafficDetector", Traffic)
     monkeypatch.setattr(detection, "YoloDetector", lambda *_args: pytest.fail("Dense traffic must not fall back to Tiny"))
     monkeypatch.setattr(detection.subprocess, "run", lambda *_args, **_kwargs: SimpleNamespace(stdout=json.dumps(metadata).encode()))
-    result = detection.prepare_detections(tmp_path, "traffic-jam", sample_fps=4)
+    result = detection.prepare_detections(tmp_path, "traffic-jam", sample_fps=4, dense_strategy="full-frame")
     assert calls == [(tmp_path / "models" / "yolo11s_visdrone.onnx", "yolo11s-visdrone640")]
     assert result["model"]["name"] == "YOLO11s VisDrone" and result["model"]["license"] == "AGPL-3.0"
     assert result["model"]["runtime_version"] == "offline-test-runtime"
@@ -265,8 +265,82 @@ def test_dense_only_cli_does_not_fetch_unrelated_tiny_weights(tmp_path, monkeypa
     prepared["processing"] = {"frame_count": len(prepared["frames"])}
     monkeypatch.setattr(module, "load_local_environment", lambda: None)
     monkeypatch.setenv("CLEARWAY_DATA_DIR", str(tmp_path))
-    monkeypatch.setattr(sys, "argv", [str(path), "--source", "traffic-jam", "--download-model"])
+    monkeypatch.setattr(sys, "argv", [str(path), "--source", "traffic-jam", "--download-model", "--dense-strategy", "full-frame"])
     monkeypatch.setattr(module, "download_model", lambda *_: pytest.fail("Dense-only setup must not download Tiny"))
     monkeypatch.setattr(module, "DetectionService", lambda _: SimpleNamespace(get=lambda _source: deepcopy(prepared)))
     assert module.main() == 0
     assert json.loads(capsys.readouterr().out)["model"]["name"] == "YOLO11s VisDrone"
+
+
+def tiled_traffic_report():
+    from api.detection import requested_replay_strategy, strategy_digest
+    from api.tiled_detection import TilingConfig, tile_regions
+    result = traffic_report()
+    strategy = requested_replay_strategy("traffic-jam")
+    result["provenance"].update(inference_strategy=strategy, inference_strategy_sha256=strategy_digest(strategy))
+    result["confidence_threshold"] = strategy["confidence_floor"]
+    passes = 1 + len(tile_regions(result["video_width"], result["video_height"], TilingConfig()))
+    result["processing"] = {"model_passes_per_sample": passes, "model_passes_total": passes * len(result["frames"])}
+    return result
+
+
+def test_tiled_and_full_frame_fallback_caches_both_preserve_actual_strategy():
+    from api.detection import FULL_FRAME_STRATEGY, strategy_digest
+    tiled = tiled_traffic_report()
+    assert validate_report(tiled, "traffic-jam", "test-sha")
+    assert tiled["processing"]["model_passes_per_sample"] == 7
+    assert validate_report(traffic_report(), "traffic-jam", "test-sha")  # legacy full frame
+    explicit_full = traffic_report()
+    explicit_full["provenance"].update(inference_strategy=FULL_FRAME_STRATEGY, inference_strategy_sha256=strategy_digest(FULL_FRAME_STRATEGY))
+    assert validate_report(explicit_full, "traffic-jam", "test-sha")
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda r: r["provenance"].update(inference_strategy_sha256="wrong"),
+    lambda r: r["provenance"]["inference_strategy"].update(tile_size=640),
+    lambda r: r["provenance"]["inference_strategy"].update(overlap=.5),
+    lambda r: r["provenance"]["inference_strategy"].update(merge_containment=.5),
+    lambda r: r["processing"].update(model_passes_total=1),
+    lambda r: r["processing"].update(model_passes_per_sample=1),
+    lambda r: r.update(confidence_threshold=.4),
+    lambda r: r["frames"][8]["boxes"][0].update(confidence=.49),
+])
+def test_tiled_cache_rejects_strategy_or_counts_or_score_mismatch(mutation):
+    result = tiled_traffic_report()
+    mutation(result)
+    assert not validate_report(result, "traffic-jam", "test-sha")
+
+
+def test_even_rehashed_unvalidated_tiling_parameters_are_not_accepted():
+    from api.detection import strategy_digest
+    result = tiled_traffic_report()
+    result["provenance"]["inference_strategy"]["merge_containment"] = .5
+    result["provenance"]["inference_strategy_sha256"] = strategy_digest(result["provenance"]["inference_strategy"])
+    assert not validate_report(result, "traffic-jam", "test-sha")
+
+
+def test_cli_changes_strategy_without_force_and_does_not_recompute_matching_cache(tmp_path, monkeypatch, capsys):
+    import importlib.util
+    import sys
+    from api.detection import requested_replay_strategy
+    path = Path(__file__).parents[1] / "scripts" / "run_detection.py"
+    spec = importlib.util.spec_from_file_location("dense_tiling_cli_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    old = traffic_report()
+    old["processing"] = {"frame_count": 24}
+    stored = [old]
+    calls = []
+    monkeypatch.setattr(module, "load_local_environment", lambda: None)
+    monkeypatch.setenv("CLEARWAY_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", [str(path), "--source", "traffic-jam"])
+    monkeypatch.setattr(module, "DetectionService", lambda _: SimpleNamespace(get=lambda _source: deepcopy(stored[0])))
+    def prepare(data, source, **kwargs):
+        calls.append((data, source, kwargs))
+        stored[0] = tiled_traffic_report()
+        return deepcopy(stored[0])
+    monkeypatch.setattr(module, "prepare_detections", prepare)
+    assert module.main() == 0 and len(calls) == 1
+    assert calls[0][2] == {"sample_fps": 4.0, "dense_strategy": "tiled", "dense_tile_size": 768}
+    assert json.loads(capsys.readouterr().out)["inference_strategy"] == requested_replay_strategy("traffic-jam")
+    assert module.main() == 0 and len(calls) == 1

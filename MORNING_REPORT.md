@@ -1,5 +1,23 @@
 # Clearway morning handoff
 
+## Tiled Dense traffic and live ByteTrack — November 7, 2026
+
+**Working:** Dense traffic now uses 768px overlapping crops from the original 1080p frame plus a full-frame pass. Its final 45-sample cache took 17.074 seconds to prepare; playback reads saved detections. Same 1/4/8-second frames returned **88/60/68 boxes versus 69/41/51 before** (full frame at the same new 0.50 cutoff: 55/30/41). Visual coverage improved, with remaining roof/background false boxes, overlaps and occluded misses.
+
+**Working:** live CCTV now uses ByteTrack with ephemeral IDs and high/low-confidence association. In 58 Fremont development frames, all **461 raw high-confidence detections stayed unchanged**, with **77 additional low-confidence observations** associated with existing tracks; 13 IDs continued high→low→high. Tracking median was 0.560ms, maximum 2.308ms. Only current detections are displayed; lost predictions remain internal. Raw detector counts and incident evidence remain separate from recovered low-confidence boxes. This is a continuity diagnostic, not labeled accuracy or incident recall.
+
+**Verification:** 390 backend tests and 107 frontend tests passed across the full run and final focused frozen-frame regression; TypeScript/production build and emitted asset checks passed. Independent read-only review found no material issues. The visible built-in browser played Fremont with ByteTrack at approximately 6–6.5 updates/s, verified tracking while alerts were paused, cleared boxes on video pause, resumed with fresh IDs and re-enabled monitoring. Dense playback advanced with the tiled boxes and honest no-candidate fixture message. Two announced no-reload restarts loaded the feature and final frozen-frame correction; the existing run and all four incident records were retained. No paid inference, model download, deployment or tunnel was used.
+
+**Run:** the no-reload app is running at `http://127.0.0.1:8000/`. Start it with `make serve` when stopped. Existing local models and licensed media are already installed. Rebuild Dense with:
+
+```sh
+clearway/.venv/bin/python clearway/scripts/run_detection.py --source traffic-jam --fps 4 --dense-strategy tiled --dense-tile-size 768 --force
+```
+
+Use `--dense-strategy full-frame --force` for the explicit fallback. Reproduction commands and benchmark details are in [CCTV-QUALITY.md](clearway/docs/CCTV-QUALITY.md) and [VISION.md](clearway/docs/VISION.md). Ignored browser proofs: `clearway/data/verification/fremont-bytetrack.jpg` and `dense-traffic-tiled.jpg`. Local comparisons remain under `.local/fremont-quality/bytetrack/` and `.local/cctv-quality/dense-tiling/`.
+
+**Still needed:** human-labeled crowded/blurred video to measure missed vehicles, false positives and identity switches; the deferred Gemini key, Google 3D token, and physical cellular handoff test. No fine-tuning was attempted. Do not claim the extra boxes establish detection accuracy or an emergency.
+
 ## Fremont and Dense traffic corrections — November 7, 2026
 
 **Fremont CCTV:** the stream was healthy but the VisDrone model missed visible frontal vehicles. Fremont now explicitly selects pinned YOLOX-M; all other camera defaults remain unchanged. Three matched browser-resolution development frames produced **10/13/7 boxes versus 1/4/0** with VisDrone. The live browser displayed the selected model at about 6 updates/s and 69–73 ms inference. Distant/blurred cars and some neighboring-vehicle boxes remain a limitation. These counts are not accuracy metrics.

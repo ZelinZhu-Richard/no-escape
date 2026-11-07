@@ -2,6 +2,24 @@
 
 Live CCTV defaults to **YOLO11s VisDrone, 640×640, confidence 0.40**, following the user's explicit AGPL-3.0 approval. Fremont has the explicit YOLOX-M selection described below. The live page shows the actual model, vehicle/person counts, inference time, source resolution, and update frequency. Labels toggle without restarting the stream.
 
+## Live ByteTrack — November 7, 2026
+
+Selected live video now uses an adaptation of the [official MIT ByteTrack core](https://github.com/ifzhang/ByteTrack/tree/d1bf0191adff59bc8fcfeaa0b33d3d1642552a99/yolox/tracker). It preserves the XYAH Kalman model, score-fused high-confidence association, a second low-confidence association, tentative confirmation and brief lost-track recovery. A NumPy Hungarian assignment replaces upstream LAP/SciPy dependencies. Full attribution and adaptation notes are in `clearway/licenses/BYTETRACK-MIT.txt`.
+
+The detector's normal high-confidence boxes and counts remain separate from a candidate pool down to 0.10. Only low observations associated with an active track are displayed; low observations cannot start tracks. Every returned box is an actual detection from the current JPEG. Lost predictions remain internal and never reach the overlay or incident monitor. IDs are ephemeral to a run/camera/stream; sessions, candidates and tracks are bounded, with reset on invalid/repeated frames, timing gaps, seek, dimensions or configuration changes. The frontend matches stable IDs for its existing short redraw estimates and preserves the 350ms media/500ms wall freshness limits. Pausing alerts preserves display tracking but clears incident-observation continuity.
+
+A bounded 9.6-second official Fremont development segment was sampled at 6fps using the browser-equivalent 640×480/JPEG80 input. Across **58 frames**, raw detection produced **461 high-confidence observations**. ByteTrack displayed those same observations plus **77 low-confidence recoveries**, across 19 track IDs; 13 IDs had a high→low→high sequence. Raw high boxes were unchanged on every frame and no prediction-only box was returned. The measured tracking median was **0.560ms**, maximum **2.308ms** (n=58); detector median was 67.811ms, maximum 253.355ms including initialization.
+
+Visual inspection found recoveries on visible near vehicles, especially around 9 seconds. Blur, distant misses, imperfect boxes and possible identity switches remain. These are development observations and continuity diagnostics, **not accuracy, recall, IDF1, unique vehicle counts or human labels**. ByteTrack improves continuity where low-confidence detections exist; it does not restore missing image detail or establish an incident.
+
+Reproduce locally with an already permitted short segment (the script does not download footage or create alerts):
+
+```sh
+clearway/.venv/bin/python clearway/scripts/compare_live_tracking.py --video .local/fremont-quality/source.ts --output .local/fremont-quality/bytetrack
+```
+
+The ignored output contains a side-by-side diagnostic video, five annotated frames and numeric results. It compares both raw high detections and a high-only tracking ablation against the same input. This is development material, not a held-out evaluation.
+
 ## Fremont correction — November 7, 2026
 
 The user reported missed vehicles on TVD01 — I-80 at Fremont (`caltrans-d4-49`). Browser inspection reproduced just 1–3 detections while the stream and overlay continued at about 6 updates/s. The installed VisDrone model performed poorly on this view; it was not a stalled player.

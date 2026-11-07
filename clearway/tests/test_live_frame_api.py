@@ -18,7 +18,7 @@ class Detector:
     def __init__(self):
         self.calls = []
 
-    def analyze_jpeg(self, raw, camera_id=None):
+    def analyze_jpeg(self, raw, camera_id=None, *, tracking=False):
         self.calls.append((raw, camera_id))
         return {"image_sha256": hashlib.sha256(raw).hexdigest(), "status": "unavailable", "boxes": []}
 

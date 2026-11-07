@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -284,8 +285,12 @@ class TrafficDetector:
         ])
         self.strides = np.concatenate([np.full(((profile.input_size // stride) ** 2, 1), stride) for stride in (8, 16, 32)])
 
-    def detect(self, image) -> list[dict]:
+    def detect(self, image, *, confidence_floor: float | None = None) -> list[dict]:
         np, cv2, profile = self.np, self.cv2, self.profile
+        threshold = profile.confidence if confidence_floor is None else confidence_floor
+        if (type(threshold) not in (int, float) or not math.isfinite(threshold)
+                or not 0.1 <= threshold <= profile.confidence):
+            raise TrafficDetectionError("Invalid detector confidence floor.")
         tensor, (ratio, offset_x, offset_y) = prepare_input(image, profile, cv2, np)
         output = self.session.run(None, {self.input_name: tensor})[0]
         expected_shape = ((1, 8400, 5 + profile.class_count) if profile.architecture == "yolox-raw-grid"
@@ -308,7 +313,7 @@ class TrafficDetector:
         display, native = dict(profile.display_classes), dict(profile.native_classes)
         class_ids = np.argmax(scores, axis=1)
         confidence = scores[np.arange(len(rows)), class_ids]
-        keep = (confidence >= profile.confidence) & np.isin(class_ids, list(display))
+        keep = (confidence >= threshold) & np.isin(class_ids, list(display))
         rows, confidence, class_ids = rows[keep], confidence[keep], class_ids[keep]
         if not len(rows):
             return []
@@ -320,7 +325,7 @@ class TrafficDetector:
             candidates.append([float((cx - width / 2 - offset_x) / ratio),
                                float((cy - height / 2 - offset_y) / ratio),
                                float(width / ratio), float(height / ratio)])
-        indices = cv2.dnn.NMSBoxes(candidates, confidence.tolist(), profile.confidence, profile.nms_iou)
+        indices = cv2.dnn.NMSBoxes(candidates, confidence.tolist(), threshold, profile.nms_iou)
         image_height, image_width = image.shape[:2]
         boxes = []
         for index in np.asarray(indices).reshape(-1):
@@ -331,6 +336,6 @@ class TrafficDetector:
                 continue
             class_id = int(class_ids[index])
             boxes.append({"class_name": display[class_id], "native_class_name": native[class_id],
-                          "confidence": round(float(confidence[index]), 6),
+                          "confidence": float(confidence[index]),
                           "xyxy": [round(value, 6) for value in coordinates]})
         return sorted(boxes, key=lambda box: -box["confidence"])[:300]

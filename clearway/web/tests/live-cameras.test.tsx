@@ -118,7 +118,12 @@ beforeEach(() => {
   let streamSequence = 0;
   vi.stubGlobal("crypto", {
     subtle: { digest: vi.fn(async () => new Uint8Array(32).fill(0xab).buffer) },
-    randomUUID: vi.fn().mockImplementation(() => `00000000-0000-4000-8000-${String(++streamSequence).padStart(12, "0")}`),
+    randomUUID: vi
+      .fn()
+      .mockImplementation(
+        () =>
+          `00000000-0000-4000-8000-${String(++streamSequence).padStart(12, "0")}`,
+      ),
   });
   vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("");
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
@@ -160,23 +165,59 @@ const advance = async (milliseconds: number) => {
 
 describe("public camera data boundaries", () => {
   it("preserves explicit camera model selection without inventing it for legacy evidence", () => {
-    const raw = {...detection(), model: {name: "YOLOX-M", version: "test", selection: "camera_override"}};
+    const raw = {
+      ...detection(),
+      model: { name: "YOLOX-M", version: "test", selection: "camera_override" },
+    };
     expect(readImageDetections(raw, verifiedHash)?.model).toEqual(raw.model);
-    expect(readImageDetections(detection(), verifiedHash)?.model.selection).toBeUndefined();
-    expect(readImageDetections({...raw, model: {...raw.model, selection: "automatic"}}, verifiedHash)?.model.selection).toBeUndefined();
+    expect(
+      readImageDetections(detection(), verifiedHash)?.model.selection,
+    ).toBeUndefined();
+    expect(
+      readImageDetections(
+        { ...raw, model: { ...raw.model, selection: "automatic" } },
+        verifiedHash,
+      )?.model.selection,
+    ).toBeUndefined();
   });
   it("rejects malformed live alert status instead of inventing monitoring", () => {
-    const valid = {phase: "watching", observed_seconds: 4, incident_id: null, message: "Watching"};
+    const valid = {
+      phase: "watching",
+      observed_seconds: 4,
+      incident_id: null,
+      message: "Watching",
+    };
     expect(readLiveAlertMonitor(valid)).toEqual(valid);
-    expect(readLiveAlertMonitor({...valid, observed_seconds: Infinity})).toBeNull();
-    expect(readLiveAlertMonitor({...valid, phase: "confirmed"})).toBeNull();
-    expect(readLiveAlertMonitor({...valid, incident_id: "/other/path"})).toBeNull();
+    expect(
+      readLiveAlertMonitor({ ...valid, observed_seconds: Infinity }),
+    ).toBeNull();
+    expect(readLiveAlertMonitor({ ...valid, phase: "confirmed" })).toBeNull();
+    expect(
+      readLiveAlertMonitor({ ...valid, incident_id: "/other/path" }),
+    ).toBeNull();
   });
   it("preserves bounded camera-text exclusions and rejects invalid regions", () => {
     const regions = [{ id: "provider-title", xyxy: [0, 0, 0.46, 0.08] }];
-    expect(readImageDetections({ ...detection(), excluded_regions: regions }, verifiedHash)?.excluded_regions).toEqual(regions);
-    for (const xyxy of [[0, 0, 2, 1], [0.5, 0, 0.1, 1], [0, 0, NaN, 1]]) {
-      expect(readImageDetections({ ...detection(), excluded_regions: [{ id: "provider-title", xyxy }] }, verifiedHash)).toBeNull();
+    expect(
+      readImageDetections(
+        { ...detection(), excluded_regions: regions },
+        verifiedHash,
+      )?.excluded_regions,
+    ).toEqual(regions);
+    for (const xyxy of [
+      [0, 0, 2, 1],
+      [0.5, 0, 0.1, 1],
+      [0, 0, NaN, 1],
+    ]) {
+      expect(
+        readImageDetections(
+          {
+            ...detection(),
+            excluded_regions: [{ id: "provider-title", xyxy }],
+          },
+          verifiedHash,
+        ),
+      ).toBeNull();
     }
   });
   it("only allows official HLS sources and source-bound genuine local detections", () => {
@@ -268,23 +309,60 @@ describe("public camera data boundaries", () => {
 
 describe("selected public camera preview", () => {
   it("binds alert observations to the run and stream, and resets on seek, disable and run change", async () => {
-    const streamCamera = {...cameras[0], streaming_url: "https://wzmedia.dot.ca.gov/D4/E80_at_SAS_Tower.stream/playlist.m3u8"};
+    const streamCamera = {
+      ...cameras[0],
+      streaming_url:
+        "https://wzmedia.dot.ca.gov/D4/E80_at_SAS_Tower.stream/playlist.m3u8",
+    };
     const run1 = "00000000-0000-4000-8000-000000000001";
     const run2 = "00000000-0000-4000-8000-000000000002";
-    const renderRun = async (runId: string) => act(async () => root.render(<LiveCameraPanel catalog={{...catalog, cameras: [streamCamera]}} selectedId="camera-a" onSelect={vi.fn()} runId={runId} />));
-    vi.mocked(request).mockResolvedValue({...detection(), alert_monitor: {phase: "watching", observed_seconds: 4, incident_id: null, message: "Watching the current video."}});
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({drawImage: vi.fn()} as unknown as CanvasRenderingContext2D);
-    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(snapshot().image_data_url!);
+    const renderRun = async (runId: string) =>
+      act(async () =>
+        root.render(
+          <LiveCameraPanel
+            catalog={{ ...catalog, cameras: [streamCamera] }}
+            selectedId="camera-a"
+            onSelect={vi.fn()}
+            runId={runId}
+          />,
+        ),
+      );
+    vi.mocked(request).mockResolvedValue({
+      ...detection(),
+      alert_monitor: {
+        phase: "watching",
+        observed_seconds: 4,
+        incident_id: null,
+        message: "Watching the current video.",
+      },
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      snapshot().image_data_url!,
+    );
     await renderRun(run1);
     const video = container.querySelector("video")!;
-    Object.defineProperties(video, {videoWidth:{value:352},videoHeight:{value:240},readyState:{value:4},paused:{get:()=>false}});
+    Object.defineProperties(video, {
+      videoWidth: { value: 352 },
+      videoHeight: { value: 240 },
+      readyState: { value: 4 },
+      paused: { get: () => false },
+    });
     video.currentTime = 1;
     await act(async () => {
-      hlsMock.instances[0].handlers.get("level")("level", {details:{live:true}});
+      hlsMock.instances[0].handlers.get("level")("level", {
+        details: { live: true },
+      });
       video.dispatchEvent(new Event("playing"));
     });
     await advance(50);
-    const headers = () => vi.mocked(request).mock.calls.at(-1)?.[1]?.headers as Record<string,string>;
+    const headers = () =>
+      vi.mocked(request).mock.calls.at(-1)?.[1]?.headers as Record<
+        string,
+        string
+      >;
     const firstStream = headers()["X-Clearway-Stream-ID"];
     expect(headers()["X-Clearway-Run-ID"]).toBe(run1);
     expect(headers()["X-Clearway-Media-Time"]).toBe("1");
@@ -293,11 +371,17 @@ describe("selected public camera preview", () => {
     await act(async () => video.dispatchEvent(new Event("seeking")));
     await advance(180);
     expect(headers()["X-Clearway-Stream-ID"]).not.toBe(firstStream);
-    const button = (name: string) => [...container.querySelectorAll("button")].find(b=>b.textContent === name)!;
+    const seekStream = headers()["X-Clearway-Stream-ID"];
+    const button = (name: string) =>
+      [...container.querySelectorAll("button")].find(
+        (b) => b.textContent === name,
+      )!;
     await act(async () => button("Pause alerts").click());
     video.currentTime = 0.3;
     await advance(180);
-    expect(headers()["X-Clearway-Run-ID"]).toBeUndefined();
+    expect(headers()["X-Clearway-Run-ID"]).toBe(run1);
+    expect(headers()["X-Clearway-Stream-ID"]).toBe(seekStream);
+    expect(headers()["X-Clearway-Alert-Monitor"]).toBe("paused");
     expect(container.textContent).toContain("Alerts paused");
     expect(container.querySelector(".detection-box")).not.toBeNull();
     await act(async () => button("Enable alerts").click());
@@ -395,10 +479,17 @@ describe("selected public camera preview", () => {
     ).toBe("0 0 352 240");
     expect(container.querySelector(".live-video-view img")).toBeNull();
     expect(container.querySelector(".live-stream-frame svg text")).toBeNull();
-    expect(container.querySelector('[data-testid="live-detection-summary"]')?.textContent).toContain("1 vehicles");
-    const showLabels = [...container.querySelectorAll("button")].find(button => button.textContent === "Show labels")!;
+    expect(
+      container.querySelector('[data-testid="live-detection-summary"]')
+        ?.textContent,
+    ).toContain("1 vehicles");
+    const showLabels = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Show labels",
+    )!;
     await act(async () => showLabels.click());
-    expect(container.querySelector(".live-stream-frame svg text")?.textContent).toContain("car");
+    expect(
+      container.querySelector(".live-stream-frame svg text")?.textContent,
+    ).toContain("car");
     expect(hlsMock.instances).toHaveLength(1);
     await act(async () => {
       visibility.mockReturnValue("hidden");
@@ -737,5 +828,290 @@ describe("selected public camera preview", () => {
       changed.mock.calls.at(-1)?.[0].map((item: LiveCamera) => item.id),
     ).toEqual(["camera-b"]);
     expect(request).not.toHaveBeenCalled();
+  });
+});
+
+describe("verified ByteTrack live overlays", () => {
+  const runId = "00000000-0000-4000-8000-000000000100";
+  const streamCamera = {
+    ...cameras[0],
+    streaming_url:
+      "https://wzmedia.dot.ca.gov/D4/E80_at_SAS_Tower.stream/playlist.m3u8",
+  };
+  const configurationHash = "cd".repeat(32);
+  let hash: string;
+  let sequence: number;
+  const responseFor = (options?: RequestInit) => {
+    const headers = options?.headers as Record<string, string>;
+    const prefix = headers["X-Clearway-Stream-ID"]
+      .replaceAll("-", "")
+      .slice(-12);
+    const raw = detection(hash);
+    return {
+      ...raw,
+      provenance: {
+        ...raw.provenance,
+        configuration_sha256: configurationHash,
+      },
+      tracking: {
+        status: "available",
+        algorithm: "ByteTrack",
+        schema_version: "clearway-live-tracking-v1",
+        image_sha256: hash,
+        configuration_sha256: configurationHash,
+        camera_id: "camera-a",
+        run_id: headers["X-Clearway-Run-ID"],
+        stream_id: headers["X-Clearway-Stream-ID"],
+        media_time_seconds: Number(headers["X-Clearway-Media-Time"]),
+        reset_reason: null,
+        tracks: [
+          {
+            ...raw.boxes[0],
+            track_id: `bt-${prefix}-1`,
+            observation: "high",
+            confirmed: true,
+          },
+          {
+            class_name: "car",
+            confidence: 0.2,
+            xyxy: [0.5, 0.2, 0.8, 0.8],
+            track_id: `bt-${prefix}-2`,
+            observation: "low_recovery",
+            confirmed: true,
+          },
+        ],
+      },
+      alert_monitor: {
+        phase: "watching",
+        observed_seconds: 4,
+        incident_id: null,
+        message: "Watching current frames",
+      },
+    };
+  };
+  const renderRun = async (selectedRun = runId) =>
+    act(async () =>
+      root.render(
+        <LiveCameraPanel
+          catalog={{ ...catalog, cameras: [streamCamera] }}
+          selectedId="camera-a"
+          onSelect={vi.fn()}
+          runId={selectedRun}
+        />,
+      ),
+    );
+  const headers = () =>
+    vi.mocked(request).mock.calls.at(-1)?.[1]?.headers as Record<
+      string,
+      string
+    >;
+  const button = (text: string) =>
+    [...container.querySelectorAll("button")].find(
+      (item) => item.textContent === text,
+    )!;
+  const start = async () => {
+    await renderRun();
+    const video = container.querySelector("video")!;
+    Object.defineProperties(video, {
+      videoWidth: { value: 352 },
+      videoHeight: { value: 240 },
+      readyState: { value: 4 },
+      paused: { get: () => false },
+    });
+    video.currentTime = 1;
+    await act(async () => {
+      hlsMock.instances[0].handlers.get("level")("level", {
+        details: { live: true },
+      });
+      video.dispatchEvent(new Event("playing"));
+    });
+    await advance(50);
+    return video;
+  };
+  beforeEach(() => {
+    sequence = 0;
+    hash = verifiedHash;
+    vi.mocked(crypto.subtle.digest).mockImplementation(async () => {
+      const bytes = new Uint8Array(32).fill(++sequence);
+      hash = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      return bytes.buffer;
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockImplementation(
+      () => `data:image/jpeg;base64,${btoa(`frame-${sequence}`)}`,
+    );
+    vi.mocked(request).mockImplementation(async (_path, options) =>
+      responseFor(options),
+    );
+  });
+
+  it("shows verified current tracks and distinguishes raw counts from low recovery while alert pauses preserve tracking", async () => {
+    const video = await start();
+    const stream = headers()["X-Clearway-Stream-ID"];
+    const ids = [...container.querySelectorAll("[data-track-id]")].map(
+      (element) => element.getAttribute("data-track-id"),
+    );
+    expect(ids).toHaveLength(2);
+    expect(
+      container.querySelector('[data-testid="live-yolo-status"]')?.textContent,
+    ).toContain("+ ByteTrack");
+    expect(
+      container.querySelector('[data-testid="live-detection-summary"]')
+        ?.textContent,
+    ).toContain("Raw YOLO: 1 vehicles");
+    expect(container.textContent).toContain(
+      "ByteTrack: 2 shown · 1 low-confidence recoveries",
+    );
+    await act(async () => button("Show labels").click());
+    expect(
+      container.querySelector(".live-stream-frame svg text")?.textContent,
+    ).toContain("car #1");
+    await act(async () => button("Pause alerts").click());
+    video.currentTime = 1.2;
+    await advance(180);
+    expect(headers()["X-Clearway-Run-ID"]).toBe(runId);
+    expect(headers()["X-Clearway-Stream-ID"]).toBe(stream);
+    expect(headers()["X-Clearway-Alert-Monitor"]).toBe("paused");
+    expect(
+      [...container.querySelectorAll("[data-track-id]")].map((element) =>
+        element.getAttribute("data-track-id"),
+      ),
+    ).toEqual(ids);
+    expect(container.textContent).toContain("Alerts paused");
+    expect(
+      container.querySelector('[data-testid="live-yolo-status"]')?.textContent,
+    ).toContain("+ ByteTrack");
+    await act(async () => button("Enable alerts").click());
+    video.currentTime = 1.4;
+    await advance(180);
+    expect(headers()["X-Clearway-Alert-Monitor"]).toBeUndefined();
+    expect(headers()["X-Clearway-Stream-ID"]).toBe(stream);
+    expect(hlsMock.instances).toHaveLength(1);
+  });
+
+  it.each(["stream_id", "image_sha256", "status"])(
+    "falls back to raw current boxes when tracking %s mismatches",
+    async (field) => {
+      const video = await start();
+      vi.mocked(request).mockImplementation(async (_path, options) => {
+        const raw = responseFor(options);
+        return { ...raw, tracking: { ...raw.tracking, [field]: "mismatch" } };
+      });
+      video.currentTime = 1.2;
+      await advance(180);
+      expect(
+        container.querySelectorAll(".live-stream-frame .detection-box"),
+      ).toHaveLength(1);
+      expect(container.querySelector("[data-track-id]")).toBeNull();
+      expect(
+        container
+          .querySelector('[data-testid="live-direct-overlay"]')
+          ?.getAttribute("data-tracking"),
+      ).toBe("raw");
+      expect(
+        container.querySelector('[data-testid="live-yolo-status"]')
+          ?.textContent,
+      ).not.toContain("ByteTrack");
+    },
+  );
+
+  it("acknowledges a rapid alert pause/resume without resetting tracking or reusing old alert status", async () => {
+    const video = await start();
+    const stream = headers()["X-Clearway-Stream-ID"];
+    await act(async () => button("Pause alerts").click());
+    await act(async () => button("Enable alerts").click());
+    expect(
+      container.querySelector('[data-testid="live-alert-monitor"]')
+        ?.textContent,
+    ).not.toContain("Watching current frames");
+    video.currentTime = 1.2;
+    await advance(180);
+    expect(headers()["X-Clearway-Alert-Monitor"]).toBe("paused");
+    expect(headers()["X-Clearway-Stream-ID"]).toBe(stream);
+    expect(container.querySelectorAll("[data-track-id]")).toHaveLength(2);
+    video.currentTime = 1.4;
+    await advance(180);
+    expect(headers()["X-Clearway-Alert-Monitor"]).toBeUndefined();
+    expect(headers()["X-Clearway-Stream-ID"]).toBe(stream);
+    expect(
+      container.querySelector('[data-testid="live-alert-monitor"]')
+        ?.textContent,
+    ).toContain("Watching current frames");
+  });
+
+  it("clears old IDs on seek, ignores late tracks, and creates new context after run change", async () => {
+    const video = await start();
+    const firstStream = headers()["X-Clearway-Stream-ID"];
+    let resolve!: (value: unknown) => void;
+    vi.mocked(request).mockImplementation(
+      (_path, options) =>
+        new Promise((done) => {
+          const old = responseFor(options);
+          resolve = () => done(old);
+        }),
+    );
+    video.currentTime = 1.2;
+    await advance(180);
+    const pendingSignal = vi.mocked(request).mock.calls.at(-1)?.[1]?.signal;
+    await act(async () => {
+      video.currentTime = 0.1;
+      video.dispatchEvent(new Event("seeking"));
+    });
+    expect(pendingSignal?.aborted).toBe(true);
+    expect(container.querySelector("[data-track-id]")).toBeNull();
+    await act(async () => resolve(null));
+    expect(container.querySelector("[data-track-id]")).toBeNull();
+    vi.mocked(request).mockImplementation(async (_path, options) =>
+      responseFor(options),
+    );
+    await advance(180);
+    expect(headers()["X-Clearway-Stream-ID"]).not.toBe(firstStream);
+    expect(container.querySelectorAll("[data-track-id]")).toHaveLength(2);
+    const seekStream = headers()["X-Clearway-Stream-ID"];
+    await renderRun("00000000-0000-4000-8000-000000000200");
+    expect(container.querySelector("[data-track-id]")).toBeNull();
+    video.currentTime = 0.3;
+    await advance(180);
+    expect(headers()["X-Clearway-Run-ID"]).toBe(
+      "00000000-0000-4000-8000-000000000200",
+    );
+    expect(headers()["X-Clearway-Stream-ID"]).not.toBe(seekStream);
+    expect(container.querySelectorAll("[data-track-id]")).toHaveLength(2);
+  });
+
+  it("removes all previous tracks for an empty current result and hides stalled tracks", async () => {
+    const video = await start();
+    vi.mocked(request).mockImplementation(async (_path, options) => {
+      const raw = responseFor(options);
+      return {
+        ...raw,
+        tracking: {
+          ...raw.tracking,
+          tracks: [],
+          reset_reason: "duplicate_frame",
+        },
+      };
+    });
+    video.currentTime = 1.2;
+    await advance(180);
+    expect(
+      container.querySelectorAll(".live-stream-frame .detection-box"),
+    ).toHaveLength(0);
+    expect(container.textContent).toContain("ByteTrack: 0 shown");
+    vi.mocked(request).mockImplementation(async (_path, options) =>
+      responseFor(options),
+    );
+    video.currentTime = 1.4;
+    await advance(180);
+    expect(container.querySelectorAll("[data-track-id]")).toHaveLength(2);
+    await advance(501);
+    expect(
+      container.querySelector('[data-testid="live-direct-overlay"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="live-yolo-status"]')?.textContent,
+    ).not.toContain("ByteTrack");
   });
 });

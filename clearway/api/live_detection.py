@@ -29,6 +29,7 @@ MAX_CACHE_ENTRIES = 8
 CACHE_TTL_SECONDS = 300
 FAILURE_RETRY_SECONDS = 30
 SCHEMA_VERSION = "clearway-live-detections-v1"
+TRACKING_CONFIDENCE_FLOOR = 0.1
 SOF_MARKERS = frozenset({0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF})
 # These rectangles cover the observed provider graphics on this camera only.
 # They are not a generic road ROI and must not follow other camera selections.
@@ -91,18 +92,19 @@ def _decode(detector, raw: bytes):
     return detector.cv2.imdecode(detector.np.frombuffer(raw, dtype=detector.np.uint8), detector.cv2.IMREAD_COLOR)
 
 
-def _validated_boxes(boxes: object, profile: DetectorProfile) -> list[dict]:
+def _validated_boxes(boxes: object, profile: DetectorProfile, *, confidence_floor: float | None = None) -> list[dict]:
     if not isinstance(boxes, list) or len(boxes) > 300:
         raise ValueError("Invalid detector output.")
     normalized = []
     allowed_classes = set(dict(profile.display_classes).values())
     display_names = dict(profile.display_classes)
     native_mapping = {native: display_names[index] for index, native in profile.native_classes}
+    threshold = profile.confidence if confidence_floor is None else confidence_floor
     for item in boxes:
         if not isinstance(item, dict) or item.get("class_name") not in allowed_classes:
             raise ValueError("Invalid detector class.")
         confidence, coords = item.get("confidence"), item.get("xyxy")
-        if type(confidence) not in (float, int) or not math.isfinite(confidence) or not profile.confidence <= confidence <= 1:
+        if type(confidence) not in (float, int) or not math.isfinite(confidence) or not threshold <= confidence <= 1:
             raise ValueError("Invalid detector confidence.")
         if (not isinstance(coords, list) or len(coords) != 4
                 or any(type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1 for value in coords)
@@ -178,7 +180,7 @@ class LiveDetectionService:
             result["retry_after_seconds"] = retry
         return result
 
-    def analyze_jpeg(self, raw: bytes, camera_id: str | None = None) -> dict:
+    def analyze_jpeg(self, raw: bytes, camera_id: str | None = None, *, tracking: bool = False) -> dict:
         started = self._monotonic()
         try:
             context = _exclusion_context(camera_id)
@@ -196,7 +198,8 @@ class LiveDetectionService:
         config_sha = self._config_shas[profile.id]
         selection = "camera_override" if camera_id in self._camera_profiles else "default"
         configuration_sha = hashlib.sha256(json.dumps(
-            {"model_configuration_sha256": config_sha, "profile_selection": selection, **context},
+            {"model_configuration_sha256": config_sha, "profile_selection": selection,
+             "tracking_confidence_floor": TRACKING_CONFIDENCE_FLOOR if tracking else None, **context},
             sort_keys=True, separators=(",", ":"),
         ).encode()).hexdigest()
         cache_key = hashlib.sha256(f"{image_sha}:{configuration_sha}".encode()).hexdigest()
@@ -230,7 +233,18 @@ class LiveDetectionService:
                         or decoded_width * decoded_height > MAX_IMAGE_PIXELS):
                     return self._unavailable("Decoded image dimensions do not match the JPEG header.", "invalid_image", image_sha=image_sha)
                 inference_started = self._monotonic()
-                boxes = _validated_boxes(detector.detect(image), profile)
+                if tracking:
+                    candidates = _validated_boxes(
+                        detector.detect(image, confidence_floor=TRACKING_CONFIDENCE_FLOOR),
+                        profile, confidence_floor=TRACKING_CONFIDENCE_FLOOR,
+                    )
+                    # Low-confidence observations are available only to the
+                    # tracker. Counts and incident evidence retain the detector's
+                    # normal threshold (OpenCV NMS uses a strict score cutoff).
+                    boxes = [box for box in candidates if box["confidence"] > profile.confidence]
+                    candidates = [box for box in candidates if _outside_graphics(box, context["excluded_regions"])]
+                else:
+                    boxes = _validated_boxes(detector.detect(image), profile)
                 unfiltered_count = len(boxes)
                 boxes = [box for box in boxes if _outside_graphics(box, context["excluded_regions"])]
                 inference_ms = round(max(0, (self._monotonic() - inference_started) * 1000), 3)
@@ -253,6 +267,9 @@ class LiveDetectionService:
                     "request_ms": round(max(0, (self._monotonic() - started) * 1000), 3),
                     "limitations": list(LIMITATIONS),
                 }
+                if tracking:
+                    result["tracking_candidates"] = candidates
+                    result["tracking_confidence_floor"] = TRACKING_CONFIDENCE_FLOOR
             except Exception:
                 # Provider names, paths and native exception strings do not
                 # become UI messages. No fake/cached-from-another-image boxes.

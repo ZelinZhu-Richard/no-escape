@@ -16,6 +16,29 @@ The November 7 Dense traffic correction followed a playback check: the video dec
 
 Replay labels have their own toggle. Dense traffic starts with boxes visible and labels hidden to keep the crowded roadway readable; other scenes retain labeled boxes by default. Browser verification confirmed advancing playback with real saved boxes, working label toggles and the completed fixture message. Local proof: `clearway/data/verification/dense-traffic-fixed.jpg`.
 
+## Dense traffic tiled detection — November 7, 2026
+
+Dense traffic now prepares saved boxes from original 1920×1080 pixels using **768px crops with nominal 25% overlap plus a full-frame pass** (six crops plus one full pass per sample). Edge crops can overlap more to cover the complete image. Boxes clipped by internal crop edges are rejected, coordinates are mapped back to the original frame, and conservative IoU/containment checks suppress duplicates. A 0.50 output cutoff reduces weaker hypotheses before merging. Person/vehicle hypotheses are kept separate. These settings and their digest enter cache provenance; stale or mismatched reports are rejected. Other sources keep their existing Tiny caches.
+
+Same-frame development comparison after one warmup:
+
+| Mode | Boxes at 1.007 / 4.007 / 8.007s | Median processing time, n=3 |
+| --- | --- | ---: |
+| Previous full frame, 0.40 | 69 / 41 / 51 | 45.6ms |
+| Full frame, 0.50 control | 55 / 30 / 41 | 45.7ms |
+| Selected tiled, 0.50 | 88 / 60 / 68 | 324.2ms |
+
+Visual inspection found additional visible vehicles on both carriageways and the lower road. Roof/background false positives, ambiguous striped patterns, overlaps and occluded misses remain. More boxes alone do not establish better accuracy. These three frames informed development settings; they are not a holdout, human labels, or precision/recall evaluation. The latency tradeoff is paid once during local cache preparation; recorded playback reads saved results.
+
+All 336 decoded frames yielded 45 samples at 4fps. Preparing the final cache took 17.074s, with sample processing median 353.848ms and maximum 695.750ms (n=45), 315 total model passes. Vehicle counts ranged 55–91, median 66. These are per-frame predictions, not unique vehicles.
+
+```sh
+clearway/.venv/bin/python clearway/scripts/run_detection.py --source traffic-jam --force
+clearway/.venv/bin/python clearway/scripts/compare_dense_tiling.py --tile-sizes 768 --output .local/cctv-quality/dense-tiling/check
+```
+
+Use `--dense-strategy full-frame --force` for an explicit full-frame cache fallback. Tiling is a spatial crop/inference/merge implementation, following the [slice-detect-merge approach](https://obss.github.io/sahi/guides/sliced-inference/); no SAHI package or model training is added. There is no upscaling or synthetic detail enhancement.
+
 ## What the counter means
 
 The gate divides the clip into two-second windows. It passes the first window, a ten-second heartbeat, any window with a detected person, or a vehicle-count change of at least two. Otherwise it marks the window suppressed. The comparison baseline is **one VLM call per two-second window**. It runs in shadow mode: the operator's Gemini command remains independent, and no actual paid call is silently suppressed.

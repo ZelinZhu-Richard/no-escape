@@ -256,6 +256,31 @@ def test_visdrone_filters_low_confidence_candidates_before_nms():
     assert boxes[0]["xyxy"] == pytest.approx([380 / 640, 300 / 640, 420 / 640, 340 / 640])
 
 
+def test_tracking_floor_keeps_low_candidates_without_changing_high_detections():
+    _, np = vision_modules()
+    output = np.zeros((1, 14, 8400), dtype=np.float32)
+    for index, confidence in enumerate((0.2, 0.39, 0.41, 0.85)):
+        output[0, :4, index] = [80 + 150 * index, 320, 40, 40]
+        output[0, 4 + 3, index] = confidence
+    # A low duplicate must not displace the stronger box during NMS.
+    output[0, :4, 4] = output[0, :4, 3]
+    output[0, 4 + 3, 4] = 0.25
+    detector = tensor_detector("yolo11s-visdrone640", output)
+    frame = np.zeros((640, 640, 3), dtype=np.uint8)
+    high = detector.detect(frame)
+    candidates = detector.detect(frame, confidence_floor=0.1)
+    assert len(candidates) == 4
+    assert [box for box in candidates if box["confidence"] > detector.profile.confidence] == high
+
+
+@pytest.mark.parametrize("floor", [0, -1, True, 0.5, float("nan"), float("inf"), "0.1"])
+def test_tracking_floor_rejects_invalid_configuration_before_inference(floor):
+    _, np = vision_modules()
+    detector = tensor_detector("yolo11s-visdrone640", np.zeros((1, 14, 8400), dtype=np.float32))
+    with pytest.raises(TrafficDetectionError, match="confidence floor"):
+        detector.detect(np.zeros((640, 640, 3), dtype=np.uint8), confidence_floor=floor)
+
+
 def test_decoded_boxes_clip_to_source_image_and_discard_padding_only_boxes():
     _, np = vision_modules()
     output = np.zeros((1, 14, 8400), dtype=np.float32)

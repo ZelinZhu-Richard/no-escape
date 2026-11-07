@@ -105,6 +105,11 @@ class LiveAlertMonitor:
         with self._lock:
             self._streams.clear()
 
+    def pause(self, run_id: str, camera_id: str, stream_id: str):
+        """A display-only tracking frame breaks incident-observation continuity."""
+        with self._lock:
+            self._streams.pop((run_id, camera_id, stream_id), None)
+
     def observe(self, run_id: str, camera: dict, stream_id: str, media_time: float,
                 raw: bytes, detections: dict) -> dict:
         """Never let monitoring failures interrupt genuine detection overlays."""

@@ -43,6 +43,12 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Tiled replay detection and live ByteTrack — November 7, 2026
+
+The user authorized higher-resolution tiled detection for Dense traffic and ByteTrack for live CCTV, same-footage comparisons on Dense/Fremont, and an update to the existing PR. Dense traffic uses original 1920×1080 pixels with 768px overlapping crops plus a full-frame pass, a 0.50 output floor, boundary-fragment rejection and duplicate suppression. Prepare the 4fps cache locally; keep other replay sources unchanged and an explicit full-frame fallback. Bind tiling settings to cache provenance.
+
+Live CCTV uses bounded, in-memory ByteTrack association: high-confidence matching, low-confidence recovery, Kalman motion prediction and ephemeral per-stream IDs. Return only actual current-frame observations; lost predictions remain internal. Preserve raw high-confidence boxes/counts and the existing incident rules. Tracking must continue when alerts are paused, while the alert observation window resets. Keep exact frame/config/run/stream binding and the existing overlay age limits, with resets on seek/gap/source/run/config changes. No paid inference or model training. Report development counts and measured latency, not unlabelled accuracy.
+
 ## Fremont and Dense traffic corrections — November 7, 2026
 
 The user reported missed vehicles on Fremont CCTV and a nonworking Dense traffic source. Inspect the actual images and player before changing models. Use explicit camera-specific local profiles: Fremont (`caltrans-d4-49`) selects the already pinned Apache-2.0 YOLOX-M model after same-frame visual comparisons; other cameras keep the approved YOLO11s VisDrone default. Preserve model-specific preprocessing, thresholds, provenance, cache identity and failure isolation, and show the selected model honestly. No runtime model downloads or paid inference.

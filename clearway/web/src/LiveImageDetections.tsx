@@ -71,13 +71,20 @@ export function LiveImageBoxes({
     >
       {detections.excluded_regions?.map((region) => {
         const [x1, y1, x2, y2] = region.xyxy;
-        return <rect key={region.id} className="live-excluded-region"
-          x={x1 * width} y={y1 * height} width={(x2 - x1) * width}
-          height={(y2 - y1) * height} />;
+        return (
+          <rect
+            key={region.id}
+            className="live-excluded-region"
+            x={x1 * width}
+            y={y1 * height}
+            width={(x2 - x1) * width}
+            height={(y2 - y1) * height}
+          />
+        );
       })}
       {detections.boxes.map((box, index) => {
         const [x1, y1, x2, y2] = box.xyxy;
-        const label = `${box.class_name} ${Math.round(box.confidence * 100)}%`;
+        const label = `${box.class_name}${box.track_id ? ` #${box.track_id.split("-").at(-1)}` : ""} ${Math.round(box.confidence * 100)}%`;
         const labelWidth = Math.min(
           width,
           label.length * font * 0.56 + font * 0.6,
@@ -87,7 +94,9 @@ export function LiveImageBoxes({
           y1 * height >= font * 1.5 ? y1 * height - font * 1.5 : y1 * height;
         return (
           <g
-            key={index}
+            key={box.track_id ?? index}
+            data-track-id={box.track_id}
+            data-observation={box.observation}
             className={
               box.class_name === "person"
                 ? "detection-person"
@@ -101,22 +110,26 @@ export function LiveImageBoxes({
               height={(y2 - y1) * height}
               className="detection-box"
             />
-            {labels && <><rect
-              x={x}
-              y={y}
-              width={labelWidth}
-              height={font * 1.4}
-              className="detection-label-bg"
-            />
-            <text
-              x={x + font * 0.3}
-              y={y + font}
-              fill="currentColor"
-              fontSize={font}
-              fontFamily="monospace"
-            >
-              {label}
-            </text></>}
+            {labels && (
+              <>
+                <rect
+                  x={x}
+                  y={y}
+                  width={labelWidth}
+                  height={font * 1.4}
+                  className="detection-label-bg"
+                />
+                <text
+                  x={x + font * 0.3}
+                  y={y + font}
+                  fill="currentColor"
+                  fontSize={font}
+                  fontFamily="monospace"
+                >
+                  {label}
+                </text>
+              </>
+            )}
           </g>
         );
       })}
@@ -144,8 +157,12 @@ export function LiveDetectionCounts({
           ? ""
           : ` · ${Math.round(detections.inference_ms)} ms`}
       </span>
-      {detections.model.selection === "camera_override" && <span>Camera-specific model</span>}
-      {!!detections.excluded_regions?.length && <span>Camera text regions excluded</span>}
+      {detections.model.selection === "camera_override" && (
+        <span>Camera-specific model</span>
+      )}
+      {!!detections.excluded_regions?.length && (
+        <span>Camera text regions excluded</span>
+      )}
     </div>
   );
 }
