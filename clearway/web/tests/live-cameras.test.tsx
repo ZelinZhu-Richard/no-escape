@@ -164,6 +164,13 @@ const advance = async (milliseconds: number) => {
     await vi.advanceTimersByTimeAsync(milliseconds);
   });
 };
+const selectFeeds = async (value: "all" | "video") => {
+  const select = container.querySelector<HTMLSelectElement>('[aria-label="Camera feeds"]')!;
+  await act(async () => {
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+};
 
 describe("public camera data boundaries", () => {
   it("preserves explicit camera model selection without inventing it for legacy evidence", () => {
@@ -821,7 +828,8 @@ describe("selected public camera preview", () => {
       );
     }
     await act(async () => root.render(<Controlled />));
-    const select = container.querySelector<HTMLSelectElement>("select")!;
+    await selectFeeds("all");
+    const select = container.querySelector<HTMLSelectElement>('[aria-label="Camera region"]')!;
     await act(async () => {
       select.value = "alameda";
       select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1195,6 +1203,9 @@ describe("expanded Bay Area camera catalog", () => {
         />,
       ),
     );
+    expect(changed.mock.calls.at(-1)?.[0]).toHaveLength(63);
+    expect(changed.mock.calls.at(-1)?.[0].every((camera: LiveCamera) => camera.streaming_url)).toBe(true);
+    await selectFeeds("all");
     expect(listButtons()).toHaveLength(50);
     expect(changed.mock.calls.at(-1)?.[0]).toHaveLength(126);
     expect(container.textContent).toContain("126 cameras · Bay Area");
@@ -1229,6 +1240,47 @@ describe("expanded Bay Area camera catalog", () => {
     });
     expect(listButtons()).toHaveLength(50);
     expect(changed.mock.calls.at(-1)?.[0]).toHaveLength(126);
+    expect(request).not.toHaveBeenCalled();
+    await selectFeeds("video");
+    expect(listButtons()).toHaveLength(50);
+    expect(changed.mock.calls.at(-1)?.[0]).toHaveLength(63);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("starts video when a default-list camera is selected and retries it after a fallback", async () => {
+    const data = expandedCatalog(4);
+    function Controlled() {
+      const [selected, setSelected] = useState<string | null>(null);
+      return <LiveCameraPanel catalog={data} selectedId={selected} onSelect={setSelected} />;
+    }
+    await act(async () => root.render(<Controlled />));
+    expect(listButtons()).toHaveLength(2);
+    expect(container.querySelector<HTMLSelectElement>('[aria-label="Camera feeds"]')?.value).toBe("video");
+    expect(request).not.toHaveBeenCalled();
+    await act(async () => listButtons()[0].click());
+    expect(hlsMock.instances[0].loadSource).toHaveBeenCalledWith(data.cameras[0].streaming_url);
+    expect(container.querySelector("video")).not.toBeNull();
+    expect(request).not.toHaveBeenCalled();
+    vi.mocked(request).mockResolvedValue(snapshot(data.cameras[0].id));
+    await act(async () => hlsMock.instances[0].handlers.get("error")("error", { fatal: true }));
+    expect(container.querySelector("video")).toBeNull();
+    expect(container.textContent).toContain("Showing its provider snapshot instead");
+    expect(request).toHaveBeenCalledTimes(1);
+    await act(async () => listButtons()[0].click());
+    expect(container.querySelector("video")).not.toBeNull();
+    expect(hlsMock.instances).toHaveLength(2);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("explains snapshot availability when a county has no video matches", async () => {
+    const changed = vi.fn();
+    await act(async () => root.render(<LiveCameraPanel catalog={catalog} selectedId={null} onSelect={vi.fn()} onVisibleCamerasChange={changed} />));
+    expect(listButtons()).toHaveLength(0);
+    expect(changed.mock.calls.at(-1)?.[0]).toEqual([]);
+    expect(container.textContent).toContain("Choose All cameras to include snapshots");
+    await selectFeeds("all");
+    expect(listButtons()).toHaveLength(2);
+    expect(changed.mock.calls.at(-1)?.[0]).toHaveLength(2);
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -1291,8 +1343,11 @@ describe("expanded Bay Area camera catalog", () => {
         />,
       ),
     );
-    expect(listButtons()).toHaveLength(1);
+    expect(listButtons()).toHaveLength(0);
     expect(container.querySelector(".live-preview-heading")).toBeNull();
+    expect(changed.mock.calls.at(-1)?.[0]).toEqual([]);
+    await selectFeeds("all");
+    expect(listButtons()).toHaveLength(1);
     expect(changed.mock.calls.at(-1)?.[0]).toEqual([cameras[0]]);
     expect(request).not.toHaveBeenCalled();
   });

@@ -1,5 +1,13 @@
 # Clearway morning handoff
 
+## Live video by default — November 7, 2026
+
+**Fixed:** the user's sidebar tab still ran an older build and its TV317 stream had fallen back to a snapshot. Retrying restored genuine video. Public CCTV now defaults to **Live video (191)** for both its list and map; **All cameras (767)** explicitly includes snapshot-only locations. Selecting a video camera starts its stream. Re-selecting a list item retries a failed stream or exits a prior manual snapshot choice; provider failure still produces a disclosed snapshot fallback with Retry live video.
+
+**Verified:** 113 frontend tests, TypeScript/production build and emitted asset/license checks passed. New tests cover default video filtering, map/list synchronization, snapshot opt-in, pagination reset and video retry after failure. In the visible built-in browser, the refreshed sidebar tab played Fremont at a decoded 704×528 with YOLOX-M/ByteTrack; playback advanced from 4.954 to 11.349 seconds while switching All cameras → Live video. The tab is left on the playing Fremont feed. Proof: `clearway/data/verification/video-first-fremont.jpg` (ignored).
+
+**Run:** the existing no-reload server stays at `http://127.0.0.1:8000/`; no restart or run reset was needed. Refresh other already-open tabs to load the new UI. Open Public CCTV, keep Camera feeds on Live video, then select a camera. Use All cameras only when you want snapshot-only sources too. Provider uptime is not guaranteed; no new inference costs, backend changes or model changes were introduced.
+
 ## Bay Area-only public CCTV — November 7, 2026
 
 **Working:** the NC camera inventory layer, dataset, endpoint and refresh task are removed. Public CCTV now includes **767 Caltrans cameras across all nine Bay Area counties**, an increase of 667. **191 advertise HLS video**; the other 576 provide snapshots only. Every record has a snapshot endpoint. County and geographic validation excludes out-of-scope entries. The camera list shows 50 matches at a time, with county/search filters and all matching map pins selectable.

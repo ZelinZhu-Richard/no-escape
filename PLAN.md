@@ -43,6 +43,10 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Prefer live public video — November 7, 2026
+
+The user wants moving video whenever the official camera supports it. Default both the public-camera list and map to the 191 advertised video feeds, with an explicit All cameras option for the 576 snapshot-only entries. Selecting a video camera starts its stream; retain disclosed snapshot fallback and Retry live video when the provider fails. Re-selecting a list item retries video instead of retaining a previous fallback or manual snapshot choice. Keep selected-feed-only loading and existing local YOLO/ByteTrack. Refresh the user's stale built-in-browser tab after rebuilding, verify actual advancing video, and update the existing PR.
+
 ## Bay Area public CCTV only — November 7, 2026
 
 The user requested removing NC public-camera points and expanding Bay Area endpoints. Interpret “May area” as Bay Area. Retire the NCDOT inventory dataset, route, refresh task and map controls. Use the official Caltrans District 4 catalog across Alameda, Contra Costa, Marin, Napa, San Francisco, San Mateo, Santa Clara, Solano and Sonoma; filter other counties, invalid coordinates/URLs and out-of-service entries. Retain up to 1,000 validated cameras, list pagination and all matching map pins. Advertised HLS availability is distinct from tested playback; preserve snapshot fallback, existing detections/tracking and selected-camera-only loading. Historical replay placement and retained incident evidence do not change. Update the existing PR and handoff after tests and browser verification. This supersedes the earlier requirement to retain 20 NC inventory points.

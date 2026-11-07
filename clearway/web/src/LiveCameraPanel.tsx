@@ -210,6 +210,7 @@ export function LiveCameraPanel({
 }: LiveCameraPanelProps) {
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState("");
+  const [feedType, setFeedType] = useState<"video" | "all">("video");
   const [listLimit, setListLimit] = useState(CAMERA_PAGE_SIZE);
   const [paused, setPaused] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
@@ -236,15 +237,16 @@ export function LiveCameraPanel({
   );
   const previewRef = useRef<HTMLDivElement>(null);
   const visible = useMemo(
-    () => filterLiveCameras(cameras, region, query),
-    [cameras, region, query],
+    () => filterLiveCameras(cameras, region, query)
+      .filter((camera) => feedType === "all" || Boolean(camera.streaming_url)),
+    [cameras, region, query, feedType],
   );
   const selected = cameras.find((camera) => camera.id === selectedId);
   const listed = visible.slice(0, listLimit);
   const videoCount = cameras.filter((camera) => camera.streaming_url).length;
   useEffect(() => {
     setListLimit(CAMERA_PAGE_SIZE);
-  }, [query, region, cameras]);
+  }, [query, region, cameras, feedType]);
   const showVideo = Boolean(
     selected?.streaming_url &&
     failedStream !== selectedId &&
@@ -285,7 +287,8 @@ export function LiveCameraPanel({
         endpoints
       </p>
       <p className="live-camera-intro">
-        Provider video where available, with snapshots as a fallback. Local YOLO
+        Live-video cameras are shown first. Select one to play its provider stream;
+        snapshots are used if video fails or you choose them. Local YOLO
         watches the selected playing video for sustained signals and sends
         candidates to the review queue. Confirmation stays with you.
       </p>
@@ -321,6 +324,17 @@ export function LiveCameraPanel({
         <div className="live-camera-layout">
           <div className="live-camera-browser">
             <div className="live-camera-filters">
+              <label className="live-camera-feed-filter">
+                <span>Camera feeds</span>
+                <select
+                  value={feedType}
+                  onChange={(event) => setFeedType(event.target.value as "video" | "all")}
+                  aria-label="Camera feeds"
+                >
+                  <option value="video">Live video ({videoCount})</option>
+                  <option value="all">All cameras ({cameras.length})</option>
+                </select>
+              </label>
               <label>
                 <span className="sr-only">Search public cameras</span>
                 <input
@@ -355,7 +369,12 @@ export function LiveCameraPanel({
               {listed.map((camera) => (
                 <li key={camera.id}>
                   <button
-                    onClick={() => onSelect(camera.id)}
+                    onClick={() => {
+                      setFailedStream(null);
+                      setMediaChoice(null);
+                      setPaused(false);
+                      onSelect(camera.id);
+                    }}
                     aria-pressed={selectedId === camera.id}
                     className={selectedId === camera.id ? "is-selected" : ""}
                   >
@@ -368,7 +387,7 @@ export function LiveCameraPanel({
                           .join(" · ")}
                       </small>
                       <small className="live-camera-capability">
-                        {camera.streaming_url ? "Video + snapshot" : "Snapshot"}
+                        {camera.streaming_url ? "Live video · snapshot fallback" : "Snapshot only"}
                       </small>
                     </span>
                   </button>
@@ -395,7 +414,9 @@ export function LiveCameraPanel({
             )}
             {!visible.length && (
               <p className="live-camera-empty">
-                No cameras match these filters.
+                {feedType === "video"
+                  ? "No video cameras match these filters. Choose All cameras to include snapshots."
+                  : "No cameras match these filters."}
               </p>
             )}
           </div>

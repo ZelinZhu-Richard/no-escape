@@ -73,6 +73,15 @@
 .live-camera-filters input::placeholder {
   color: var(--muted, #6b6860);
 }
+.live-camera-feed-filter {
+  grid-column: 1 / -1;
+}
+.live-camera-feed-filter > span {
+  display: block;
+  margin-bottom: 5px;
+  font-family: var(--font-wire, monospace);
+  font-size: 11px;
+}
 .live-camera-result-count {
   margin: 12px 0 6px;
   font-family: var(--font-wire, monospace);

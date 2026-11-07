@@ -404,7 +404,6 @@ function Operator() {
         const catalog = readLiveCameraCatalog(raw);
         if (!catalog) throw new Error("Invalid public camera catalog");
         setLiveCatalog(catalog);
-        setVisibleLiveCameras(catalog.cameras);
       })
       .catch(() => {
         if (!controller.signal.aborted)
@@ -1245,7 +1244,7 @@ function Operator() {
                   <span className="cctv-toggle-text">
                     <strong>Public CCTV network</strong>
                     <small className="mono">
-                      {feedCount} Caltrans cameras · live video + local YOLO
+                      {liveCatalog?.cameras.filter(camera => camera.streaming_url).length ?? 0} video feeds · {feedCount} total cameras · local YOLO
                     </small>
                   </span>
                   <span className="cctv-toggle-action mono">

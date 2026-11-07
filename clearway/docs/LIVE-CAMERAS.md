@@ -19,7 +19,7 @@ The nine-county scope follows [MTC's Bay Area definition](https://511.org/about)
 ## Use
 
 1. Open the local operator at `http://127.0.0.1:8000`.
-2. In **Public traffic CCTV**, search for a road/camera or filter by county. Select a camera to focus its map location. Blue map pins have enlarged click areas and bring the selected preview into view. The list shows the first 50 matches; use **Show 50 more** to reveal another 50. All matching map pins remain selectable, including cameras not yet shown in the list.
+2. In **Public traffic CCTV**, **Camera feeds → Live video (191)** is selected by default for both the list and map. Search for a road/camera or filter by county, then select a camera to focus its map location and start its video. Choose **All cameras (767)** to include snapshot-only locations. Blue map pins have enlarged click areas and bring the selected preview into view. The list shows the first 50 matches; use **Show 50 more** to reveal another 50. All matching map pins remain selectable, including cameras not yet shown in the list. If video fails, the preview discloses its snapshot fallback; use **Retry live video** or re-select the list item to try again.
 3. Read the source cadence and image timestamps. Close the preview to stop refreshing it. Switching to another application tab or hiding the browser pauses preview polling.
 4. To refresh the catalog, run `make live-camera-refresh`. The command skips a catalog less than one day old, updates metadata atomically, and never downloads camera images. Reload the page to use new catalog data. It needs no API key.
 
