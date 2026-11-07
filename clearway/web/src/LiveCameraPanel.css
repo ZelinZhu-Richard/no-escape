@@ -144,6 +144,12 @@
   height: 100%;
   object-fit: contain;
 }
+.live-video-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
 .live-yolo-counts {
   display: flex;
   flex-wrap: wrap;
@@ -161,22 +167,6 @@
   flex-basis: 100%;
   color: #afc5c9;
   font-size: 8px;
-}
-.live-analyzed-frame {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid #37514f;
-}
-.live-analyzed-frame .live-snapshot-frame {
-  max-height: 170px;
-}
-.live-analysis-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 7px;
-  font-size: 9px;
-  color: #c8ded3;
-  margin-bottom: 8px;
 }
 .live-camera-preview {
   min-width: 0;

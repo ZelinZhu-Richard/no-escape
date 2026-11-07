@@ -270,7 +270,7 @@ describe("selected public camera preview", () => {
     ).toBeNull();
   });
 
-  it("keeps live YOLO boxes on an exact analyzed-frame inset and stops the stream when hidden", async () => {
+  it("draws fresh YOLO boxes on the playing video and stops the stream when hidden", async () => {
     const streamCamera = {
       ...cameras[0],
       streaming_url:
@@ -307,7 +307,7 @@ describe("selected public camera preview", () => {
       player.handlers.get("level")("level", { details: { live: true } });
       video.dispatchEvent(new Event("playing"));
     });
-    await advance(1000);
+    await advance(50);
     expect(request).toHaveBeenCalledTimes(1);
     const [path, options] = vi.mocked(request).mock.calls[0];
     expect(path).toBe("/api/live-cameras/camera-a/detect-frame");
@@ -315,11 +315,21 @@ describe("selected public camera preview", () => {
     expect(options?.headers).toEqual({ "Content-Type": "image/jpeg" });
     expect(
       container.querySelector(".live-stream-frame .live-image-boxes"),
-    ).toBeNull();
+    ).not.toBeNull();
     expect(
       container.querySelector(".live-analyzed-frame .live-image-boxes"),
-    ).not.toBeNull();
-    expect(container.textContent).toContain("Video time 1.50s");
+    ).toBeNull();
+    expect(
+      container
+        .querySelector('[data-testid="live-direct-overlay"]')
+        ?.getAttribute("data-media-time"),
+    ).toBe("1.5");
+    expect(
+      container
+        .querySelector(".live-stream-frame svg")
+        ?.getAttribute("viewBox"),
+    ).toBe("0 0 352 240");
+    expect(container.querySelector(".live-video-view img")).toBeNull();
     await act(async () => {
       visibility.mockReturnValue("hidden");
       document.dispatchEvent(new Event("visibilitychange"));
@@ -327,6 +337,186 @@ describe("selected public camera preview", () => {
     expect(player.destroy).toHaveBeenCalledTimes(1);
     await advance(5000);
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears zero detections, expires stalled boxes, and resets on seek without reusing old responses", async () => {
+    const streamCamera = {
+      ...cameras[0],
+      streaming_url:
+        "https://wzmedia.dot.ca.gov/D4/E80_at_SAS_Tower.stream/playlist.m3u8",
+    };
+    vi.mocked(request).mockResolvedValue(detection());
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      snapshot().image_data_url!,
+    );
+    await act(async () =>
+      root.render(
+        <LiveCameraPanel
+          catalog={{ ...catalog, cameras: [streamCamera] }}
+          selectedId="camera-a"
+          onSelect={vi.fn()}
+        />,
+      ),
+    );
+    const video = container.querySelector("video")!;
+    Object.defineProperties(video, {
+      videoWidth: { value: 352 },
+      videoHeight: { value: 240 },
+      readyState: { value: 4 },
+      paused: { get: () => false },
+    });
+    video.currentTime = 1;
+    await act(async () => {
+      hlsMock.instances[0].handlers.get("level")("level", {
+        details: { live: true },
+      });
+      video.dispatchEvent(new Event("playing"));
+    });
+    await advance(50);
+    expect(
+      container.querySelector(".live-stream-frame .detection-box"),
+    ).not.toBeNull();
+    vi.mocked(request).mockResolvedValue({
+      ...detection(),
+      boxes: [],
+      vehicle_count: 0,
+    });
+    video.currentTime = 1.2;
+    await advance(180);
+    expect(
+      container.querySelector(".live-stream-frame .detection-box"),
+    ).toBeNull();
+    vi.mocked(request).mockResolvedValue(detection());
+    video.currentTime = 1.4;
+    await advance(180);
+    expect(
+      container.querySelector(".live-stream-frame .detection-box"),
+    ).not.toBeNull();
+    await advance(501);
+    expect(
+      container.querySelector('[data-testid="live-direct-overlay"]'),
+    ).toBeNull();
+    expect(container.textContent).toContain("delayed");
+    let resolve!: (value: ImageDetections) => void;
+    vi.mocked(request).mockReturnValue(
+      new Promise<ImageDetections>((done) => {
+        resolve = done;
+      }),
+    );
+    video.currentTime = 1.6;
+    await advance(20);
+    const pendingSignal = vi.mocked(request).mock.calls.at(-1)?.[1]?.signal;
+    await act(async () => {
+      video.currentTime = 0.1;
+      video.dispatchEvent(new Event("seeking"));
+    });
+    expect(pendingSignal?.aborted).toBe(true);
+    await act(async () => resolve(detection()));
+    expect(
+      container.querySelector('[data-testid="live-direct-overlay"]'),
+    ).toBeNull();
+  });
+
+  it("uses rVFC presentation time and rejects delayed results without queuing frames", async () => {
+    const streamCamera = {
+      ...cameras[0],
+      streaming_url:
+        "https://wzmedia.dot.ca.gov/D4/E80_at_SAS_Tower.stream/playlist.m3u8",
+    };
+    vi.mocked(request).mockResolvedValue(detection());
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      snapshot().image_data_url!,
+    );
+    await act(async () =>
+      root.render(
+        <LiveCameraPanel
+          catalog={{ ...catalog, cameras: [streamCamera] }}
+          selectedId="camera-a"
+          onSelect={vi.fn()}
+        />,
+      ),
+    );
+    const video = container.querySelector("video")!;
+    let presented!: VideoFrameRequestCallback;
+    let callbackId = 0;
+    Object.defineProperties(video, {
+      videoWidth: { value: 352 },
+      videoHeight: { value: 240 },
+      readyState: { value: 4 },
+      paused: { get: () => false },
+      requestVideoFrameCallback: {
+        value: vi.fn((callback: VideoFrameRequestCallback) => {
+          presented = callback;
+          return ++callbackId;
+        }),
+      },
+      cancelVideoFrameCallback: { value: vi.fn() },
+    });
+    // currentTime is deliberately different: boxes must follow the frame that
+    // was presented, not the media element's more advanced playback clock.
+    video.currentTime = 99;
+    await act(async () => {
+      hlsMock.instances[0].handlers.get("level")("level", {
+        details: { live: true },
+      });
+      video.dispatchEvent(new Event("playing"));
+    });
+    const present = async (mediaTime: number) => {
+      await act(async () =>
+        presented(performance.now(), {
+          mediaTime,
+        } as VideoFrameCallbackMetadata),
+      );
+    };
+    await present(1.5);
+    await advance(20);
+    expect(
+      container
+        .querySelector('[data-testid="live-direct-overlay"]')
+        ?.getAttribute("data-media-time"),
+    ).toBe("1.5");
+    expect(request).toHaveBeenCalledTimes(1);
+
+    let resolveMediaLate!: (value: ImageDetections) => void;
+    vi.mocked(request).mockReturnValue(
+      new Promise<ImageDetections>((done) => {
+        resolveMediaLate = done;
+      }),
+    );
+    await advance(140);
+    await present(1.7);
+    expect(request).toHaveBeenCalledTimes(2);
+    await advance(200);
+    await present(1.9);
+    await advance(100);
+    await present(2.1);
+    expect(request).toHaveBeenCalledTimes(2); // one request in flight, no backlog
+    await act(async () => resolveMediaLate(detection()));
+    expect(
+      container.querySelector('[data-testid="live-direct-overlay"]'),
+    ).toBeNull();
+
+    let resolveWallLate!: (value: ImageDetections) => void;
+    vi.mocked(request).mockReturnValue(
+      new Promise<ImageDetections>((done) => {
+        resolveWallLate = done;
+      }),
+    );
+    await advance(140);
+    await present(2.2);
+    expect(request).toHaveBeenCalledTimes(3);
+    await advance(501);
+    await act(async () => resolveWallLate(detection()));
+    expect(
+      container.querySelector('[data-testid="live-direct-overlay"]'),
+    ).toBeNull();
+    expect(container.textContent).toContain("delayed");
   });
 
   it("falls back to the selected provider snapshot when HLS fails", async () => {

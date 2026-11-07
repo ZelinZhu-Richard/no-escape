@@ -1,5 +1,7 @@
 """The local frame endpoint stays bounded, rate limited, and operator-only."""
 import hashlib
+import importlib
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 import pytest
@@ -43,6 +45,18 @@ def test_exact_frame_bytes_rate_limit_and_no_incident_mutation(service):
     assert client.post(URL, content=frame, headers=JPEG_HEADERS).status_code == 429
     assert detector.calls == [frame]
     assert client.get("/api/state").json() == before
+
+
+def test_motion_overlay_accepts_eight_fps_but_rejects_faster_calls(service, monkeypatch):
+    client, detector = service
+    clock = [100.0]
+    monkeypatch.setattr(importlib.import_module("api.app"), "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    for index in range(8):
+        clock[0] = 100.0 + index * 0.125
+        assert client.post(URL, content=b"frame", headers=JPEG_HEADERS).status_code == 200
+        clock[0] += 0.124
+        assert client.post(URL, content=b"too-soon", headers=JPEG_HEADERS).status_code == 429
+    assert detector.calls == [b"frame"] * 8
 
 
 def test_unknown_camera_and_wrong_types_never_reach_detector(service):

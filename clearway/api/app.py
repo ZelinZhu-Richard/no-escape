@@ -252,8 +252,8 @@ def create_app(
                 raise HTTPException(413, "Frame exceeds the one-megabyte limit.")
             with frame_request_lock:
                 now = time.monotonic()
-                if now - last_frame_attempt < 1:
-                    raise HTTPException(429, "Local frame detection is limited to one request per second.")
+                if now - last_frame_attempt < 0.125:
+                    raise HTTPException(429, "Local frame detection is limited to eight requests per second.")
                 last_frame_attempt = now
             raw = bytearray()
             async for chunk in request.stream():

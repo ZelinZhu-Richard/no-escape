@@ -1,145 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import type { RefObject } from "react";
 import type Hls from "hls.js";
-import { request } from "./api";
-import { publicStreamUrl, readImageDetections } from "./liveCameras";
-import type { ImageDetections, LiveCamera } from "./liveCameras";
-import {
-  jpegHash,
-  LiveDetectionCounts,
-  LiveImageBoxes,
-} from "./LiveImageDetections";
-
-interface AnalyzedVideoFrame {
-  cameraId: string;
-  image: string;
-  mediaTime: number;
-  sampledAt: string;
-  detections: ImageDetections;
-}
-
-export async function captureLocalFrame(video: HTMLVideoElement) {
-  if (video.readyState < 2 || video.videoWidth < 1 || video.videoHeight < 1)
-    throw new Error("No decoded video frame.");
-  const scale = Math.min(1, 640 / video.videoWidth, 480 / video.videoHeight);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
-  canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Frame sampling unavailable.");
-  const mediaTime = video.currentTime;
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
-  const image = canvas.toDataURL("image/jpeg", 0.8);
-  const hash = await jpegHash(image);
-  const bytes = Uint8Array.from(atob(image.split(",")[1]), (character) =>
-    character.charCodeAt(0),
-  );
-  if (bytes.length > 1_000_000)
-    throw new Error("Frame exceeds the local limit.");
-  return {
-    image,
-    hash,
-    blob: new Blob([bytes], { type: "image/jpeg" }),
-    mediaTime,
-    sampledAt: new Date().toISOString(),
-  };
-}
-
-function useLiveFrameDetection(
-  videoRef: RefObject<HTMLVideoElement | null>,
-  cameraId: string,
-  enabled: boolean,
-) {
-  const [frame, setFrame] = useState<AnalyzedVideoFrame | null>(null);
-  const [message, setMessage] = useState("");
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    setFrame(null);
-    setCount(0);
-    setMessage("");
-  }, [cameraId]);
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!enabled || !video) return;
-    let disposed = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    let controller: AbortController | undefined;
-    let previousMediaTime = -1;
-    const sample = async () => {
-      if (disposed || document.visibilityState === "hidden") return;
-      let delay = 1000;
-      try {
-        if (
-          video.paused ||
-          video.readyState < 2 ||
-          video.currentTime === previousMediaTime
-        )
-          return;
-        let captured: Awaited<ReturnType<typeof captureLocalFrame>>;
-        try {
-          captured = await captureLocalFrame(video);
-        } catch {
-          setMessage(
-            "This stream cannot be sampled in this browser. Choose Snapshot for local YOLO on its provider image.",
-          );
-          disposed = true;
-          return;
-        }
-        if (disposed) return;
-        previousMediaTime = captured.mediaTime;
-        controller = new AbortController();
-        const active = controller;
-        timeout = setTimeout(() => active.abort(), 15_000);
-        const raw = await request<unknown>(
-          `/api/live-cameras/${encodeURIComponent(cameraId)}/detect-frame`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "image/jpeg" },
-            body: captured.blob,
-            signal: active.signal,
-          },
-        );
-        if (disposed || active.signal.aborted) return;
-        const result = readImageDetections(raw, captured.hash);
-        if (!result) {
-          delay = 5000;
-          setMessage(
-            "Local YOLO is unavailable for this frame. No substitute boxes are shown.",
-          );
-          return;
-        }
-        setFrame({
-          cameraId,
-          image: captured.image,
-          mediaTime: captured.mediaTime,
-          sampledAt: captured.sampledAt,
-          detections: result,
-        });
-        setCount((current) => current + 1);
-        setMessage("");
-      } catch {
-        if (!disposed) {
-          setMessage(
-            "Local frame analysis interrupted. The last analyzed frame stays labeled below.",
-          );
-          delay = 5000;
-        }
-      } finally {
-        if (timeout) clearTimeout(timeout);
-        if (!disposed) timer = setTimeout(sample, delay);
-      }
-    };
-    timer = setTimeout(sample, 1000);
-    return () => {
-      disposed = true;
-      if (timer) clearTimeout(timer);
-      if (timeout) clearTimeout(timeout);
-      controller?.abort();
-    };
-  }, [videoRef, cameraId, enabled]);
-  return { frame: frame?.cameraId === cameraId ? frame : null, message, count };
-}
+import { publicStreamUrl } from "./liveCameras";
+import type { LiveCamera } from "./liveCameras";
+import { LiveImageBoxes } from "./LiveImageDetections";
+import { useLiveVideoOverlay } from "./useLiveVideoOverlay";
+export { captureLocalFrame } from "./useLiveVideoOverlay";
 
 export function LiveCameraVideo({
   camera,
@@ -363,11 +228,7 @@ export function LiveCameraVideo({
 
   const sampling =
     active && visible && yoloEnabled && ["live", "playing"].includes(playback);
-  const { frame, message, count } = useLiveFrameDetection(
-    video,
-    camera.id,
-    sampling,
-  );
+  const overlay = useLiveVideoOverlay(video, camera.id, sampling);
   const status =
     !active || !visible
       ? "Video paused"
@@ -390,6 +251,18 @@ export function LiveCameraVideo({
           crossOrigin="anonymous"
           aria-label={`${camera.name} provider video`}
         />
+        {sampling && overlay.detections && (
+          <div
+            className="live-video-overlay"
+            data-testid="live-direct-overlay"
+            data-media-time={overlay.mediaTime}
+            data-media-age-ms={overlay.mediaAgeMs}
+            data-wall-age-ms={overlay.wallAgeMs}
+            data-source-id={camera.id}
+          >
+            <LiveImageBoxes detections={overlay.detections} />
+          </div>
+        )}
         <span className="live-image-status">{status.toUpperCase()}</span>
       </div>
       <p className="live-camera-disclosure">
@@ -402,7 +275,18 @@ export function LiveCameraVideo({
         </p>
       )}
       <div className="live-camera-refresh">
-        <span>Local YOLO · at most 1 frame/s</span>
+        <span data-testid="live-yolo-status">
+          Local YOLO · {overlay.updatesPerSecond.toFixed(1)} updates/s
+          {!sampling
+            ? " · paused"
+            : overlay.phase === "delayed"
+              ? " · delayed"
+              : overlay.phase === "waiting"
+                ? " · starting"
+                : overlay.phase === "unavailable"
+                  ? " · unavailable"
+                  : ""}
+        </span>
         <button
           onClick={() => setYoloEnabled((value) => !value)}
           aria-pressed={yoloEnabled}
@@ -410,37 +294,9 @@ export function LiveCameraVideo({
           {yoloEnabled ? "Pause YOLO" : "Enable YOLO"}
         </button>
       </div>
-      {frame ? (
-        <div className="live-analyzed-frame">
-          <div className="live-analysis-heading">
-            <span>Exact analyzed frame</span>
-            <span>{count} analyzed</span>
-          </div>
-          <div className="live-snapshot-frame">
-            <img
-              src={frame.image}
-              alt={`Exact ${camera.name} video frame analyzed by local YOLO`}
-            />
-            <LiveImageBoxes detections={frame.detections} />
-          </div>
-          <LiveDetectionCounts detections={frame.detections} />
-          <p className="live-camera-disclosure">
-            Video time {frame.mediaTime.toFixed(2)}s · sampled in this browser
-            at {new Date(frame.sampledAt).toLocaleTimeString()}. Boxes belong to
-            this frame, not the moving video. Object detections do not establish
-            danger.
-          </p>
-        </div>
-      ) : (
-        <p className="live-camera-disclosure">
-          {yoloEnabled
-            ? "The exact sampled frame and its boxes will appear here when local analysis completes."
-            : "Local YOLO sampling paused."}
-        </p>
-      )}
-      {message && (
+      {overlay.message && (
         <p className="live-snapshot-notice" role="status">
-          {message}
+          {overlay.message}
         </p>
       )}
     </div>
