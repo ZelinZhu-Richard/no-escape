@@ -6,6 +6,8 @@ import {
   ConstantPositionProperty,
   ConstantProperty,
   Credit,
+  Ellipsoid,
+  EllipsoidalOccluder,
   EllipsoidTerrainProvider,
   Ion,
   Math as CesiumMath,
@@ -27,6 +29,18 @@ import "./MapView.css";
 type MapState = "basic" | "loading" | "photorealistic" | "unavailable";
 type MapViewMode = "replay" | "inventory" | "public";
 const EMPTY_LIVE_CAMERAS: LiveCamera[] = [];
+const CAMERA_HIT_RADIUS = 24;
+interface MapPickTarget { id: string; x: number; y: number }
+
+function nearestMapTarget(position: Cartesian2, targets: MapPickTarget[]): string | null {
+  let nearest: string | null = null;
+  let distance = CAMERA_HIT_RADIUS * CAMERA_HIT_RADIUS;
+  for (const target of targets) {
+    const squared = (target.x - position.x) ** 2 + (target.y - position.y) ** 2;
+    if (squared <= distance) { nearest = target.id; distance = squared; }
+  }
+  return nearest;
+}
 
 function positionedCamera(camera: LiveCamera): boolean {
   return Number.isFinite(camera.latitude) && Number.isFinite(camera.longitude)
@@ -154,6 +168,7 @@ export function MapView({
   currentLivePoints.current = livePoints;
   const selectedLive = livePoints.find((camera) => camera.id === liveSelectedId);
   const liveEntityIds = useRef(new Set<string>());
+  const pickTargets = useRef<MapPickTarget[]>([]);
   const [showPublicCameras, setShowPublicCameras] = useState(true);
   const [viewMode, setViewMode] = useState<MapViewMode>("replay");
   const currentViewMode = useRef(viewMode);
@@ -173,6 +188,8 @@ export function MapView({
   const [selectedCamera, setSelectedCamera] = useState<CameraContextPoint | null>(null);
   const contextPoints = useRef<CameraContextPoint[]>([]);
   contextPoints.current = cameraContext?.points ?? [];
+  const visibleLayers = useRef({ public: showPublicCameras, inventory: showCameras });
+  visibleLayers.current = { public: showPublicCameras, inventory: showCameras };
 
   useEffect(() => {
     const abort = new AbortController();
@@ -226,25 +243,54 @@ export function MapView({
       });
       handler = new ScreenSpaceEventHandler(instance.scene.canvas);
       handler.setInputAction((event: { position: Cartesian2 }) => {
-        const picked = instance?.scene.pick(event.position);
-        if (picked?.id?.id === "selected-source") selection.current();
-        else if (typeof picked?.id?.id === "string" && picked.id.id.startsWith("context-camera:")) {
-          const id = picked.id.id.slice("context-camera:".length);
+        // Dots stay visually compact, but selecting one does not require a
+        // pixel-perfect hit. Screen projections are refreshed after map renders.
+        // A click near a dot picks the nearest visible camera, not an arbitrary
+        // point returned by a large rectangular GPU pick.
+        const near = nearestMapTarget(event.position, pickTargets.current);
+        const picked = near ? undefined : instance?.scene.pick(event.position, 15, 15);
+        const nativeId = typeof picked?.id === "string" ? picked.id : picked?.id?.id;
+        const selected = near ?? nativeId;
+        if (selected === "selected-source") selection.current();
+        else if (typeof selected === "string" && selected.startsWith("context-camera:") && visibleLayers.current.inventory) {
+          const id = selected.slice("context-camera:".length);
           setSelectedCamera(contextPoints.current.find((point) => point.id === id) ?? null);
-        } else if (typeof picked?.id?.id === "string" && picked.id.id.startsWith("public-camera:")) {
-          const id = picked.id.id.slice("public-camera:".length);
+        } else if (typeof selected === "string" && selected.startsWith("public-camera:") && visibleLayers.current.public) {
+          const id = selected.slice("public-camera:".length);
           if (currentLivePoints.current.some((camera) => camera.id === id)) {
             setSelectedCamera(null);
             liveSelection.current?.(id);
           }
         }
       }, ScreenSpaceEventType.LEFT_CLICK);
+      handler.setInputAction((event: { endPosition: Cartesian2 }) => {
+        if (instance) instance.scene.canvas.style.cursor = nearestMapTarget(event.endPosition, pickTargets.current) ? "pointer" : "";
+      }, ScreenSpaceEventType.MOUSE_MOVE);
       // Use one ordinary DOM label rather than rebuilding Cesium's glyph atlas
       // on every status poll. Its text stays readable as review status changes.
       removeLabelPosition = instance.scene.postRender.addEventListener(() => {
         if (!instance || disposed) return;
         const width = instance.scene.canvas.clientWidth;
         const height = instance.scene.canvas.clientHeight;
+        const occluder = instance.camera.positionWC
+          ? new EllipsoidalOccluder(Ellipsoid.WGS84, instance.camera.positionWC) : null;
+        const targets: MapPickTarget[] = [];
+        const addTarget = (id: string, position: Cartesian3 | null) => {
+          if (!position || (occluder && !occluder.isPointVisible(position))) return;
+          const screen = SceneTransforms.worldToWindowCoordinates(instance!.scene, position);
+          if (screen && Number.isFinite(screen.x) && Number.isFinite(screen.y)
+            && screen.x >= 0 && screen.x <= width && screen.y >= 0 && screen.y <= height) {
+            targets.push({ id, x: screen.x, y: screen.y });
+          }
+        };
+        addTarget("selected-source", markerPosition.current);
+        if (visibleLayers.current.inventory) for (const camera of contextPoints.current) {
+          addTarget(`context-camera:${camera.id}`, Cartesian3.fromDegrees(camera.longitude, camera.latitude, 3));
+        }
+        if (visibleLayers.current.public) for (const camera of currentLivePoints.current) {
+          addTarget(`public-camera:${camera.id}`, Cartesian3.fromDegrees(camera.longitude, camera.latitude, 3));
+        }
+        pickTargets.current = targets;
         for (const [label, position, active] of [
           [markerLabel.current, markerPosition.current, currentViewMode.current !== "public"],
           [liveMarkerLabel.current, liveMarkerPosition.current, currentViewMode.current === "public"],
@@ -378,6 +424,7 @@ export function MapView({
       handler?.destroy();
       if (instance && !instance.isDestroyed()) instance.destroy();
       viewer.current = null;
+      pickTargets.current = [];
     };
   }, []);
 
@@ -425,7 +472,7 @@ export function MapView({
       const entity = v.entities.getById(`context-camera:${point.id}`) ?? v.entities.add({
         id: `context-camera:${point.id}`,
         position: Cartesian3.fromDegrees(point.longitude, point.latitude, 3),
-        point: { pixelSize: 7, color: Color.fromCssColorString("#6ed6df"),
+        point: { pixelSize: 10, color: Color.fromCssColorString("#6ed6df"),
           outlineWidth: 2, outlineColor: Color.fromCssColorString("#102e37"),
           disableDepthTestDistance: Number.POSITIVE_INFINITY },
       });
@@ -448,7 +495,7 @@ export function MapView({
       entity.position = new ConstantPositionProperty(Cartesian3.fromDegrees(camera.longitude, camera.latitude, 3));
       entity.show = showPublicCameras;
       if (entity.point) {
-        entity.point.pixelSize = new ConstantProperty(camera.id === liveSelectedId ? 15 : 8);
+        entity.point.pixelSize = new ConstantProperty(camera.id === liveSelectedId ? 18 : 12);
         entity.point.color = new ConstantProperty(Color.fromCssColorString(camera.id === liveSelectedId ? "#eed8ff" : "#b89ce9"));
       }
     }
@@ -597,7 +644,7 @@ export function MapView({
           <div><dt>Capture time</dt><dd>Unknown</dd></div>
           <div><dt>Map loads</dt><dd>{roots} root · {tiles} tile requests observed</dd></div>
           <div><dt>NC inventory</dt><dd>{cameraContext?.points.length ?? 0} locations · stream access unverified</dd></div>
-          {!!livePoints.length && <div><dt>Public cameras</dt><dd>{livePoints.length} snapshot locations</dd></div>}
+          {!!livePoints.length && <div><dt>Public cameras</dt><dd>{livePoints.length} locations · video where available</dd></div>}
         </dl>
         <p>{source?.location.quality === "known_camera"
           ? "Camera metadata does not locate an object within a lane."
@@ -610,10 +657,10 @@ export function MapView({
         {!!livePoints.length && <div className="map-public-layer">
           <label className="map-context-toggle"><input type="checkbox" checked={showPublicCameras}
             data-testid="map-public-toggle" onChange={(event) => setShowPublicCameras(event.target.checked)} />
-            Show public snapshot cameras</label>
+            Show public CCTV cameras</label>
           <button className="map-context-network" data-testid="map-public-fit" onClick={focusPublicNetwork} disabled={fallback}>
             Fit public camera network</button>
-          <p>Select a purple pin to open its refreshed public image. Pin presence does not prove the camera is online.</p>
+          <p>Select a purple pin to open its video or snapshot preview. Pin presence does not prove the camera is online.</p>
         </div>}
         {cameraContext?.status === "available" && <>
           <label className="map-context-toggle"><input type="checkbox" checked={showCameras}
@@ -703,7 +750,7 @@ export function MapView({
       <div className="map-bottomline">
         <span>
           <i className="legend-dot" />
-          {viewMode === "public" && !fallback ? <><i className="public-camera-legend-dot" />{livePoints.length} public snapshot points</>
+          {viewMode === "public" && !fallback ? <><i className="public-camera-legend-dot" />{livePoints.length} public camera points</>
             : <>{incident ? "Incident candidate" : "Replay camera"}
               {!fallback && showCameras && !!cameraContext?.points.length && <><i className="camera-legend-dot" />{cameraContext.points.length} NCDOT locations</>}</>}
         </span>

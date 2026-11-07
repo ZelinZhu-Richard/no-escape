@@ -6,8 +6,9 @@ import { request } from "../src/api";
 import { readCameraContext } from "../src/mapContext";
 import type { Incident, Source } from "../src/types";
 import type { LiveCamera } from "../src/liveCameras";
+import { ScreenSpaceEventType } from "cesium";
 
-const mocks = vi.hoisted(() => ({ viewers: [] as any[], handlers: [] as any[], createTiles: vi.fn() }));
+const mocks = vi.hoisted(() => ({ viewers: [] as any[], handlers: [] as any[], createTiles: vi.fn(), project: vi.fn() }));
 vi.mock("../src/api", () => ({ request: vi.fn() }));
 vi.mock("cesium", async (original) => {
   const real = await original<object>();
@@ -29,9 +30,14 @@ vi.mock("cesium", async (original) => {
     },
     ScreenSpaceEventHandler: class {
       input: any;
-      setInputAction = vi.fn((fn: any) => { this.input = fn; }); destroy = vi.fn();
+      actions = new Map<number, any>();
+      setInputAction = vi.fn((fn: any, event: number) => {
+        if (!this.input) this.input = fn;
+        this.actions.set(event, fn);
+      }); destroy = vi.fn();
       constructor() { mocks.handlers.push(this); }
     },
+    SceneTransforms: { worldToWindowCoordinates: mocks.project },
     OpenStreetMapImageryProvider: class { errorEvent = { addEventListener: vi.fn() }; },
     createGooglePhotorealistic3DTileset: mocks.createTiles,
   };
@@ -64,6 +70,7 @@ beforeEach(() => {
   mocks.viewers.length = 0;
   mocks.handlers.length = 0;
   mocks.createTiles.mockReset();
+  mocks.project.mockReset();
   vi.mocked(request).mockResolvedValue(context);
   container = document.createElement("div"); document.body.append(container);
   root = createRoot(container);
@@ -101,6 +108,48 @@ describe("public snapshot map layer", () => {
     await act(async () => mocks.handlers[0].input({ position: {} }));
     expect(onLive).toHaveBeenCalledWith(liveCamera.id);
     expect(onReplay).not.toHaveBeenCalled();
+  });
+
+  it("selects the nearest visible dot within a generous hit radius and shows a pointer", async () => {
+    const onLive = vi.fn(); const onReplay = vi.fn();
+    const second = { ...liveCamera, id: "caltrans-d4-second", longitude: -122.31 };
+    await renderLive([liveCamera, second], null, onLive, onReplay);
+    const viewer = mocks.viewers[0];
+    Object.defineProperty(viewer.scene.canvas, "clientWidth", { value: 640 });
+    Object.defineProperty(viewer.scene.canvas, "clientHeight", { value: 500 });
+    mocks.project.mockReturnValueOnce({ x: 20, y: 20 })
+      .mockReturnValueOnce({ x: 100, y: 100 })
+      .mockReturnValueOnce({ x: 250, y: 250 })
+      .mockReturnValueOnce({ x: 280, y: 250 });
+    viewer.scene.postRender.addEventListener.mock.calls[0][0]();
+    const actions = mocks.handlers[0].actions;
+    await act(async () => actions.get(ScreenSpaceEventType.LEFT_CLICK)({ position: { x: 269, y: 250 } }));
+    expect(onLive).toHaveBeenCalledWith(second.id);
+    expect(onReplay).not.toHaveBeenCalled();
+    expect(viewer.scene.pick).not.toHaveBeenCalled();
+    actions.get(ScreenSpaceEventType.MOUSE_MOVE)({ endPosition: { x: 269, y: 250 } });
+    expect(viewer.scene.canvas.style.cursor).toBe("pointer");
+    actions.get(ScreenSpaceEventType.MOUSE_MOVE)({ endPosition: { x: 600, y: 450 } });
+    expect(viewer.scene.canvas.style.cursor).toBe("");
+    onLive.mockClear();
+    await act(async () => actions.get(ScreenSpaceEventType.LEFT_CLICK)({ position: { x: 305, y: 250 } }));
+    expect(onLive).not.toHaveBeenCalled();
+  });
+
+  it("ignores offscreen and hidden public camera targets", async () => {
+    const onLive = vi.fn();
+    await renderLive([liveCamera], null, onLive);
+    const viewer = mocks.viewers[0];
+    Object.defineProperty(viewer.scene.canvas, "clientWidth", { value: 640 });
+    Object.defineProperty(viewer.scene.canvas, "clientHeight", { value: 500 });
+    mocks.project.mockReturnValue({ x: 660, y: 250 });
+    viewer.scene.postRender.addEventListener.mock.calls[0][0]();
+    await act(async () => mocks.handlers[0].input({ position: { x: 640, y: 250 } }));
+    expect(onLive).not.toHaveBeenCalled();
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="map-public-toggle"]')!.click());
+    viewer.scene.pick.mockReturnValue({ id: { id: `public-camera:${liveCamera.id}` } });
+    await act(async () => mocks.handlers[0].input({ position: { x: 250, y: 250 } }));
+    expect(onLive).not.toHaveBeenCalled();
   });
 
   it("bounds the layer and filters invalid coordinates without claiming online availability", async () => {

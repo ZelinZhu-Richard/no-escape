@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from email.message import Message
+import hashlib
 import json
 from pathlib import Path
 
@@ -192,3 +193,41 @@ def test_source_record_timestamp_never_becomes_image_capture_time_and_limit():
 def test_catalog_becomes_stale_without_silent_refresh(tmp_path):
     service = LiveCameraService(catalog_file(tmp_path), clock=lambda: NOW+timedelta(days=2))
     assert service.catalog()["stale"] is True
+
+
+def test_detector_receives_exact_snapshot_once_and_cache_preserves_hash(tmp_path):
+    calls = []
+    class Detector:
+        def analyze_jpeg(self, raw):
+            calls.append(raw)
+            return {"status": "available", "analysis_mode": "fresh", "image_sha256": hashlib.sha256(raw).hexdigest(), "boxes": [], "vehicle_count": 0, "person_count": 0}
+    service = LiveCameraService(catalog_file(tmp_path), detector=Detector(), image_fetcher=lambda *_: (JPEG, {}), clock=lambda: NOW)
+    fresh = service.snapshot("caltrans-d4-1")
+    cached = service.snapshot("caltrans-d4-1")
+    assert calls == [JPEG]
+    assert fresh["image_sha256"] == fresh["detections"]["image_sha256"] == hashlib.sha256(JPEG).hexdigest()
+    assert fresh["detections"]["analysis_mode"] == "fresh"
+    assert cached["detections"]["analysis_mode"] == "cached"
+    assert cached["image_sha256"] == fresh["image_sha256"]
+
+
+@pytest.mark.parametrize("failure", ["raise", "mismatch"])
+def test_failed_or_mismatched_detection_never_breaks_image_or_substitutes_boxes(tmp_path, failure):
+    class Detector:
+        def analyze_jpeg(self, raw):
+            if failure == "raise":
+                raise RuntimeError("private-provider-error")
+            return {"status": "available", "image_sha256": "wrong-image", "boxes": [{"class_name": "person"}]}
+    service = LiveCameraService(catalog_file(tmp_path), detector=Detector(), image_fetcher=lambda *_: (JPEG, {}), clock=lambda: NOW)
+    result = service.snapshot("caltrans-d4-1")
+    assert result["status"] == "available"
+    assert result["detections"]["status"] == "unavailable"
+    assert "boxes" not in result["detections"]
+    assert "private" not in json.dumps(result)
+
+
+def test_camera_allowlist_lookup_is_offline(tmp_path):
+    service = LiveCameraService(catalog_file(tmp_path), image_fetcher=lambda *_: pytest.fail("unexpected network"), clock=lambda: NOW)
+    assert service.camera_exists("caltrans-d4-1") is True
+    assert service.camera_exists("caltrans-d4-9999") is False
+    assert service.camera_exists("https://example.com/camera") is False

@@ -43,6 +43,12 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Live video and camera detections — November 7, 2026
+
+The user requested actual live video where the official source supports it, accepted snapshots as fallback, reported hard-to-use map pins, and authorized YOLO boxes on public feeds. This supersedes the earlier exclusion of local inference on selected cameras. Probe official HLS access without bypassing controls, play only the selected visible camera, and fall back honestly when video cannot load. Make map pins easier to hit and move focus to their camera preview.
+
+Run the existing local YOLOX model on the exact selected snapshot, with boxes bound to the JPEG hash. For supported video, sample at most one frame per second and show the exact analyzed frame with its boxes alongside the live player; never pretend delayed boxes are synchronized to a different moving frame. Hide stale/wrong-camera results, stop on pause/hidden/change, bound upload size and inference concurrency, and keep images in memory. No paid inference, identification, automatic incident confirmation, archive, or public tunnel is added.
+
 ## Public CCTV expansion — November 7, 2026
 
 The user requested more live traffic-camera data points. Add a separate, selectable public CCTV network with actual source imagery, rather than promoting dated inventory pins to live feeds. DriveNC's documented camera API requires a developer key; none is configured. Use the keyless official Caltrans District 4 feed for 100 Bay Area cameras with authentic coordinates and clearly named regions. Preserve the 20 North Carolina inventory points as metadata only.

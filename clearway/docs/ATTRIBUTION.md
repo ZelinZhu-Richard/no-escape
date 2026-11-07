@@ -30,6 +30,7 @@ Versions and license declarations below were checked against `web/package-lock.j
 | React / React DOM | 19.3.1 / 19.3.1 | MIT; Meta Platforms, Inc. and affiliates |
 | CesiumJS | 1.147.0 | Apache-2.0; CesiumJS Contributors. Installed engine 26.5.0 and widgets 16.3.1 also declare Apache-2.0. |
 | qrcode.react | 4.2.0 | ISC; Paul O’Shannessy. Its bundled QR Code generator credits Project Nayuki under MIT. |
+| hls.js | 1.7.4 | Apache-2.0; installed package license retained by the bundled dependency notice build. Used for official public HLS playback where native playback is unavailable. |
 | Manrope Variable (`@fontsource-variable/manrope`) | 5.2.8 package | SIL Open Font License 1.1; The Manrope Project Authors |
 | FastAPI / Pydantic | 0.162.0 / 2.14.3 | MIT |
 | Starlette / Uvicorn | 1.10.0 / 0.54.0 | BSD-3-Clause |

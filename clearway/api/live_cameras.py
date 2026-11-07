@@ -10,6 +10,7 @@ import base64
 from collections import OrderedDict, deque
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -156,8 +157,9 @@ def fetch_image(url: str) -> tuple[bytes, dict]:
 
 
 class LiveCameraService:
-    def __init__(self, catalog_path: Path | None = None, *, image_fetcher=None, clock=None, monotonic=None):
+    def __init__(self, catalog_path: Path | None = None, *, detector=None, image_fetcher=None, clock=None, monotonic=None):
         self.catalog_path = Path(catalog_path) if catalog_path else CATALOG_PATH
+        self._detector = detector
         self._fetch = image_fetcher or fetch_image
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._monotonic = monotonic or time.monotonic
@@ -200,6 +202,33 @@ class LiveCameraService:
                 raise ValueError("Invalid provider stream")
         return doc
 
+    def camera_exists(self, camera_id: str) -> bool:
+        """Allowlist a selected camera without fetching its imagery."""
+        try:
+            return bool(isinstance(camera_id, str) and CAMERA_ID.fullmatch(camera_id)
+                        and any(camera["id"] == camera_id for camera in self._read()["cameras"]))
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            return False
+
+    def _detect(self, raw: bytes, image_hash: str) -> dict:
+        unavailable = {"status": "unavailable", "analysis_mode": "unavailable", "image_sha256": image_hash, "message": "Local YOLO is unavailable for this exact image; no boxes substituted."}
+        if self._detector is None:
+            return unavailable
+        try:
+            result = self._detector.analyze_jpeg(raw)
+            if not isinstance(result, dict) or result.get("image_sha256") != image_hash:
+                return unavailable
+            return result
+        except Exception:
+            return unavailable
+
+    @staticmethod
+    def _cached_detection(result: dict) -> dict:
+        detection = result.get("detections")
+        if isinstance(detection, dict) and detection.get("status") == "available":
+            return {**result, "detections": {**detection, "analysis_mode": "cached"}}
+        return result
+
     def catalog(self) -> dict:
         base = {"provider": "Caltrans", "mode": "live_snapshot_catalog", "refresh_interval_seconds": MIN_REFRESH_SECONDS, "note": NOTE, "attribution": "California Department of Transportation / Caltrans", "provider_url": PROVIDER_URL}
         try:
@@ -211,7 +240,7 @@ class LiveCameraService:
             return {**base, "status": "unavailable", "fetched_at": None, "stale": True, "regions": [], "cameras": [], "message": "Public camera catalog unavailable; no camera locations substituted."}
 
     def snapshot(self, camera_id: str) -> dict:
-        base = {"status": "unavailable", "camera_id": camera_id, "mode": "refreshed_snapshot", "image_data_url": None, "fetched_at": None, "source_last_modified": None, "capture_time": None, "stale": True, "refresh_after_seconds": MIN_REFRESH_SECONDS}
+        base = {"status": "unavailable", "camera_id": camera_id, "mode": "refreshed_snapshot", "image_data_url": None, "image_sha256": None, "detections": {"status": "unavailable", "analysis_mode": "unavailable", "message": "No current image to analyze."}, "fetched_at": None, "source_last_modified": None, "capture_time": None, "stale": True, "refresh_after_seconds": MIN_REFRESH_SECONDS}
         try:
             if not isinstance(camera_id, str) or not CAMERA_ID.fullmatch(camera_id):
                 raise ValueError("Invalid camera")
@@ -226,7 +255,7 @@ class LiveCameraService:
             cached = self._cache.get(camera_id)
             if cached and cached["url"] == camera["image_url"] and now_tick < cached["next_fetch"]:
                 self._cache.move_to_end(camera_id)
-                return {**cached["result"], "refresh_after_seconds": max(1, math.ceil(cached["next_fetch"]-now_tick))}
+                return {**self._cached_detection(cached["result"]), "refresh_after_seconds": max(1, math.ceil(cached["next_fetch"]-now_tick))}
             deadline = self._deadlines.get(camera_id)
             if deadline and deadline["url"] == camera["image_url"] and now_tick < deadline["next_fetch"]:
                 return {**base, "status": "throttled", "message": "This camera was fetched recently; its image was released from memory. Wait for the next source refresh.", "refresh_after_seconds": max(1, math.ceil(deadline["next_fetch"]-now_tick))}
@@ -251,12 +280,15 @@ class LiveCameraService:
                 except (TypeError, ValueError, OverflowError):
                     pass
                 stale = modified is not None and (fetched-modified).total_seconds() > max(900, interval*2)
-                result = {**base, "status": "available", "image_data_url": "data:image/jpeg;base64," + base64.b64encode(raw).decode("ascii"), "fetched_at": fetched.isoformat(), "source_last_modified": modified.isoformat() if modified else None, "stale": stale, "refresh_after_seconds": interval, "source_refresh_seconds": interval, "message": "Latest provider snapshot fetched; exact capture time is unknown." if not stale else "Provider image metadata is old; this snapshot may be stale."}
+                image_hash = hashlib.sha256(raw).hexdigest()
+                detections = self._detect(raw, image_hash)
+                result = {**base, "status": "available", "image_data_url": "data:image/jpeg;base64," + base64.b64encode(raw).decode("ascii"), "image_sha256": image_hash, "detections": detections, "fetched_at": fetched.isoformat(), "source_last_modified": modified.isoformat() if modified else None, "stale": stale, "refresh_after_seconds": interval, "source_refresh_seconds": interval, "message": "Latest provider snapshot fetched; exact capture time is unknown." if not stale else "Provider image metadata is old; this snapshot may be stale."}
                 next_fetch = self._monotonic()+interval
             except Exception:
                 result = {**base, "message": "Public camera image unavailable; no substitute image or inference result created."}
                 if cached and cached["url"] == camera["image_url"] and cached["result"].get("image_data_url"):
-                    result.update({key: cached["result"][key] for key in ("image_data_url", "fetched_at", "source_last_modified")})
+                    result.update({key: cached["result"][key] for key in ("image_data_url", "image_sha256", "detections", "fetched_at", "source_last_modified")})
+                    result = self._cached_detection(result)
                     result["message"] = "Refresh failed; showing the previous snapshot marked stale."
                 next_fetch = self._monotonic()+MIN_REFRESH_SECONDS
             self._cache[camera_id] = {"url": camera["image_url"], "result": result, "next_fetch": next_fetch}

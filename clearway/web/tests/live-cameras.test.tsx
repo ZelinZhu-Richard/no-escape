@@ -6,15 +6,58 @@ import {
   filterLiveCameras,
   readLiveCameraCatalog,
   readLiveSnapshot,
+  readImageDetections,
+  publicStreamUrl,
 } from "../src/liveCameras";
 import type {
   LiveCamera,
   LiveCameraCatalog,
   LiveSnapshot,
+  ImageDetections,
 } from "../src/liveCameras";
 import { request } from "../src/api";
 
 vi.mock("../src/api", () => ({ request: vi.fn() }));
+const hlsMock = vi.hoisted(() => ({ instances: [] as any[] }));
+vi.mock("hls.js", () => ({
+  default: class {
+    static isSupported = () => true;
+    static Events = {
+      ERROR: "error",
+      LEVEL_LOADED: "level",
+      MANIFEST_PARSED: "manifest",
+    };
+    handlers = new Map<string, (...args: any[]) => void>();
+    destroy = vi.fn();
+    loadSource = vi.fn();
+    attachMedia = vi.fn();
+    on = (event: string, callback: (...args: any[]) => void) => {
+      this.handlers.set(event, callback);
+    };
+    constructor() {
+      hlsMock.instances.push(this);
+    }
+  },
+}));
+const verifiedHash = "ab".repeat(32);
+const detection = (hash = verifiedHash): ImageDetections => ({
+  status: "available",
+  analysis_mode: "fresh",
+  image_sha256: hash,
+  image_width: 352,
+  image_height: 240,
+  boxes: [{ class_name: "car", confidence: 0.91, xyxy: [0.1, 0.2, 0.4, 0.8] }],
+  vehicle_count: 1,
+  person_count: 0,
+  model: { name: "YOLOX-Tiny", version: "test" },
+  provenance: {
+    kind: "local_yolo_image",
+    fixture: false,
+    image_sha256: hash,
+    analyzed_at: "2026-11-07T17:30:00Z",
+  },
+  inference_ms: 25,
+});
 const camera = (id: string, region = "san-francisco"): LiveCamera => ({
   id,
   name: id === "camera-a" ? "Bay Bridge Approach" : "Oakland Freeway",
@@ -70,6 +113,14 @@ beforeEach(() => {
     .spyOn(document, "visibilityState", "get")
     .mockReturnValue("visible");
   vi.mocked(request).mockReset();
+  hlsMock.instances.length = 0;
+  vi.stubGlobal("crypto", {
+    subtle: { digest: vi.fn(async () => new Uint8Array(32).fill(0xab).buffer) },
+  });
+  vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("");
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
   vi.mocked(request).mockImplementation(async (path) =>
     snapshot(path.includes("camera-b") ? "camera-b" : "camera-a"),
   );
@@ -81,6 +132,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 const render = async (
   selectedId: string | null = "camera-a",
@@ -104,6 +156,43 @@ const advance = async (milliseconds: number) => {
 };
 
 describe("public camera data boundaries", () => {
+  it("only allows official HLS sources and source-bound genuine local detections", () => {
+    expect(
+      publicStreamUrl(
+        "https://wzmedia.dot.ca.gov/D4/E80_at_SAS_Tower.stream/playlist.m3u8",
+      ),
+    ).not.toBeNull();
+    expect(
+      publicStreamUrl("https://other.example/D4/test/playlist.m3u8"),
+    ).toBeNull();
+    expect(
+      publicStreamUrl(
+        "https://wzmedia.dot.ca.gov/D4/test/playlist.m3u8?token=unexpected",
+      ),
+    ).toBeNull();
+    expect(readImageDetections(detection(), verifiedHash)?.vehicle_count).toBe(
+      1,
+    );
+    expect(readImageDetections(detection(), "ff".repeat(32))).toBeNull();
+    expect(
+      readImageDetections(
+        {
+          ...detection(),
+          provenance: { ...detection().provenance, fixture: true },
+        },
+        verifiedHash,
+      ),
+    ).toBeNull();
+    expect(
+      readImageDetections(
+        {
+          ...detection(),
+          boxes: [{ class_name: "car", confidence: 0.9, xyxy: [-1, 0, 1, 1] }],
+        },
+        verifiedHash,
+      ),
+    ).toBeNull();
+  });
   it("rejects false live-video modes, bad coordinates, duplicate IDs, and unsafe links", () => {
     const value = readLiveCameraCatalog({
       ...catalog,
@@ -155,6 +244,119 @@ describe("public camera data boundaries", () => {
 });
 
 describe("selected public camera preview", () => {
+  it("draws snapshot boxes only after its actual bytes verify against the source hash", async () => {
+    vi.mocked(request).mockResolvedValue({
+      ...snapshot(),
+      image_sha256: verifiedHash,
+      detections: detection(),
+    });
+    await render();
+    expect(
+      container.querySelector('[data-testid="live-yolo-boxes"]'),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("1 vehicles");
+    expect(container.textContent).toContain(
+      "YOLO boxes match this exact snapshot",
+    );
+    const bad = "ff".repeat(32);
+    vi.mocked(request).mockResolvedValue({
+      ...snapshot("camera-b"),
+      image_sha256: bad,
+      detections: detection(bad),
+    });
+    await render("camera-b");
+    expect(
+      container.querySelector('[data-testid="live-yolo-boxes"]'),
+    ).toBeNull();
+  });
+
+  it("keeps live YOLO boxes on an exact analyzed-frame inset and stops the stream when hidden", async () => {
+    const streamCamera = {
+      ...cameras[0],
+      streaming_url:
+        "https://wzmedia.dot.ca.gov/D4/E80_at_SAS_Tower.stream/playlist.m3u8",
+    };
+    vi.mocked(request).mockResolvedValue(detection());
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      snapshot().image_data_url!,
+    );
+    await act(async () =>
+      root.render(
+        <LiveCameraPanel
+          catalog={{ ...catalog, cameras: [streamCamera] }}
+          selectedId="camera-a"
+          onSelect={vi.fn()}
+        />,
+      ),
+    );
+    expect(request).not.toHaveBeenCalled();
+    const player = hlsMock.instances[0];
+    expect(player.loadSource).toHaveBeenCalledWith(streamCamera.streaming_url);
+    const video = container.querySelector("video")!;
+    Object.defineProperties(video, {
+      videoWidth: { value: 352 },
+      videoHeight: { value: 240 },
+      readyState: { value: 4 },
+      paused: { get: () => false },
+    });
+    video.currentTime = 1.5;
+    await act(async () => {
+      player.handlers.get("level")("level", { details: { live: true } });
+      video.dispatchEvent(new Event("playing"));
+    });
+    await advance(1000);
+    expect(request).toHaveBeenCalledTimes(1);
+    const [path, options] = vi.mocked(request).mock.calls[0];
+    expect(path).toBe("/api/live-cameras/camera-a/detect-frame");
+    expect(options?.method).toBe("POST");
+    expect(options?.headers).toEqual({ "Content-Type": "image/jpeg" });
+    expect(
+      container.querySelector(".live-stream-frame .live-image-boxes"),
+    ).toBeNull();
+    expect(
+      container.querySelector(".live-analyzed-frame .live-image-boxes"),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("Video time 1.50s");
+    await act(async () => {
+      visibility.mockReturnValue("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(player.destroy).toHaveBeenCalledTimes(1);
+    await advance(5000);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the selected provider snapshot when HLS fails", async () => {
+    const streamCamera = {
+      ...cameras[0],
+      streaming_url:
+        "https://wzmedia.dot.ca.gov/D4/E80_at_SAS_Tower.stream/playlist.m3u8",
+    };
+    await act(async () =>
+      root.render(
+        <LiveCameraPanel
+          catalog={{ ...catalog, cameras: [streamCamera] }}
+          selectedId="camera-a"
+          onSelect={vi.fn()}
+        />,
+      ),
+    );
+    await act(async () =>
+      hlsMock.instances[0].handlers.get("error")("error", { fatal: true }),
+    );
+    expect(container.textContent).toContain(
+      "Showing its provider snapshot instead",
+    );
+    expect(container.querySelector("video")).toBeNull();
+    expect(container.querySelector("img")).not.toBeNull();
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(request).mock.calls[0][0]).toBe(
+      "/api/live-cameras/camera-a/snapshot",
+    );
+  });
   it("makes no snapshot requests until a camera is deliberately selected", async () => {
     await render(null);
     expect(request).not.toHaveBeenCalled();

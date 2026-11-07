@@ -12,6 +12,12 @@ import type {
   LiveSnapshot,
 } from "./liveCameras";
 import "./LiveCameraPanel.css";
+import { LiveCameraVideo } from "./LiveCameraVideo";
+import {
+  LiveDetectionCounts,
+  LiveImageBoxes,
+  useVerifiedSnapshotDetections,
+} from "./LiveImageDetections";
 
 export interface LiveCameraPanelProps {
   catalog: LiveCameraCatalog | null;
@@ -200,17 +206,28 @@ export function LiveCameraPanel({
   const [region, setRegion] = useState("");
   const [paused, setPaused] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [mediaChoice, setMediaChoice] = useState<{
+    cameraId: string;
+    mode: "video" | "snapshot";
+  } | null>(null);
+  const [failedStream, setFailedStream] = useState<string | null>(null);
   const cameras = useMemo(() => catalog?.cameras ?? [], [catalog]);
   const visible = useMemo(
     () => filterLiveCameras(cameras, region, query),
     [cameras, region, query],
   );
   const selected = cameras.find((camera) => camera.id === selectedId);
+  const showVideo = Boolean(
+    selected?.streaming_url &&
+    failedStream !== selectedId &&
+    !(mediaChoice?.cameraId === selectedId && mediaChoice.mode === "snapshot"),
+  );
   const {
     snapshot,
     loading: refreshing,
     notice,
-  } = useSelectedSnapshot(selected, active && !paused);
+  } = useSelectedSnapshot(selected, active && !paused && !showVideo);
+  const snapshotDetections = useVerifiedSnapshotDetections(snapshot);
   useEffect(() => {
     onVisibleCamerasChange?.(visible);
   }, [visible, onVisibleCamerasChange]);
@@ -234,8 +251,9 @@ export function LiveCameraPanel({
         <span className="live-camera-count">{cameras.length} cameras</span>
       </div>
       <p className="live-camera-intro">
-        Current provider snapshots, separate from the recorded incident demo.
-        Only the selected camera is fetched; no AI analysis runs here.
+        Provider video where available, with snapshots as a fallback. Local YOLO
+        analyzes the selected camera only; no cloud model calls or incident
+        alerts run here.
       </p>
       {loading ? (
         <p className="live-camera-empty" role="status">
@@ -296,6 +314,9 @@ export function LiveCameraPanel({
                           .filter(Boolean)
                           .join(" · ")}
                       </small>
+                      <small className="live-camera-capability">
+                        {camera.streaming_url ? "Video + snapshot" : "Snapshot"}
+                      </small>
                     </span>
                   </button>
                 </li>
@@ -313,7 +334,7 @@ export function LiveCameraPanel({
                 <div className="live-preview-heading">
                   <div>
                     <span className="live-snapshot-badge">
-                      REFRESHED SNAPSHOT
+                      {showVideo ? "PROVIDER VIDEO" : "REFRESHED SNAPSHOT"}
                     </span>
                     <h3>{selected.name}</h3>
                   </div>
@@ -325,42 +346,114 @@ export function LiveCameraPanel({
                     <Icon name="cross" size={16} />
                   </button>
                 </div>
-                <div className="live-snapshot-frame">
-                  {hasImage ? (
-                    <img
-                      src={snapshot!.image_data_url!}
-                      alt={`${selected.name} public traffic camera snapshot; capture time ${snapshot?.capture_time ? formatTime(snapshot.capture_time) : "unknown"}`}
-                      onError={() => setImageFailed(true)}
-                    />
-                  ) : (
-                    <div className="live-snapshot-placeholder">
-                      <Icon name="camera" size={25} />
-                      <span>
-                        {imageFailed
-                          ? "The provider image could not be decoded."
-                          : refreshing
-                            ? "Retrieving the selected camera…"
-                            : paused
-                              ? "Updates paused. Resume to retrieve this camera."
-                              : notice || "Waiting for a provider image."}
-                      </span>
-                    </div>
-                  )}
-                  {hasImage && (
-                    <span
-                      className={`live-image-status ${stale ? "is-stale" : ""}`}
+                {selected.streaming_url && (
+                  <div
+                    className="live-media-mode"
+                    aria-label="Camera media mode"
+                  >
+                    <button
+                      aria-pressed={showVideo}
+                      onClick={() => {
+                        setMediaChoice({
+                          cameraId: selected.id,
+                          mode: "video",
+                        });
+                        setFailedStream(null);
+                        setPaused(false);
+                      }}
                     >
-                      {stale ? "LAST RETRIEVED IMAGE" : "PROVIDER SNAPSHOT"}
-                    </span>
-                  )}
-                </div>
+                      {failedStream === selected.id
+                        ? "Retry live video"
+                        : "Live video"}
+                    </button>
+                    <button
+                      aria-pressed={!showVideo}
+                      onClick={() =>
+                        setMediaChoice({
+                          cameraId: selected.id,
+                          mode: "snapshot",
+                        })
+                      }
+                    >
+                      Snapshot + YOLO
+                    </button>
+                  </div>
+                )}
+                {showVideo ? (
+                  <LiveCameraVideo
+                    key={selected.id}
+                    camera={selected}
+                    active={active && !paused}
+                    onFallback={() => setFailedStream(selected.id)}
+                  />
+                ) : (
+                  <>
+                    {failedStream === selected.id && (
+                      <p className="live-snapshot-notice" role="status">
+                        Video is unavailable in this browser or from this
+                        camera. Showing its provider snapshot instead.
+                      </p>
+                    )}
+                    <div className="live-snapshot-frame">
+                      {hasImage ? (
+                        <img
+                          src={snapshot!.image_data_url!}
+                          alt={`${selected.name} public traffic camera snapshot; capture time ${snapshot?.capture_time ? formatTime(snapshot.capture_time) : "unknown"}`}
+                          onError={() => setImageFailed(true)}
+                        />
+                      ) : (
+                        <div className="live-snapshot-placeholder">
+                          <Icon name="camera" size={25} />
+                          <span>
+                            {imageFailed
+                              ? "The provider image could not be decoded."
+                              : refreshing
+                                ? "Retrieving the selected camera…"
+                                : paused
+                                  ? "Updates paused. Resume to retrieve this camera."
+                                  : notice || "Waiting for a provider image."}
+                          </span>
+                        </div>
+                      )}
+                      {hasImage && snapshotDetections && (
+                        <LiveImageBoxes detections={snapshotDetections} />
+                      )}
+                      {hasImage && (
+                        <span
+                          className={`live-image-status ${stale ? "is-stale" : ""}`}
+                        >
+                          {stale ? "LAST RETRIEVED IMAGE" : "PROVIDER SNAPSHOT"}
+                        </span>
+                      )}
+                    </div>
+                    {hasImage &&
+                      (snapshotDetections ? (
+                        <LiveDetectionCounts detections={snapshotDetections} />
+                      ) : (
+                        <p className="live-camera-disclosure">
+                          Local YOLO unavailable or awaiting exact-image
+                          verification. No substitute boxes are shown.
+                        </p>
+                      ))}
+                    {hasImage && snapshotDetections && (
+                      <p className="live-camera-disclosure">
+                        YOLO boxes match this exact snapshot. Object detections
+                        do not establish danger.
+                      </p>
+                    )}
+                  </>
+                )}
                 <div className="live-camera-refresh">
                   <span role="status">
-                    {refreshing
-                      ? "Refreshing…"
-                      : paused
-                        ? "Updates paused"
-                        : `Source cadence ${cadenceLabel(selected.source_refresh_seconds)}`}
+                    {showVideo
+                      ? paused
+                        ? "Video paused"
+                        : "Selected provider feed"
+                      : refreshing
+                        ? "Refreshing…"
+                        : paused
+                          ? "Updates paused"
+                          : `Source cadence ${cadenceLabel(selected.source_refresh_seconds)}`}
                   </span>
                   <button
                     onClick={() => setPaused((value) => !value)}
@@ -369,38 +462,42 @@ export function LiveCameraPanel({
                     {paused ? "Resume updates" : "Pause updates"}
                   </button>
                 </div>
-                {notice && (
+                {!showVideo && notice && (
                   <p className="live-snapshot-notice" role="status">
                     {notice}
                   </p>
                 )}
-                <dl className="live-snapshot-facts">
-                  <div>
-                    <dt>Retrieved</dt>
-                    <dd title={snapshot?.fetched_at ?? undefined}>
-                      {formatTime(snapshot?.fetched_at ?? null)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Capture time</dt>
-                    <dd>{formatTime(snapshot?.capture_time ?? null)}</dd>
-                  </div>
-                  {snapshot?.source_last_modified && (
-                    <div>
-                      <dt>Provider last modified</dt>
-                      <dd title={snapshot.source_last_modified}>
-                        {formatTime(snapshot.source_last_modified)}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-                <p className="live-camera-disclosure">
-                  {selected.provider} public camera ·{" "}
-                  {cadenceLabel(selected.source_refresh_seconds)} published
-                  refresh. A refreshed image is not continuous live video. The
-                  provider may show an outage card. Updates pause when this tab
-                  is hidden.
-                </p>
+                {!showVideo && (
+                  <>
+                    <dl className="live-snapshot-facts">
+                      <div>
+                        <dt>Retrieved</dt>
+                        <dd title={snapshot?.fetched_at ?? undefined}>
+                          {formatTime(snapshot?.fetched_at ?? null)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Capture time</dt>
+                        <dd>{formatTime(snapshot?.capture_time ?? null)}</dd>
+                      </div>
+                      {snapshot?.source_last_modified && (
+                        <div>
+                          <dt>Provider last modified</dt>
+                          <dd title={snapshot.source_last_modified}>
+                            {formatTime(snapshot.source_last_modified)}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                    <p className="live-camera-disclosure">
+                      {selected.provider} public camera ·{" "}
+                      {cadenceLabel(selected.source_refresh_seconds)} published
+                      refresh. A refreshed image is not continuous live video.
+                      The provider may show an outage card. Updates pause when
+                      this tab is hidden.
+                    </p>
+                  </>
+                )}
                 {selected.provider_url && (
                   <a
                     className="live-provider-link"
@@ -417,8 +514,9 @@ export function LiveCameraPanel({
                 <Icon name="camera" size={28} />
                 <strong>Select a camera or map pin.</strong>
                 <span>
-                  One current provider snapshot appears here. Camera markers are
-                  not incident alerts.
+                  Video or a provider snapshot appears here. Local YOLO boxes
+                  stay tied to their analyzed image. Camera markers are not
+                  incident alerts.
                 </span>
               </div>
             )}

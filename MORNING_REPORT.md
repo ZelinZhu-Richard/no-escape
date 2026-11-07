@@ -1,5 +1,23 @@
 # Clearway morning handoff
 
+## Live video, map clicks, and camera YOLO — November 7, 2026
+
+**Actual provider video is working.** Select **TVD33 — I-80: Bay Bridge SAS Tower West** in Public traffic CCTV. The built-in browser played its advancing HLS stream and produced real local YOLO detections on sampled frames. Forty catalog entries advertise video URLs; only the selected camera is loaded, and this is not a claim that every advertised stream works. Cameras without reliable video retain the five-minute snapshot fallback.
+
+Purple map pins now have larger visible markers and a 24-pixel hit area. Clicking one focuses and scrolls its preview into view. A browser click approximately eleven pixels from a settled pin selected **TV113 — SR-24: AT TELEGRAPH** and brought the preview onto the screen. Cyan NCDOT inventory points still provide metadata only.
+
+The snapshot view draws genuine YOLO boxes on its exact JPEG. Video has a moving player plus an **Exact analyzed frame** view with boxes and counts, sampled at most once per second. Image hashes prevent boxes from being attached to another image. This is local CPU object detection, not cloud inference, continuous tracking, or a validated danger classifier. Small vehicles may be missed; capture time and provider delay remain unknown.
+
+### Current verification
+
+- **217 backend tests and 39 frontend tests passed.** Production build and dependency/Cesium notices passed; `hls.js` 1.7.4 is pinned and its Apache-2.0 attribution retained.
+- Five running-service HTTP replay/confirm/reset cycles passed again with no cloud inference calls: `clearway/data/verification/live-video-api-cycles.json`.
+- Browser verification: live playback advanced, real car boxes appeared on sampled frames, and **Pause updates** removed the video source and paused playback. Map selection now focuses the preview. Camera 88's snapshot displayed three genuine car detections on its exact image. An early reconnect failure exercised the automatic snapshot fallback with one car detection. After preferring managed hls.js/MSE playback, pause/resume and snapshot-to-video reconnections both played successfully again. Live video and sampled-frame boxes also rendered at 390×844 with no horizontal overflow. Screenshots are under `clearway/data/verification/`: `live-cctv-yolo-desktop.jpg`, `cctv-snapshot-yolo.jpg`, and `live-cctv-yolo-mobile.jpg`.
+- Local-only detector: one inference slot, eight numeric-result cache entries, bounded JPEG dimensions/size, no automatic model download, no image archive or cloud model calls. The frame endpoint caps uploads at one megabyte and one request per second and remains unavailable on the responder service.
+- The local server was intentionally restarted once to load the new endpoint. No reload watcher or public tunnel is running. The Gemini key, Google 3D token, and physical phone test remain deferred/pending as previously recorded.
+
+Use the existing `make serve` session at `http://127.0.0.1:8000`. On a fresh machine, prepare `make detection-setup` and `make detect`, then `make build` and `make serve`. See [LIVE-CAMERAS.md](clearway/docs/LIVE-CAMERAS.md) for video/fallback behavior and detection limits. This section supersedes older snapshot-only and no-local-inference descriptions below.
+
 ## Public CCTV expansion — November 7, 2026
 
 Added **100 authentic Caltrans District 4 traffic-camera points** across San Francisco, Alameda, and San Mateo counties, in addition to the twenty metadata-only NCDOT points. The public camera browser has road/name search, county filtering, map selection, a network-overview shortcut, and a selected-camera preview. Selecting a public camera preserves the separate incident/replay workflow.

@@ -8,11 +8,15 @@ from pathlib import Path
 from datetime import datetime, timezone
 import json
 import os
+import threading
+import time
+import re
 from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from .configuration import load_local_environment
 from .models import AnalysisResult, LabelRequest, ReplayRequest
@@ -74,7 +78,7 @@ def _unavailable() -> dict:
 
 def create_app(
     *, data_dir: Path | str | None = None, analysis_service=None,
-    detection_service=None, live_camera_service=None,
+    detection_service=None, live_camera_service=None, live_detection_service=None,
     read_only: bool = False, web_dist: Path | str | None = None,
 ) -> FastAPI:
     data = Path(data_dir or os.environ.get("CLEARWAY_DATA_DIR", ROOT / "data")).resolve()
@@ -88,7 +92,12 @@ def create_app(
         detection_service = DetectionService(data)
     if live_camera_service is None and not read_only:
         from .live_cameras import LiveCameraService
-        live_camera_service = LiveCameraService()
+        if live_detection_service is None:
+            from .live_detection import LiveDetectionService
+            live_detection_service = LiveDetectionService(data)
+        live_camera_service = LiveCameraService(detector=live_detection_service)
+    frame_request_lock = threading.Lock()
+    last_frame_attempt = float("-inf")
     application = FastAPI(
         title="Clearway responder" if read_only else "Clearway local operator",
         docs_url=None, redoc_url=None, openapi_url=None,
@@ -117,7 +126,9 @@ def create_app(
                         allowed = False
                     if not allowed:
                         return JSONResponse({"detail": "Cross-origin operator writes are not allowed."}, status_code=403)
-                if request.headers.get("content-type", "").split(";")[0].lower() != "application/json":
+                content_type = request.headers.get("content-type", "").split(";")[0].lower()
+                camera_frame = bool(re.fullmatch(r"/api/live-cameras/[A-Za-z0-9_-]{1,120}/detect-frame", request.url.path))
+                if content_type != "application/json" and not (camera_frame and content_type == "image/jpeg"):
                     return JSONResponse({"detail": "Operator writes require application/json."}, status_code=415)
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
@@ -228,6 +239,30 @@ def create_app(
         @application.get("/api/live-cameras/{camera_id}/snapshot")
         def live_camera_snapshot(camera_id: str):
             return live_camera_service.snapshot(camera_id)
+
+        @application.post("/api/live-cameras/{camera_id}/detect-frame")
+        async def live_camera_frame(camera_id: str, request: Request):
+            nonlocal last_frame_attempt
+            if not any(camera["id"] == camera_id for camera in live_camera_service.catalog().get("cameras", [])):
+                raise HTTPException(404, "Public camera not found.")
+            if request.headers.get("content-type", "").split(";")[0].lower() != "image/jpeg":
+                raise HTTPException(415, "A single JPEG frame is required.")
+            length = request.headers.get("content-length")
+            if length is not None and (not length.isdigit() or int(length) > 1_000_000):
+                raise HTTPException(413, "Frame exceeds the one-megabyte limit.")
+            with frame_request_lock:
+                now = time.monotonic()
+                if now - last_frame_attempt < 1:
+                    raise HTTPException(429, "Local frame detection is limited to one request per second.")
+                last_frame_attempt = now
+            raw = bytearray()
+            async for chunk in request.stream():
+                if len(raw) + len(chunk) > 1_000_000:
+                    raise HTTPException(413, "Frame exceeds the one-megabyte limit.")
+                raw.extend(chunk)
+            if live_detection_service is None:
+                raise HTTPException(503, "Local camera detection is unavailable.")
+            return await run_in_threadpool(live_detection_service.analyze_jpeg, bytes(raw))
 
         @application.get("/api/state")
         def state():

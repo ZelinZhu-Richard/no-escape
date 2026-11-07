@@ -38,7 +38,34 @@ export interface LiveSnapshot {
   stale: boolean;
   refresh_after_seconds: number;
   message: string;
+  image_sha256?: string | null;
+  detections?: ImageDetections | null;
 }
+
+export interface ImageDetections {
+  status: "available";
+  analysis_mode: "fresh" | "cached";
+  image_sha256: string;
+  image_width: number;
+  image_height: number;
+  boxes: {
+    class_name: string;
+    confidence: number;
+    xyxy: [number, number, number, number];
+  }[];
+  vehicle_count: number;
+  person_count: number;
+  model: { name: string; version: string };
+  provenance: {
+    kind: "local_yolo_image";
+    fixture: false;
+    image_sha256: string;
+    analyzed_at: string;
+  };
+  inference_ms: number | null;
+}
+export const isImageHash = (value: unknown): value is string =>
+  typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 
 const record = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -66,6 +93,107 @@ function httpsLink(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+export function publicStreamUrl(value: unknown): string | null {
+  const link = httpsLink(value);
+  if (!link) return null;
+  const url = new URL(link);
+  return url.hostname === "wzmedia.dot.ca.gov" &&
+    !url.port &&
+    !url.search &&
+    !url.hash &&
+    /^\/D4\/[A-Za-z0-9_.-]+\/playlist\.m3u8$/.test(url.pathname)
+    ? link
+    : null;
+}
+
+export function readImageDetections(
+  value: unknown,
+  imageHash: string | null,
+): ImageDetections | null {
+  const raw = record(value);
+  const provenance = record(raw?.provenance);
+  const model = record(raw?.model);
+  if (
+    !raw ||
+    !isImageHash(imageHash) ||
+    raw.status !== "available" ||
+    !["fresh", "cached"].includes(String(raw.analysis_mode)) ||
+    raw.image_sha256 !== imageHash ||
+    provenance?.kind !== "local_yolo_image" ||
+    provenance.fixture !== false ||
+    provenance.image_sha256 !== imageHash ||
+    !safeDate(provenance.analyzed_at) ||
+    typeof raw.image_width !== "number" ||
+    !Number.isInteger(raw.image_width) ||
+    raw.image_width < 1 ||
+    raw.image_width > 4096 ||
+    typeof raw.image_height !== "number" ||
+    !Number.isInteger(raw.image_height) ||
+    raw.image_height < 1 ||
+    raw.image_height > 4096 ||
+    !Array.isArray(raw.boxes) ||
+    raw.boxes.length > 500 ||
+    !model ||
+    typeof model.name !== "string"
+  )
+    return null;
+  const boxes: ImageDetections["boxes"] = [];
+  for (const item of raw.boxes) {
+    const box = record(item);
+    if (
+      !box ||
+      typeof box.class_name !== "string" ||
+      typeof box.confidence !== "number" ||
+      !Number.isFinite(box.confidence) ||
+      box.confidence < 0 ||
+      box.confidence > 1 ||
+      !Array.isArray(box.xyxy) ||
+      box.xyxy.length !== 4 ||
+      !box.xyxy.every(
+        (n) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1,
+      ) ||
+      box.xyxy[2] <= box.xyxy[0] ||
+      box.xyxy[3] <= box.xyxy[1]
+    )
+      return null;
+    boxes.push({
+      class_name: box.class_name,
+      confidence: box.confidence,
+      xyxy: box.xyxy as [number, number, number, number],
+    });
+  }
+  const count = (n: unknown) =>
+    typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 500
+      ? n
+      : null;
+  const vehicles = count(raw.vehicle_count),
+    people = count(raw.person_count);
+  if (vehicles === null || people === null) return null;
+  return {
+    status: "available",
+    analysis_mode: raw.analysis_mode as "fresh" | "cached",
+    image_sha256: imageHash,
+    image_width: raw.image_width,
+    image_height: raw.image_height,
+    boxes,
+    vehicle_count: vehicles,
+    person_count: people,
+    model: { name: model.name, version: safeText(model.version) },
+    provenance: {
+      kind: "local_yolo_image",
+      fixture: false,
+      image_sha256: imageHash,
+      analyzed_at: provenance.analyzed_at as string,
+    },
+    inference_ms:
+      typeof raw.inference_ms === "number" &&
+      Number.isFinite(raw.inference_ms) &&
+      raw.inference_ms >= 0
+        ? raw.inference_ms
+        : null,
+  };
 }
 
 /** Treat an inventory record as a public snapshot source, never as an incident. */
@@ -118,7 +246,7 @@ export function readLiveCameraCatalog(
         in_service_reported: camera.in_service_reported === true,
         capture_time: safeDate(camera.capture_time),
         source_refresh_seconds: interval(camera.source_refresh_seconds),
-        streaming_url: httpsLink(camera.streaming_url),
+        streaming_url: publicStreamUrl(camera.streaming_url),
       });
       ids.add(camera.id);
     }
@@ -170,6 +298,11 @@ export function readLiveSnapshot(
     stale: raw.stale !== false,
     refresh_after_seconds: interval(raw.refresh_after_seconds),
     message: safeText(raw.message),
+    image_sha256: isImageHash(raw.image_sha256) ? raw.image_sha256 : null,
+    detections: readImageDetections(
+      raw.detections,
+      isImageHash(raw.image_sha256) ? raw.image_sha256 : null,
+    ),
   };
 }
 

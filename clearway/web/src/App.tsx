@@ -220,6 +220,17 @@ function Operator() {
   const mounted = useRef(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const evidenceRef = useRef<HTMLElement>(null);
+  const livePreviewRef = useRef<HTMLDivElement>(null);
+  const selectMapCamera = useCallback((id: string) => {
+    setLiveSelectedId(id);
+    requestAnimationFrame(() => {
+      livePreviewRef.current?.focus({ preventScroll: true });
+      livePreviewRef.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+        block: "start",
+      });
+    });
+  }, []);
   const source = sources.find((s) => s.id === sourceId);
   const incident =
     state?.incidents.find((i) => i.id === selectedId) ??
@@ -660,9 +671,10 @@ function Operator() {
                   onSelect={openEvidence}
                   liveCameras={visibleLiveCameras}
                   liveSelectedId={liveSelectedId}
-                  onSelectLiveCamera={setLiveSelectedId}
+                  onSelectLiveCamera={selectMapCamera}
                 />
               </Suspense>
+              <div ref={livePreviewRef} tabIndex={-1} aria-label="Selected public camera preview">
               <LiveCameraPanel
                 catalog={liveCatalog}
                 selectedId={liveSelectedId}
@@ -671,6 +683,7 @@ function Operator() {
                 loading={liveLoading}
                 catalogError={liveError}
               />
+              </div>
               <section className="incident-tray">
                 <div className="tray-heading">
                   <div>
@@ -951,7 +964,7 @@ function Operator() {
                     ? (state.telemetry.network_inference_calls ?? "Unknown")
                     : "—"}
                 </b>{" "}
-                actual inference calls
+                cloud inference calls
               </span>
               <span>
                 <b>{state ? (state.telemetry.cache_hits ?? "Unknown") : "—"}</b>{" "}
