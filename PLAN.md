@@ -43,6 +43,14 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Live CCTV review candidates — November 7, 2026
+
+The user now authorizes connecting live detections to incident alerts, map markers, and the evidence/confirmation workflow. This supersedes the prior viewing-only restriction on creating public-camera candidates. Monitor only the selected, visible, playing video; snapshots remain detection-only. Use bounded local temporal rules for a possible stationary vehicle (at least 12 seconds) or sustained person presence (at least 3 seconds). Do not infer a collision, injury, exact lane, or danger from these rules. High vehicle count alone is not an alert.
+
+Bind observations to the current run, camera, fresh stream session, media time, server time, and exact image hash. Reset temporal state on discontinuities, gaps, seeks, pauses, camera/run switches, or invalid input. One candidate per camera per run, including after review, prevents repeated alarms; limit the run to 20 live candidates. Save one exact trigger frame per candidate for review and delete retained live evidence on reset; this is bounded incident evidence, not a continuous camera archive. Candidate creation must recheck the run atomically so a late inference cannot restore an expired incident.
+
+Live candidates use the camera's published coordinates labeled as camera location, genuine local YOLO plus explicit temporal-rule provenance, measured observations, and unknown capture time/provider delay. Reuse the review queue, map selection, confirm/dismiss, and scoped responder evidence. Never substitute replay footage for live evidence or label these rules as Gemini inference. Keep paid inference at zero, preserve existing deferred token/phone tasks, test positive and normal controlled sequences and lifecycle races, and report natural-incident validation separately from tests.
+
 ## Public CCTV detection quality — November 7, 2026
 
 The user reported that the live YOLO results were poor. Compare genuine detections on the same public-camera frames, including false boxes on burned-in camera text, instead of treating update frequency as detection quality. Upgrade live CCTV independently of the saved replay detector. The user explicitly approved the AGPL-3.0 traffic-trained YOLO11 model. Select checksum-pinned YOLO11s VisDrone at 640 pixels and confidence 0.40 for live CCTV; preserve the replay Tiny model and caches. Keep YOLOX-M as an explicitly selectable Apache-weight alternative. Include the AGPL license and corresponding source link. Camera 689 alone excludes its observed title/timestamp regions, with the policy in provenance and visible in the UI.

@@ -21,6 +21,7 @@ import type {
 import { Icon } from "./Icon";
 import { DetectionOverlay } from "./DetectionOverlay";
 import { VoiceBrief } from "./VoiceBrief";
+import { LiveIncidentEvidence } from "./LiveIncidentEvidence";
 import { LiveCameraPanel } from "./LiveCameraPanel";
 import { readLiveCameraCatalog } from "./liveCameras";
 import type { LiveCamera, LiveCameraCatalog } from "./liveCameras";
@@ -109,8 +110,16 @@ function ModeBadge({ mode }: { mode: AnalysisMode }) {
 function Provenance({ incident }: { incident: Incident }) {
   return (
     <div className="provenance-row">
-      <Badge>Recorded replay</Badge>
-      <ModeBadge mode={incident.analysis_mode} />
+      <Badge>
+        {incident.source_mode === "live"
+          ? "Public camera · live source"
+          : "Recorded replay"}
+      </Badge>
+      {incident.source_mode === "live" ? (
+        <Badge kind="green">Local YOLO · temporal rule</Badge>
+      ) : (
+        <ModeBadge mode={incident.analysis_mode} />
+      )}
       <Badge kind={incident.review_status === "confirmed" ? "green" : "amber"}>
         {incident.review_status === "candidate"
           ? "Needs review"
@@ -206,12 +215,17 @@ function Operator() {
   const [pending, setPending] = useState("");
   const [tab, setTab] = useState<"desk" | "labels">("desk");
   const [playbackKey, setPlaybackKey] = useState(0);
-  const [liveCatalog, setLiveCatalog] = useState<LiveCameraCatalog | null>(null);
+  const [liveCatalog, setLiveCatalog] = useState<LiveCameraCatalog | null>(
+    null,
+  );
   const [liveLoading, setLiveLoading] = useState(true);
   const [liveError, setLiveError] = useState("");
   const [liveSelectedId, setLiveSelectedId] = useState<string | null>(null);
-  const [visibleLiveCameras, setVisibleLiveCameras] = useState<LiveCamera[]>([]);
+  const [visibleLiveCameras, setVisibleLiveCameras] = useState<LiveCamera[]>(
+    [],
+  );
   const epoch = useRef(0);
+  const autoSelectCandidate = useRef(true);
   const configEpoch = useRef(0);
   // Synchronous guard: a render-time pending flag cannot protect polling races.
   const writeInFlight = useRef<
@@ -226,17 +240,34 @@ function Operator() {
     requestAnimationFrame(() => {
       livePreviewRef.current?.focus({ preventScroll: true });
       livePreviewRef.current?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "instant"
+          : "smooth",
         block: "start",
       });
     });
   }, []);
   const source = sources.find((s) => s.id === sourceId);
-  const incident =
-    state?.incidents.find((i) => i.id === selectedId) ??
-    state?.incidents.find((i) => i.source_id === sourceId);
-  const sourceIncidents =
-    state?.incidents.filter((i) => i.source_id === sourceId) ?? [];
+  const incident = state?.incidents.find((i) => i.id === selectedId);
+  const runIncidents = state?.incidents ?? [];
+  const evidenceSource =
+    incident?.live_source ??
+    sources.find((s) => s.id === incident?.source_id) ??
+    source;
+  const liveIncident = incident?.source_mode === "live";
+
+  useEffect(() => {
+    // New candidates can open an empty desk, but polling never replaces a review.
+    setSelectedId((current) => {
+      if (current && state?.incidents.some((item) => item.id === current))
+        return current;
+      if (!autoSelectCandidate.current) return null;
+      return (
+        state?.incidents.find((item) => item.review_status === "candidate")
+          ?.id ?? null
+      );
+    });
+  }, [state?.run.id, state?.incidents]);
 
   useEffect(() => {
     // Public-camera availability must never block the local replay workflow.
@@ -251,7 +282,9 @@ function Operator() {
       })
       .catch(() => {
         if (!controller.signal.aborted)
-          setLiveError("The public camera catalog is unavailable. Recorded replays remain ready.");
+          setLiveError(
+            "The public camera catalog is unavailable. Recorded replays remain ready.",
+          );
       })
       .finally(() => {
         if (!controller.signal.aborted) setLiveLoading(false);
@@ -381,6 +414,7 @@ function Operator() {
         const result = await post<State>("/api/reset");
         if (mounted.current && generation === epoch.current) {
           setState(result);
+          autoSelectCandidate.current = true;
           setSelectedId(null);
           setPlaybackKey((k) => k + 1);
           if (nextSource) setSourceId(nextSource);
@@ -465,8 +499,8 @@ function Operator() {
       }
     }
   };
-  const openEvidence = () => {
-    if (incident) setSelectedId(incident.id);
+  const openEvidence = (id?: string) => {
+    if (id ?? incident?.id) setSelectedId(id ?? incident!.id);
     evidenceRef.current?.focus({ preventScroll: true });
     if (window.innerWidth < 1100)
       evidenceRef.current?.scrollIntoView({
@@ -477,6 +511,7 @@ function Operator() {
       });
   };
   const seek = (time: number) => {
+    if (liveIncident) return;
     if (videoRef.current) {
       videoRef.current.currentTime = time;
       videoRef.current.focus();
@@ -545,9 +580,7 @@ function Operator() {
                 <span className="sr-only">Analysis mode</span>
                 <select
                   value={mode}
-                  onChange={(e) =>
-                    void reset(undefined, e.target.value as AnalysisMode)
-                  }
+                  onChange={(e) => setMode(e.target.value as AnalysisMode)}
                   disabled={Boolean(pending)}
                   aria-label="Analysis mode"
                 >
@@ -600,7 +633,15 @@ function Operator() {
                     key={s.id}
                     className={`source-card ${sourceId === s.id ? "selected" : ""}`}
                     onClick={() => {
-                      if (s.id !== sourceId) void reset(s.id);
+                      // Source browsing must not expire another camera's evidence.
+                      autoSelectCandidate.current = false;
+                      videoRef.current?.pause();
+                      setSourceId(s.id);
+                      setSelectedId(
+                        state?.incidents.find((item) => item.source_id === s.id)
+                          ?.id ?? null,
+                      );
+                      setPlaybackKey((key) => key + 1);
                     }}
                     disabled={Boolean(pending)}
                     aria-pressed={sourceId === s.id}
@@ -666,48 +707,52 @@ function Operator() {
                 }
               >
                 <MapView
-                  source={source}
+                  source={evidenceSource}
                   incident={incident}
-                  onSelect={openEvidence}
+                  incidents={runIncidents}
+                  onSelect={() => openEvidence()}
+                  onSelectIncident={openEvidence}
                   liveCameras={visibleLiveCameras}
                   liveSelectedId={liveSelectedId}
                   onSelectLiveCamera={selectMapCamera}
                 />
               </Suspense>
-              <div ref={livePreviewRef} tabIndex={-1} aria-label="Selected public camera preview">
-              <LiveCameraPanel
-                catalog={liveCatalog}
-                selectedId={liveSelectedId}
-                onSelect={setLiveSelectedId}
-                onVisibleCamerasChange={setVisibleLiveCameras}
-                loading={liveLoading}
-                catalogError={liveError}
-              />
+              <div
+                ref={livePreviewRef}
+                tabIndex={-1}
+                aria-label="Selected public camera preview"
+              >
+                <LiveCameraPanel
+                  runId={state?.run.id}
+                  catalog={liveCatalog}
+                  selectedId={liveSelectedId}
+                  onSelect={setLiveSelectedId}
+                  onVisibleCamerasChange={setVisibleLiveCameras}
+                  loading={liveLoading}
+                  catalogError={liveError}
+                />
               </div>
               <section className="incident-tray">
                 <div className="tray-heading">
                   <div>
                     <span className="eyebrow">REVIEW QUEUE</span>
                     <h2>
-                      {sourceIncidents.length
-                        ? "One scene. Evidence attached."
+                      {runIncidents.length
+                        ? "Incidents with evidence."
                         : "Ready when you are."}
                     </h2>
                   </div>
                   <span className="count-label">
-                    {sourceIncidents.length.toString().padStart(2, "0")}
+                    {runIncidents.length.toString().padStart(2, "0")}
                   </span>
                 </div>
-                {sourceIncidents.length ? (
-                  sourceIncidents.map((i) => (
+                {runIncidents.length ? (
+                  runIncidents.map((i) => (
                     <button
                       key={i.id}
                       className={`incident-card ${selectedId === i.id || incident?.id === i.id ? "selected" : ""}`}
                       data-testid="incident-card"
-                      onClick={() => {
-                        setSelectedId(i.id);
-                        openEvidence();
-                      }}
+                      onClick={() => openEvidence(i.id)}
                     >
                       <span
                         className={`incident-icon ${i.review_status === "confirmed" ? "confirmed" : ""}`}
@@ -728,9 +773,11 @@ function Operator() {
                             ? "Needs human review"
                             : i.review_status}
                           <span>·</span>
-                          {i.analysis_mode === "fixture"
-                            ? "Fixture"
-                            : i.analysis_mode}
+                          {i.source_mode === "live"
+                            ? "Live CCTV"
+                            : i.analysis_mode === "fixture"
+                              ? "Fixture"
+                              : i.analysis_mode}
                         </span>
                       </span>
                       <Icon name="arrow" size={17} />
@@ -784,29 +831,38 @@ function Operator() {
                 </div>
                 <Icon name="expand" size={17} />
               </div>
-              {source ? (
+              {evidenceSource ? (
                 <>
-                  <div className="video-wrap">
-                    <Video
-                      source={source}
-                      videoRef={videoRef}
-                      replayKey={`${source.id}-${state?.run.id}-${playbackKey}`}
-                      showDetections
+                  {liveIncident && incident ? (
+                    <LiveIncidentEvidence
+                      key={incident.id}
+                      incident={incident}
                     />
-                    <div className="video-toplabel">
-                      <span className="video-dot" />
-                      LICENSED RECORDED REPLAY
+                  ) : (
+                    <div className="video-wrap">
+                      <Video
+                        source={evidenceSource}
+                        videoRef={videoRef}
+                        replayKey={`${evidenceSource.id}-${state?.run.id}-${playbackKey}`}
+                        showDetections
+                      />
+                      <div className="video-toplabel">
+                        <span className="video-dot" />
+                        LICENSED RECORDED REPLAY
+                      </div>
                     </div>
-                  </div>
-                  <Credit source={source} />
+                  )}
+                  <Credit source={evidenceSource} />
                   {incident ? (
                     <div className="evidence-body">
                       <Provenance incident={incident} />
                       <h3>{incident.title}</h3>
                       <p className="evidence-summary">
-                        {incident.analysis_mode === "fixture"
-                          ? "These are reference observations for the workflow demonstration. No model inferred this result."
-                          : "Review the saved observations against the source video before confirming."}
+                        {liveIncident
+                          ? "Review this frozen trigger frame and the rule observations before confirming. A visual signal alone does not establish an emergency."
+                          : incident.analysis_mode === "fixture"
+                            ? "These are reference observations for the workflow demonstration. No model inferred this result."
+                            : "Review the saved observations against the source video before confirming."}
                       </p>
                       <VoiceBrief
                         incident={incident}
@@ -816,13 +872,22 @@ function Operator() {
                       <ol className="observations">
                         {incident.evidence.map((e, index) => (
                           <li key={`${e.timestamp_seconds}-${index}`}>
-                            <button
-                              onClick={() => seek(e.timestamp_seconds)}
-                              title={`Seek to ${e.timestamp_seconds} seconds`}
-                              className="timestamp mono"
-                            >
-                              {timeLabel(e.timestamp_seconds)}
-                            </button>
+                            {liveIncident ? (
+                              <span
+                                className="timestamp mono"
+                                title="Live stream media clock"
+                              >
+                                {timeLabel(e.timestamp_seconds)}
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => seek(e.timestamp_seconds)}
+                                title={`Seek to ${e.timestamp_seconds} seconds`}
+                                className="timestamp mono"
+                              >
+                                {timeLabel(e.timestamp_seconds)}
+                              </button>
+                            )}
                             <span>{e.observation}</span>
                           </li>
                         ))}
@@ -907,7 +972,9 @@ function Operator() {
                     </div>
                   ) : (
                     <div className="evidence-body empty-evidence">
-                      <span className="eyebrow">{sourceName(source.id)}</span>
+                      <span className="eyebrow">
+                        {sourceName(evidenceSource.id)}
+                      </span>
                       <h3>
                         A short replay.
                         <br />A complete review.
@@ -1169,7 +1236,11 @@ function Responder({
               </div>
             )}
             <section className="responder-video">
-              <Video source={data.source} />
+              {incident.source_mode === "live" ? (
+                <LiveIncidentEvidence key={incident.id} incident={incident} />
+              ) : (
+                <Video source={data.source} />
+              )}
               <Credit source={data.source} />
             </section>
             <section className="responder-section">
@@ -1215,8 +1286,9 @@ function Responder({
                 ))}
               </ul>
               <p className="context-unavailable">
-                External corroboration: not applicable to this historical
-                replay.
+                {incident.source_mode === "live"
+                  ? "External corroboration: not independently verified. Review the frozen camera evidence and remaining unknowns."
+                  : "External corroboration: not applicable to this historical replay."}
               </p>
             </section>
             <div className="responder-status">
@@ -1238,7 +1310,9 @@ function Responder({
         )}
       </main>
       <footer className="responder-footer">
-        Recorded demonstration · No emergency dispatch
+        {incident?.source_mode === "live"
+          ? "Public-camera review · No automatic dispatch"
+          : "Recorded demonstration · No emergency dispatch"}
         <br />
         <span className="mono">RUN {shortId(runId)}</span>
       </footer>
@@ -1489,12 +1563,31 @@ export function App() {
   const match = window.location.pathname.match(
     /^\/respond\/([^/]+)\/([^/]+)\/?$/,
   );
-  return <>
-    {match ? <Responder runId={match[1]} incidentId={match[2]} /> : <Operator />}
-    <div className="source-notice">
-      <a href="https://github.com/ZelinZhu-Richard/no-escape/tree/feat/clearway-overnight-demo" target="_blank" rel="noreferrer">Source code</a>
-      <span> · </span><a href="/assets/licenses/AGPL-3.0.txt" target="_blank" rel="noreferrer">AGPL-3.0</a>
-      <span> · No warranty</span>
-    </div>
-  </>;
+  return (
+    <>
+      {match ? (
+        <Responder runId={match[1]} incidentId={match[2]} />
+      ) : (
+        <Operator />
+      )}
+      <div className="source-notice">
+        <a
+          href="https://github.com/ZelinZhu-Richard/no-escape/tree/feat/clearway-overnight-demo"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Source code
+        </a>
+        <span> · </span>
+        <a
+          href="/assets/licenses/AGPL-3.0.txt"
+          target="_blank"
+          rel="noreferrer"
+        >
+          AGPL-3.0
+        </a>
+        <span> · No warranty</span>
+      </div>
+    </>
+  );
 }

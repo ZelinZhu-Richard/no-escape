@@ -1,3 +1,5 @@
+import type { ImageDetections } from "./liveCameras";
+
 export type AnalysisMode = "fixture" | "cached" | "fresh" | "unavailable";
 export type ReviewStatus = "candidate" | "confirmed" | "dismissed" | "resolved";
 export interface Location {
@@ -43,11 +45,23 @@ export interface Incident {
   provenance: {
     provider: string | null;
     model: string | null;
-    prompt_version: string;
+    prompt_version?: string;
+    rule_version?: string;
+    rule_thresholds?: Record<string, unknown>;
     fixture: boolean;
     cache_key: string | null;
   };
   responder_path: string;
+  live_source?: Source;
+  live_evidence?: {
+    image_url: string;
+    observed_at: string;
+    media_time_seconds: number;
+    window_seconds: number;
+    rule: string;
+    summary: string;
+    detections: ImageDetections;
+  };
 }
 export interface State {
   run: { id: string; created_at: string; status: string };

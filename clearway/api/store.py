@@ -5,6 +5,7 @@ Analysis runs outside that transaction so reset never waits for a provider.
 """
 
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -45,6 +46,11 @@ class Store:
                 );
                 CREATE TABLE IF NOT EXISTS labels (
                     id TEXT PRIMARY KEY, payload TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS live_evidence (
+                    run_id TEXT NOT NULL, incident_id TEXT NOT NULL,
+                    jpeg BLOB NOT NULL CHECK(length(jpeg) <= 1000000),
+                    PRIMARY KEY(run_id, incident_id)
                 );
             """)
         with self.transaction() as db:
@@ -94,7 +100,57 @@ class Store:
             old = self._current_id(db)
             db.execute("UPDATE runs SET status='expired' WHERE id=?", (old,))
             db.execute("UPDATE jobs SET status='cancelled' WHERE run_id=? AND status='running'", (old,))
+            db.execute("DELETE FROM live_evidence")
             self._new_run(db)
+
+    def live_candidate(self, run_id: str, camera_id: str) -> dict | None:
+        with self.connect() as db:
+            db.execute("BEGIN")
+            self._require_current(db, run_id)
+            row = db.execute("SELECT payload FROM incidents WHERE run_id=? AND source_id=?", (run_id, camera_id)).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def add_live_candidate(self, run_id: str, camera_id: str, candidate: dict, source: dict, jpeg: bytes) -> dict:
+        """Save exactly one trigger image/camera/run, atomically with its item.
+
+        Inference and temporal monitoring run outside this transaction. Reset
+        can expire them while they work; the current-run check here is final.
+        """
+        if type(jpeg) is not bytes or not 12 <= len(jpeg) <= 1_000_000 or not jpeg.startswith(b"\xff\xd8\xff") or not jpeg.endswith(b"\xff\xd9"):
+            raise StateError(422, "Live evidence must be a bounded JPEG.")
+        with self.transaction() as db:
+            self._require_current(db, run_id)
+            row = db.execute("SELECT payload FROM incidents WHERE run_id=? AND source_id=?", (run_id, camera_id)).fetchone()
+            if row:
+                return json.loads(row[0])
+            count = db.execute("SELECT count(*) FROM live_evidence WHERE run_id=?", (run_id,)).fetchone()[0]
+            if count >= 20:
+                raise StateError(409, "This run already holds 20 live review images. Review them and reset before collecting more.")
+            incident_id = str(uuid4())
+            image_url = f"/api/runs/{run_id}/incidents/{incident_id}/evidence"
+            payload = {
+                **deepcopy(candidate), "id": incident_id, "run_id": run_id, "source_id": camera_id,
+                "source_mode": "live", "analysis_mode": "fresh", "review_status": "candidate",
+                "created_at": now(), "confirmed_at": None,
+                "responder_path": f"/respond/{run_id}/{incident_id}",
+                "live_source": {**deepcopy(source), "poster_url": image_url},
+            }
+            payload["live_evidence"]["image_url"] = image_url
+            encoded = json.dumps(payload, allow_nan=False)
+            if len(encoded) > 200_000:
+                raise StateError(422, "Live evidence metadata exceeds its bounded size.")
+            db.execute("INSERT INTO incidents VALUES(?,?,?,?)", (incident_id, run_id, camera_id, encoded))
+            db.execute("INSERT INTO live_evidence VALUES(?,?,?)", (run_id, incident_id, jpeg))
+            return payload
+
+    def evidence(self, run_id: str, incident_id: str, *, public: bool = False) -> bytes:
+        with self.connect() as db:
+            db.execute("BEGIN")
+            self._require_current(db, run_id, public=public)
+            row = db.execute("SELECT jpeg FROM live_evidence WHERE run_id=? AND incident_id=?", (run_id, incident_id)).fetchone()
+            if not row:
+                raise StateError(404, "Evidence image not found in this run.")
+            return bytes(row[0])
 
     def snapshot(self) -> dict:
         with self.connect() as db:

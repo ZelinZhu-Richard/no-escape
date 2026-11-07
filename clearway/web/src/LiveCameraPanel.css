@@ -358,6 +358,16 @@
   stroke-dasharray: 3 3;
   vector-effect: non-scaling-stroke;
 }
+.live-alert-monitor {
+  border-top: 1px solid #3e535c;
+  margin-top: 12px;
+  padding-top: 10px;
+  color: #bdccce;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.live-alert-monitor strong { color: #d9e9df; font-size: 11px; }
+.live-alert-monitor p { margin: 7px 0 0; }
 .live-catalog-credit {
   font-size: 8px;
   border-top: 1px solid #2b4149;

@@ -27,6 +27,7 @@ export interface LiveCameraPanelProps {
   loading?: boolean;
   catalogError?: string;
   active?: boolean;
+  runId?: string;
 }
 
 function useSelectedSnapshot(camera: LiveCamera | undefined, enabled: boolean) {
@@ -201,6 +202,7 @@ export function LiveCameraPanel({
   loading = false,
   catalogError = "",
   active = true,
+  runId,
 }: LiveCameraPanelProps) {
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState("");
@@ -254,8 +256,8 @@ export function LiveCameraPanel({
       </div>
       <p className="live-camera-intro">
         Provider video where available, with snapshots as a fallback. Local YOLO
-        analyzes the selected camera only; no cloud model calls or incident
-        alerts run here.
+        watches the selected playing video for sustained signals and sends
+        candidates to the review queue. Confirmation stays with you.
       </p>
       {demoCamera && <button className="live-camera-shortcut" onClick={() => {
         onSelect(demoCamera.id);
@@ -393,6 +395,7 @@ export function LiveCameraPanel({
                     key={selected.id}
                     camera={selected}
                     active={active && !paused}
+                    runId={runId}
                     onFallback={() => setFailedStream(selected.id)}
                   />
                 ) : (
@@ -503,7 +506,8 @@ export function LiveCameraPanel({
                       {cadenceLabel(selected.source_refresh_seconds)} published
                       refresh. A refreshed image is not continuous live video.
                       The provider may show an outage card. Updates pause when
-                      this tab is hidden.
+                      this tab is hidden. Automatic review candidates require playing video;
+                      snapshots provide detections only.
                     </p>
                   </>
                 )}

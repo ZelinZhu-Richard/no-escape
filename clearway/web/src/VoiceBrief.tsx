@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import type { Incident } from "./types";
 
 export function buildVoiceBrief(incident: Incident): string {
-  const origin =
-    incident.analysis_mode === "fixture"
+  const live = incident.source_mode === "live";
+  const origin = live
+    ? "A local visual rule raised this public-camera candidate. It is not a confirmed emergency."
+    : incident.analysis_mode === "fixture"
       ? "Fixture observations, not model-generated analysis."
       : `${incident.analysis_mode === "cached" ? "Saved" : "Fresh"} model observations, subject to human review.`;
   const review =
@@ -11,7 +13,10 @@ export function buildVoiceBrief(incident: Incident): string {
       ? "Awaiting operator confirmation."
       : `Operator review status: ${incident.review_status}.`;
   const evidence = incident.evidence
-    .map((item) => `At ${item.timestamp_seconds} seconds: ${item.observation}`)
+    .map(
+      (item) =>
+        `At ${live ? "video clock " : ""}${item.timestamp_seconds} seconds: ${item.observation}`,
+    )
     .join(" ");
   const location =
     incident.location.quality === "simulated"
@@ -19,8 +24,10 @@ export function buildVoiceBrief(incident: Incident): string {
       : `Camera context: ${incident.location.label}. This is not a measured object location.`;
   const unknowns = incident.unknowns.length
     ? `Still unknown: ${incident.unknowns.join("; ")}.`
-    : "Original location and capture time remain unverified.";
-  return `Clearway demonstration. Recorded footage. ${origin} ${review} ${incident.title}. ${evidence} ${location} ${unknowns} This demonstration does not dispatch responders.`;
+    : live
+      ? "Cause and severity remain unverified."
+      : "Original location and capture time remain unverified.";
+  return `Clearway ${live ? "public-camera brief. Frozen evidence from a live feed." : "demonstration. Recorded footage."} ${origin} ${review} ${incident.title}. ${evidence} ${location} ${unknowns} This demonstration does not dispatch responders.`;
 }
 
 export function VoiceBrief({

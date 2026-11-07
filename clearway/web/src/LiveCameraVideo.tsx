@@ -10,10 +10,12 @@ export function LiveCameraVideo({
   camera,
   active,
   onFallback,
+  runId,
 }: {
   camera: LiveCamera;
   active: boolean;
   onFallback: () => void;
+  runId?: string;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const fallback = useRef(onFallback);
@@ -22,6 +24,7 @@ export function LiveCameraVideo({
   const [playback, setPlayback] = useState("connecting");
   const [yoloEnabled, setYoloEnabled] = useState(true);
   const [showLabels, setShowLabels] = useState(false);
+  const [alertsEnabled, setAlertsEnabled] = useState(true);
   const [frameSize, setFrameSize] = useState<[number, number] | null>(null);
   const [notice, setNotice] = useState("");
   useEffect(() => {
@@ -231,7 +234,7 @@ export function LiveCameraVideo({
 
   const sampling =
     active && visible && yoloEnabled && ["live", "playing"].includes(playback);
-  const overlay = useLiveVideoOverlay(video, camera.id, sampling);
+  const overlay = useLiveVideoOverlay(video, camera.id, sampling, alertsEnabled ? runId : undefined);
   const status =
     !active || !visible
       ? "Video paused"
@@ -310,6 +313,20 @@ export function LiveCameraVideo({
           {overlay.message}
         </p>
       )}
+      <div className="live-alert-monitor" data-testid="live-alert-monitor">
+        <div className="live-camera-refresh">
+          <strong>{!alertsEnabled ? "Alerts paused" : !runId ? "Alerts waiting for run" : !sampling ? "Alerts waiting for video" :
+            ["delayed", "unavailable"].includes(overlay.phase) ? "Alerts waiting for fresh detections" :
+            overlay.alertMonitor?.phase === "candidate" ? "Candidate in review queue" :
+            overlay.alertMonitor?.phase === "watching" ? "Watching for sustained signals" :
+            overlay.alertMonitor?.phase === "unavailable" ? "Alerts unavailable" : "Collecting live observations"}</strong>
+          <button onClick={() => setAlertsEnabled(value => !value)} aria-pressed={alertsEnabled}>
+            {alertsEnabled ? "Pause alerts" : "Enable alerts"}
+          </button>
+        </div>
+        {alertsEnabled && sampling && overlay.alertMonitor && <p>{overlay.alertMonitor.message}</p>}
+        <p>Possible stopped vehicle (12 s) or persistent person detection (3 s). Only this playing camera is monitored; every alert needs review.</p>
+      </div>
     </div>
   );
 }

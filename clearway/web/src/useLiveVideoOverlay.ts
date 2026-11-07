@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import type { RefObject } from "react";
 import { request } from "./api";
 import { jpegHash } from "./LiveImageDetections";
-import { readImageDetections } from "./liveCameras";
-import type { ImageDetections } from "./liveCameras";
+import { readImageDetections, readLiveAlertMonitor } from "./liveCameras";
+import type { ImageDetections, LiveAlertMonitor } from "./liveCameras";
 import { projectLiveFrame, trackLiveFrame } from "./liveOverlayTracking";
 import type { LiveTrackedFrame } from "./liveOverlayTracking";
 
@@ -49,6 +49,7 @@ interface OverlayView {
   mediaTime: number | null;
   mediaAgeMs: number | null;
   wallAgeMs: number | null;
+  alertMonitor: LiveAlertMonitor | null;
 }
 const initialView = (cameraId: string): OverlayView => ({
   cameraId,
@@ -59,12 +60,14 @@ const initialView = (cameraId: string): OverlayView => ({
   mediaTime: null,
   mediaAgeMs: null,
   wallAgeMs: null,
+  alertMonitor: null,
 });
 
 export function useLiveVideoOverlay(
   videoRef: RefObject<HTMLVideoElement | null>,
   cameraId: string,
   enabled: boolean,
+  runId?: string,
 ) {
   const [view, setView] = useState<OverlayView>(() => initialView(cameraId));
   useEffect(() => {
@@ -90,12 +93,16 @@ export function useLiveVideoOverlay(
     let lastStatsAt = -Infinity;
     let lastViewKey = "";
     let message = "";
+    let alertMonitor: LiveAlertMonitor | null = null;
+    let streamId = runId ? crypto.randomUUID() : "";
     const nativeFrames = typeof video.requestVideoFrameCallback === "function";
 
     const reset = () => {
       ++epoch;
       tracked = null;
       details = null;
+      alertMonitor = null;
+      streamId = runId ? crypto.randomUUID() : "";
       lastPresentedTime = null;
       lastSampledMediaTime = null;
       controller?.abort();
@@ -160,6 +167,7 @@ export function useLiveVideoOverlay(
         mediaTime,
         mediaAgeMs: projection.mediaAgeMs,
         wallAgeMs: projection.wallAgeMs,
+        alertMonitor,
       });
     };
 
@@ -203,7 +211,14 @@ export function useLiveVideoOverlay(
           `/api/live-cameras/${encodeURIComponent(cameraId)}/detect-frame`,
           {
             method: "POST",
-            headers: { "Content-Type": "image/jpeg" },
+            headers: {
+              "Content-Type": "image/jpeg",
+              ...(runId ? {
+                "X-Clearway-Run-ID": runId,
+                "X-Clearway-Stream-ID": streamId,
+                "X-Clearway-Media-Time": String(captured.mediaTime),
+              } : {}),
+            },
             body: captured.blob,
             signal: active.signal,
           },
@@ -212,6 +227,7 @@ export function useLiveVideoOverlay(
         const receivedAtMs = performance.now();
         const result = readImageDetections(raw, captured.hash);
         if (!result) {
+          alertMonitor = null;
           tracked = null;
           details = null;
           const response =
@@ -235,6 +251,7 @@ export function useLiveVideoOverlay(
         ) {
           tracked = null;
           details = null;
+          alertMonitor = null;
           message = "Local YOLO delayed · old boxes are hidden.";
           return;
         }
@@ -246,12 +263,14 @@ export function useLiveVideoOverlay(
           boxes: result.boxes,
         });
         details = tracked ? result : null;
+        alertMonitor = runId ? readLiveAlertMonitor((raw as Record<string, unknown>).alert_monitor) : null;
         updates.push(receivedAtMs);
         message = "";
       } catch {
         if (!disposed && generation === epoch) {
           tracked = null;
           details = null;
+          alertMonitor = null;
           retryAt = performance.now() + 500;
           message = "Local YOLO delayed · old boxes are hidden.";
         }
@@ -305,6 +324,6 @@ export function useLiveVideoOverlay(
       cancelAnimationFrame(animationHandle);
       events.forEach((event) => video.removeEventListener(event, reset));
     };
-  }, [videoRef, cameraId, enabled]);
+  }, [videoRef, cameraId, enabled, runId]);
   return enabled && view.cameraId === cameraId ? view : initialView(cameraId);
 }

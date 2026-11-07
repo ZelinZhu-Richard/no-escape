@@ -65,6 +65,23 @@ export interface ImageDetections {
   inference_ms: number | null;
   excluded_regions?: { id: string; xyxy: [number, number, number, number] }[];
 }
+export interface LiveAlertMonitor {
+  phase: "warming" | "watching" | "candidate" | "unavailable";
+  observed_seconds: number;
+  incident_id: string | null;
+  message: string;
+}
+
+export function readLiveAlertMonitor(value: unknown): LiveAlertMonitor | null {
+  const raw = record(value);
+  if (!raw || !["warming", "watching", "candidate", "unavailable"].includes(String(raw.phase)) ||
+    typeof raw.observed_seconds !== "number" || !Number.isFinite(raw.observed_seconds) ||
+    raw.observed_seconds < 0 || raw.observed_seconds > 86400 ||
+    !(raw.incident_id === null || typeof raw.incident_id === "string" && /^[a-f0-9-]{36}$/.test(raw.incident_id)) ||
+    typeof raw.message !== "string" || raw.message.length > 1000) return null;
+  return {phase: raw.phase as LiveAlertMonitor["phase"], observed_seconds: raw.observed_seconds,
+    incident_id: raw.incident_id, message: raw.message};
+}
 export const isImageHash = (value: unknown): value is string =>
   typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 

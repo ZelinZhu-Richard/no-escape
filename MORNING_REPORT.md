@@ -1,5 +1,29 @@
 # Clearway morning handoff
 
+## Live CCTV → review candidates — November 7, 2026
+
+**Selected playing CCTV now creates reviewable candidates from sustained local detections.** A possible stationary vehicle requires at least 12 seconds; repeated person visibility requires at least 3 seconds. Both require distinct frames, consistent boxes, confidence/size thresholds, and advancing video/server clocks. These are local temporal rules, not calibrated lane, crash, injury, or danger classification. Traffic density alone does not alert.
+
+A candidate appears in the shared queue and on the map at its **camera coordinate**, with one frozen trigger frame, hash-verified boxes, rule duration, source credit, observation time, and explicit unknowns. Confirm/Dismiss and the scoped responder page reuse the retained evidence. Replay browsing and mode changes preserve live items. Each camera creates only one item per run, even after review; reset clears its evidence. Retention is capped at 20 trigger JPEGs per run. There is no continuous camera archive.
+
+### Run and use
+
+The local no-reload server is running at `http://127.0.0.1:8000`. Open **Public traffic CCTV → Open 6th Street live**, or another working video camera. Monitoring is enabled by default for the current run. **Pause alerts** stops candidate monitoring while local box detection can continue. Snapshots, hidden/paused video, camera switches, seeks, and gaps do not accumulate an observation window. Only the selected playing camera is monitored, not the whole catalog. No public tunnel or deployment was started.
+
+If restarting, use `make serve`; fresh-checkout setup remains `make setup`, `make detection-setup`, `make live-detect`, and `make build`. Recorded demo restoration is separate (`make footage`, `make detect`). Rule details and lifecycle limits are in [LIVE-ALERTS.md](clearway/docs/LIVE-ALERTS.md).
+
+### Verification and remaining limits
+
+- **284 backend tests and 66 frontend tests passed; production build and emitted license/Cesium assets passed.** Independent review found no material issues.
+- Controlled temporal tests cover stationary/person positives, moving/empty/duplicate frames, confidence and timing limits, gaps, stream/model/run changes, one item per camera, 20-image capacity, review actions, exact image/hash binding, in-flight reset, and operator/responder boundaries. These are test sequences, not human labels or natural-incident accuracy.
+- A visibly labeled, isolated **synthetic browser test** verified the camera-position map marker, queue selection, frozen evidence with boxes, confirmation, responder brief, 390×844 image/overlay alignment, and expired handoff after reset. Its local test service was stopped and its state was never placed in the actual demo database. Proof images: `live-alert-synthetic-evidence.jpg` and `live-alert-synthetic-responder-mobile.jpg` under `clearway/data/verification/`.
+- The actual 6th Street HLS feed played with genuine YOLO11s detections and the temporal monitor receiving distinct frames, around 6 updates/s in a spot check. Pause alerts left the video playing and genuine boxes updating; re-enabling started a fresh observation window. The 390-pixel layout had no horizontal overflow. It showed ordinary moving traffic and no candidate during the checked interval. No naturally occurring emergency or incident was verified. Real-monitor screenshots: `live-alert-monitor-desktop.jpg` and `live-alert-monitor-mobile.jpg` under `clearway/data/verification/`.
+- Five real HTTP replay/confirm/responder/reset cycles passed again with zero cloud calls; receipt: `clearway/data/verification/live-alert-replay-cycles.json`. One announced integration restart loaded the feature; reload remains disabled.
+- Provider inference spend remains **$0**. The Gemini key, Google 3D token, physical cellular handoff test, and human evaluation labels remain pending/deferred as previously recorded.
+
+This section supersedes earlier claims that CCTV cannot create candidates or retains no evidence images. Existing footage licenses, AGPL source/model choice, and provider caps remain unchanged.
+
+
 ## Traffic-trained live CCTV upgrade — November 7, 2026
 
 **YOLO11s VisDrone is installed, selected, and verified on actual playing public CCTV**, following the user's explicit AGPL-3.0 approval. Open **Public traffic CCTV → Open 6th Street live** at `http://127.0.0.1:8000`. The no-reload operator/responder server is running locally; no public tunnel is running.

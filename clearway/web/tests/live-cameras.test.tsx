@@ -7,6 +7,7 @@ import {
   readLiveCameraCatalog,
   readLiveSnapshot,
   readImageDetections,
+  readLiveAlertMonitor,
   publicStreamUrl,
 } from "../src/liveCameras";
 import type {
@@ -114,8 +115,10 @@ beforeEach(() => {
     .mockReturnValue("visible");
   vi.mocked(request).mockReset();
   hlsMock.instances.length = 0;
+  let streamSequence = 0;
   vi.stubGlobal("crypto", {
     subtle: { digest: vi.fn(async () => new Uint8Array(32).fill(0xab).buffer) },
+    randomUUID: vi.fn().mockImplementation(() => `00000000-0000-4000-8000-${String(++streamSequence).padStart(12, "0")}`),
   });
   vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("");
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
@@ -156,6 +159,13 @@ const advance = async (milliseconds: number) => {
 };
 
 describe("public camera data boundaries", () => {
+  it("rejects malformed live alert status instead of inventing monitoring", () => {
+    const valid = {phase: "watching", observed_seconds: 4, incident_id: null, message: "Watching"};
+    expect(readLiveAlertMonitor(valid)).toEqual(valid);
+    expect(readLiveAlertMonitor({...valid, observed_seconds: Infinity})).toBeNull();
+    expect(readLiveAlertMonitor({...valid, phase: "confirmed"})).toBeNull();
+    expect(readLiveAlertMonitor({...valid, incident_id: "/other/path"})).toBeNull();
+  });
   it("preserves bounded camera-text exclusions and rejects invalid regions", () => {
     const regions = [{ id: "provider-title", xyxy: [0, 0, 0.46, 0.08] }];
     expect(readImageDetections({ ...detection(), excluded_regions: regions }, verifiedHash)?.excluded_regions).toEqual(regions);
@@ -251,6 +261,47 @@ describe("public camera data boundaries", () => {
 });
 
 describe("selected public camera preview", () => {
+  it("binds alert observations to the run and stream, and resets on seek, disable and run change", async () => {
+    const streamCamera = {...cameras[0], streaming_url: "https://wzmedia.dot.ca.gov/D4/E80_at_SAS_Tower.stream/playlist.m3u8"};
+    const run1 = "00000000-0000-4000-8000-000000000001";
+    const run2 = "00000000-0000-4000-8000-000000000002";
+    const renderRun = async (runId: string) => act(async () => root.render(<LiveCameraPanel catalog={{...catalog, cameras: [streamCamera]}} selectedId="camera-a" onSelect={vi.fn()} runId={runId} />));
+    vi.mocked(request).mockResolvedValue({...detection(), alert_monitor: {phase: "watching", observed_seconds: 4, incident_id: null, message: "Watching the current video."}});
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({drawImage: vi.fn()} as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(snapshot().image_data_url!);
+    await renderRun(run1);
+    const video = container.querySelector("video")!;
+    Object.defineProperties(video, {videoWidth:{value:352},videoHeight:{value:240},readyState:{value:4},paused:{get:()=>false}});
+    video.currentTime = 1;
+    await act(async () => {
+      hlsMock.instances[0].handlers.get("level")("level", {details:{live:true}});
+      video.dispatchEvent(new Event("playing"));
+    });
+    await advance(50);
+    const headers = () => vi.mocked(request).mock.calls.at(-1)?.[1]?.headers as Record<string,string>;
+    const firstStream = headers()["X-Clearway-Stream-ID"];
+    expect(headers()["X-Clearway-Run-ID"]).toBe(run1);
+    expect(headers()["X-Clearway-Media-Time"]).toBe("1");
+    expect(container.textContent).toContain("Watching the current video.");
+    video.currentTime = 0.1;
+    await act(async () => video.dispatchEvent(new Event("seeking")));
+    await advance(180);
+    expect(headers()["X-Clearway-Stream-ID"]).not.toBe(firstStream);
+    const button = (name: string) => [...container.querySelectorAll("button")].find(b=>b.textContent === name)!;
+    await act(async () => button("Pause alerts").click());
+    video.currentTime = 0.3;
+    await advance(180);
+    expect(headers()["X-Clearway-Run-ID"]).toBeUndefined();
+    expect(container.textContent).toContain("Alerts paused");
+    expect(container.querySelector(".detection-box")).not.toBeNull();
+    await act(async () => button("Enable alerts").click());
+    await renderRun(run2);
+    video.currentTime = 0.5;
+    await advance(180);
+    expect(headers()["X-Clearway-Run-ID"]).toBe(run2);
+    expect(headers()["X-Clearway-Stream-ID"]).not.toBe(firstStream);
+    expect(hlsMock.instances).toHaveLength(1);
+  });
   it("draws snapshot boxes only after its actual bytes verify against the source hash", async () => {
     vi.mocked(request).mockResolvedValue({
       ...snapshot(),

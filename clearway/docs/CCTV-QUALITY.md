@@ -6,7 +6,7 @@ Live CCTV uses **YOLO11s VisDrone, 640×640, confidence 0.40**, following the us
 
 The earlier Tiny/416 profile frequently missed small, elevated-view vehicles. More frequent overlays alone did not improve detection. The selected traffic-trained model gives better visible coverage on the inspected 6th Street view. A wider player and optional labels make the boxes easier to inspect; **Open 6th Street live** selects that view without hiding other cameras.
 
-Frame hashes, playback timestamps, bounded motion estimation, late-result rejection, and pause/seek/source cleanup remain enforced. Downloads occur only during explicit setup. Viewing a camera uses local CPU inference, with no cloud-model calls or recorded camera archive.
+Frame hashes, playback timestamps, bounded motion estimation, late-result rejection, and pause/seek/source cleanup remain enforced. Downloads occur only during explicit setup. Viewing a camera uses local CPU inference, with no cloud-model calls or continuous camera archive. The live-alert workflow retains one exact trigger image per candidate for human review; see [LIVE-ALERTS.md](LIVE-ALERTS.md).
 
 Only camera 689 filters detection centers inside its observed burned-in graphics: title `[0,0,0.46,0.08]` and timestamp `[0,0.93,0.52,1]`, normalized to the image. The UI shows dashed outlines and “Camera text regions excluded.” Camera identity and the exact policy enter the cache key and provenance. These are manually inspected graphics regions, not a calibrated road mask; they can need revision if the provider changes its graphics. Other cameras receive no such filter.
 

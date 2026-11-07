@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 
 from .configuration import load_local_environment
@@ -79,6 +79,7 @@ def _unavailable() -> dict:
 def create_app(
     *, data_dir: Path | str | None = None, analysis_service=None,
     detection_service=None, live_camera_service=None, live_detection_service=None,
+    live_monitor_service=None,
     read_only: bool = False, web_dist: Path | str | None = None,
 ) -> FastAPI:
     data = Path(data_dir or os.environ.get("CLEARWAY_DATA_DIR", ROOT / "data")).resolve()
@@ -96,6 +97,9 @@ def create_app(
             from .live_detection import LiveDetectionService
             live_detection_service = LiveDetectionService(data)
         live_camera_service = LiveCameraService(detector=live_detection_service)
+    if live_monitor_service is None and not read_only:
+        from .live_monitor import LiveAlertMonitor
+        live_monitor_service = LiveAlertMonitor(store)
     frame_request_lock = threading.Lock()
     last_frame_attempt = float("-inf")
     application = FastAPI(
@@ -105,6 +109,7 @@ def create_app(
     application.state.store = store
     application.state.analysis_service = analysis_service
     application.state.data_dir = data
+    application.state.live_monitor_service = live_monitor_service
 
     @application.middleware("http")
     async def boundaries(request: Request, call_next):
@@ -166,12 +171,21 @@ def create_app(
         run, incident_key = str(run_id), str(incident_id)
         incident = store.responder(run, incident_key)
         prefix = f"/api/respond/{run}/{incident_key}/media"
-        source = source_record(data, incident["source_id"], prefix)
+        if incident.get("source_mode") == "live":
+            source = {**incident["live_source"], "poster_url": f"{prefix}/evidence"}
+            incident["live_source"] = source
+            incident["live_evidence"] = {**incident["live_evidence"], "image_url": f"{prefix}/evidence"}
+        else:
+            source = source_record(data, incident["source_id"], prefix)
         return {"incident": incident, "source": source, "run_id": run, "status": "active"}
 
     @application.get("/api/respond/{run_id}/{incident_id}/media/{kind}")
     def responder_media(run_id: UUID, incident_id: UUID, kind: str):
         incident = store.responder(str(run_id), str(incident_id))
+        if incident.get("source_mode") == "live":
+            if kind != "evidence":
+                raise HTTPException(404, "Live candidates retain only their scoped evidence image.")
+            return Response(store.evidence(str(run_id), str(incident_id), public=True), media_type="image/jpeg")
         return file_response(incident["source_id"], kind)
 
     @application.get("/respond/{run_id}/{incident_id}")
@@ -243,7 +257,8 @@ def create_app(
         @application.post("/api/live-cameras/{camera_id}/detect-frame")
         async def live_camera_frame(camera_id: str, request: Request):
             nonlocal last_frame_attempt
-            if not any(camera["id"] == camera_id for camera in live_camera_service.catalog().get("cameras", [])):
+            camera = next((camera for camera in live_camera_service.catalog().get("cameras", []) if camera["id"] == camera_id), None)
+            if camera is None:
                 raise HTTPException(404, "Public camera not found.")
             if request.headers.get("content-type", "").split(";")[0].lower() != "image/jpeg":
                 raise HTTPException(415, "A single JPEG frame is required.")
@@ -262,7 +277,24 @@ def create_app(
                 raw.extend(chunk)
             if live_detection_service is None:
                 raise HTTPException(503, "Local camera detection is unavailable.")
-            return await run_in_threadpool(live_detection_service.analyze_jpeg, bytes(raw), camera_id=camera_id)
+            result = await run_in_threadpool(live_detection_service.analyze_jpeg, bytes(raw), camera_id=camera_id)
+            from .live_monitor import monitor_status, parse_monitor_headers
+            try:
+                context = parse_monitor_headers(request.headers)
+            except ValueError as error:
+                return {**result, "alert_monitor": monitor_status("unavailable", str(error))}
+            if context is not None:
+                run, stream, media_time = context
+                try:
+                    status = await run_in_threadpool(live_monitor_service.observe, run, camera, stream, media_time, bytes(raw), result)
+                except Exception:
+                    status = monitor_status("unavailable", "Live review monitoring is unavailable; detection boxes remain separate.")
+                return {**result, "alert_monitor": status}
+            return result
+
+        @application.get("/api/runs/{run_id}/incidents/{incident_id}/evidence")
+        def live_evidence(run_id: UUID, incident_id: UUID):
+            return Response(store.evidence(str(run_id), str(incident_id)), media_type="image/jpeg")
 
         @application.get("/api/state")
         def state():
@@ -271,6 +303,7 @@ def create_app(
         @application.post("/api/reset")
         def reset():
             store.reset()
+            live_monitor_service.reset()
             return snapshot()
 
         @application.post("/api/runs/{run_id}/replay")
