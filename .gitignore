@@ -23,6 +23,7 @@ credentials.json
 
 # Dependency, build, and test outputs.
 node_modules/
+.npm-cache/
 .venv/
 venv/
 __pycache__/

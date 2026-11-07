@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "mode": "inventory_snapshot",
+  "fetched_at": "2026-11-07T16:21:42.253542+00:00",
+  "source_updated_at": "2026-08-24T16:34:26+00:00",
+  "source_url": "https://www.arcgis.com/home/item.html?id=384ee5b6105e48cba8009ad842b508c4",
+  "layer_url": "https://services.arcgis.com/NuWFvHYDMVmmxMeM/arcgis/rest/services/NCDOT_CCTV_Buffer_1Mile/FeatureServer/0",
+  "attribution": "NCDOT / NCDIT-Transportation GIS Unit",
+  "note": "Camera inventory only; stream status unverified. Unrelated to replay footage; not incident corroboration.",
+  "terms": "Public NCDOT item; publisher disclaims accuracy. Consult the linked source for verification and current terms.",
+  "selection": "Nearest 20 explicitly CCTV-named Encoder records to central Durham, using original Lat/Long attributes; no buffer geometry or imagery.",
+  "points": [
+    {
+      "id": "ncdot-cctv-146",
+      "name": "05-1312 CCTV",
+      "description": "NC 147 @ Magnum St",
+      "latitude": 35.99009092,
+      "longitude": -78.90303612,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-147",
+      "name": "05-1313 CCTV",
+      "description": "NC 147 @ Chepel Hill St",
+      "latitude": 35.99689645,
+      "longitude": -78.91215563,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-145",
+      "name": "05-1311 CCTV",
+      "description": "NC 147 @ Alston Ave",
+      "latitude": 35.98229509,
+      "longitude": -78.89048338,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-92",
+      "name": "05-1112 CCTV",
+      "description": "I-85 @ Avondale Dr",
+      "latitude": 36.01395328,
+      "longitude": -78.88686508,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-148",
+      "name": "05-1314 CCTV",
+      "description": "NC 147 @ Erwin Rd",
+      "latitude": 36.00595584,
+      "longitude": -78.92445892,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-144",
+      "name": "05-1310 CCTV",
+      "description": "NC 147 @ Briggs Ave",
+      "latitude": 35.97654755,
+      "longitude": -78.87591362,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-91",
+      "name": "05-1111 CCTV",
+      "description": "I-85 @ Duke St",
+      "latitude": 36.02014607,
+      "longitude": -78.90551046,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-93",
+      "name": "05-1113 CCTV",
+      "description": "I-85 @ US 70",
+      "latitude": 36.01327203,
+      "longitude": -78.87047946,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-94",
+      "name": "05-1114 CCTV",
+      "description": "US-70 @ Cheek Rd",
+      "latitude": 36.00559566,
+      "longitude": -78.86402205,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-90",
+      "name": "05-1110 CCTV",
+      "description": "I-85 @ Broad St",
+      "latitude": 36.02490884,
+      "longitude": -78.91677976,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-149",
+      "name": "05-1315 CCTV",
+      "description": "NC 147 @ Hillandale Rd",
+      "latitude": 36.01356059,
+      "longitude": -78.93646717,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-143",
+      "name": "05-1309 CCTV",
+      "description": "NC 147 @ Glover Rd",
+      "latitude": 35.95685343,
+      "longitude": -78.86389732,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-150",
+      "name": "05-1316 CCTV",
+      "description": "NC 147 @ US 15-501",
+      "latitude": 36.01658058,
+      "longitude": -78.95183086,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-96",
+      "name": "05-1115 CCTV",
+      "description": "I-85 @ Club Blvd",
+      "latitude": 36.02568435,
+      "longitude": -78.85146528,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-89",
+      "name": "05-1109 CCTV",
+      "description": "I-85 @ US 15-501",
+      "latitude": 36.02424179,
+      "longitude": -78.948057,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-97",
+      "name": "05-1116 CCTV",
+      "description": "I-85 @ Glenn School Rd",
+      "latitude": 36.03224713,
+      "longitude": -78.84143516,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-142",
+      "name": "05-1308 CCTV",
+      "description": "NC 147 @ Ellis Rd",
+      "latitude": 35.9395519,
+      "longitude": -78.85939121,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-88",
+      "name": "05-1108 CCTV",
+      "description": "I-85 @ NC 147",
+      "latitude": 36.03276445,
+      "longitude": -78.96356419,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-98",
+      "name": "05-1117 CCTV",
+      "description": "I-85 @ Red Mill Rd",
+      "latitude": 36.04551201,
+      "longitude": -78.81560549,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    },
+    {
+      "id": "ncdot-cctv-23",
+      "name": "05-1014 CCTV",
+      "description": "I-40 @ Barbee Rd",
+      "latitude": 35.9091391,
+      "longitude": -78.91639352,
+      "quality": "official_inventory",
+      "status": "metadata_only"
+    }
+  ]
+}

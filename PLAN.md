@@ -43,6 +43,48 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Live CCTV review candidates — November 7, 2026
+
+The user now authorizes connecting live detections to incident alerts, map markers, and the evidence/confirmation workflow. This supersedes the prior viewing-only restriction on creating public-camera candidates. Monitor only the selected, visible, playing video; snapshots remain detection-only. Use bounded local temporal rules for a possible stationary vehicle (at least 12 seconds) or sustained person presence (at least 3 seconds). Do not infer a collision, injury, exact lane, or danger from these rules. High vehicle count alone is not an alert.
+
+Bind observations to the current run, camera, fresh stream session, media time, server time, and exact image hash. Reset temporal state on discontinuities, gaps, seeks, pauses, camera/run switches, or invalid input. One candidate per camera per run, including after review, prevents repeated alarms; limit the run to 20 live candidates. Save one exact trigger frame per candidate for review and delete retained live evidence on reset; this is bounded incident evidence, not a continuous camera archive. Candidate creation must recheck the run atomically so a late inference cannot restore an expired incident.
+
+Live candidates use the camera's published coordinates labeled as camera location, genuine local YOLO plus explicit temporal-rule provenance, measured observations, and unknown capture time/provider delay. Reuse the review queue, map selection, confirm/dismiss, and scoped responder evidence. Never substitute replay footage for live evidence or label these rules as Gemini inference. Keep paid inference at zero, preserve existing deferred token/phone tasks, test positive and normal controlled sequences and lifecycle races, and report natural-incident validation separately from tests.
+
+## Public CCTV detection quality — November 7, 2026
+
+The user reported that the live YOLO results were poor. Compare genuine detections on the same public-camera frames, including false boxes on burned-in camera text, instead of treating update frequency as detection quality. Upgrade live CCTV independently of the saved replay detector. The user explicitly approved the AGPL-3.0 traffic-trained YOLO11 model. Select checksum-pinned YOLO11s VisDrone at 640 pixels and confidence 0.40 for live CCTV; preserve the replay Tiny model and caches. Keep YOLOX-M as an explicitly selectable Apache-weight alternative. Include the AGPL license and corresponding source link. Camera 689 alone excludes its observed title/timestamp regions, with the policy in provenance and visible in the UI.
+
+Make the live player larger, offer labels separately from boxes, show actual model/count/inference time, and provide a shortcut to the clearer I-80 at 6th Street view. Keep every other camera selectable and preserve source failure/snapshot behavior. Frame quality still limits distant or blurred vehicles; never turn detection counts into accuracy claims. Record development-frame comparisons separately from human-labeled evaluation, which remains pending.
+
+## Live video and camera detections — November 7, 2026
+
+The user requested actual live video where the official source supports it, accepted snapshots as fallback, reported hard-to-use map pins, and authorized YOLO boxes on public feeds. This supersedes the earlier exclusion of local inference on selected cameras. Probe official HLS access without bypassing controls, play only the selected visible camera, and fall back honestly when video cannot load. Make map pins easier to hit and move focus to their camera preview.
+
+Run the existing local YOLOX model on the exact selected snapshot, with boxes bound to the JPEG hash. The user's subsequent request replaces the separate analyzed-frame inset with boxes directly over the playing live video. Sample the selected video at up to eight local requests per second, bind results to the captured frame and media timestamp, and redraw short motion estimates on presented video frames. Limit extrapolation to 200 ms, hide boxes older than 350 ms of playback or 500 ms of wall time, and discard late results. Clear on pause, buffering, seek, visibility loss, and camera changes. Bound upload size and inference concurrency, and keep images in memory. These are approximate short motion estimates between real detections, not validated object tracking. No paid inference, identification, automatic incident confirmation, archive, or public tunnel is added.
+
+## Public CCTV expansion — November 7, 2026
+
+The user requested more live traffic-camera data points. Add a separate, selectable public CCTV network with actual source imagery, rather than promoting dated inventory pins to live feeds. DriveNC's documented camera API requires a developer key; none is configured. Use the keyless official Caltrans District 4 feed for 100 Bay Area cameras with authentic coordinates and clearly named regions. Preserve the 20 North Carolina inventory points as metadata only.
+
+Show only the selected camera image, source attribution, retrieval time, unknown capture time, and the provider's refresh cadence. These are periodically refreshed snapshots, generally five minutes apart, not continuous live video. Follow the published refresh cadence, bound requests and in-memory caching, and stop polling when the page is hidden or the preview closes. A failed fetch must show unavailable/stale state, never a replay image substituted as live. Do not archive the feed, run paid inference on it, generate automatic incident claims, or reopen the deferred public tunnel. Verify real selected-camera responses, map selection, provider failure behavior, and replay isolation; record the tested sample size separately from catalog size.
+
+## Expo upgrade authorized November 7, 2026
+
+This follow-up supersedes the overnight feature exclusions below. The user explicitly requested visible YOLO detections on playing video, model-call savings, stable expo serving, Google photorealistic 3D, a public responder tunnel and cellular check, a corrected map label, more map data points, voice, and a licensed person-in-roadway scenario. The user requested a goal and authorized work to start; the existing PR and subagent authorization continue.
+
+1. Run actual local YOLO inference on the licensed clips. Synchronize stored, timestamped boxes to playback and label them as saved local detections. Show the model, confidence, vehicle/person counts, and sampling cadence. A missing detection cache is unavailable, never fabricated boxes.
+2. Measure gate decisions against an explicit same-window request baseline. Label shadow-mode skipped requests as an estimate; keep actual Gemini calls, cache hits, and spend separate. Vehicle/person detections alone do not prove an incident.
+3. Retain a production launcher without `--reload`, add durable service logs and readiness checks, and perform one announced integration restart. File edits must not interrupt the expo process.
+4. Fix the map label and retain the viewer across replay/reset. Enable Google photorealistic tiles only with a supplied browser-scoped Cesium token and eligible account. Show service failures honestly. Add official camera metadata where accessible, with timestamp/source and no claim that these cameras corroborate historical replay.
+5. Clone God's Eye View into ignored `.local/references/gods-eye-view` for reference without replacing Clearway. Record its pinned commit and license; do not import bundled data with incompatible terms or present reference code as original work.
+6. Add on-demand voice reading of the selected evidence brief, status, source mode, and unknowns. Stop speech on reset/selection changes. Use browser speech without another paid provider.
+7. Add a separately licensed, visually checked person-in-roadway replay when obtainable. Describe the visible person/vehicle relationship; do not call normal crossing a confirmed emergency or infer injury, collapse, or illegal behavior. Keep fixture narratives separate from genuine detections and model outputs.
+8. A temporary public tunnel is now explicitly authorized for the read-only responder on port 8001. The operator stays loopback-only. Configure the current HTTPS origin, verify public read-only routes and expiry, show QR, and ask the user to perform the physical cellular test. Browser/HTTP verification is not a cellular phone test. Keep a clear stop command and remove stale public origins when the tunnel ends.
+9. Preserve the $5/five-attempt Gemini ceiling and persistent ledger. No new paid voice, deployment, stock-media purchase, or map billing is authorized. Credentials remain private. Run appropriate regressions, five lifecycle cycles, and visible built-in-browser checks; update the morning report and existing draft PR with actual results and outstanding credential/phone dependencies.
+
+**Follow-up deferral:** the user chose to defer the physical phone/cellular test. Retain the verified public browser/HTTP results without calling them a cellular pass. The temporary tunnel has been stopped; reopen it intentionally with `make tunnel` and use the new QR when testing resumes. The user also deferred the Cesium token; Google 3D remains prepared but unverified.
+
 Updated November 7, 2026. This revision adopts the useful parts of Claude's overnight enhancements and corrects them for the licensed obstruction footage now available. The user authorized unattended implementation, a PR, and subagents on November 7, 2026. Build status and verification will be recorded in MORNING_REPORT.md; genuine model inference remains subject to the stated caps.
 
 ## Confirmed constraints
@@ -52,7 +94,7 @@ Updated November 7, 2026. This revision adopts the useful parts of Claude's over
 - Use existing licensed footage. The team will not film a staged vehicle scene.
 - For this project, work directly in the repository root. The user explicitly removed the `workspace/` requirement. Application files remain organized under `clearway/`.
 - Protect any designated `holdout/` data under the existing custodian rule. This review does not access holdout or create a protected evaluation set.
-- Current authorization: build unattended following this plan, use the two repositories as references, use subagents where useful, and create a PR. Deployments, public tunnels, organizer contact, and paid calls beyond the specified caps remain excluded.
+- Current authorization: implement the expo upgrade above, use both repositories as references, use subagents where useful, and update the PR. The temporary responder-only tunnel is now authorized. Deployments, organizer contact, and paid calls beyond the specified caps remain excluded.
 
 **Product:** Clearway connects a possible road obstruction to visual evidence, a map view, human confirmation, and a phone responder brief.
 
@@ -62,7 +104,7 @@ Updated November 7, 2026. This revision adopts the useful parts of Claude's over
 
 | Items | Decision |
 | --- | --- |
-| 1–4: narrow scope, unattended judgments, fallbacks, no external publishing | Adopt for a future authorized overnight build. Continue reversible work using documented fallbacks, within permissions and budgets. Timebox a blocked step to 45 minutes at most. No deployments, organizer messages, or public tunnels during that run. |
+| 1–4: narrow scope, unattended judgments, fallbacks, no external publishing | Adopt for the authorized overnight build. Continue reversible work using documented fallbacks, within permissions and budgets. Timebox a blocked step to 45 minutes at most. No deployments, organizer messages, or public tunnels during that run. The separately authorized GitHub PR is allowed. |
 | 5–6: congestion instead of obstruction | Do not adopt. The missing-footage premise is resolved: a licensed obstruction clip is downloaded and visually checked. Retain road obstruction / utility work zone as the primary demo class. |
 | 7: YOLO gate plus Gemini | Optional after the core flow. Vehicle counts are not evidence of abnormal congestion without a comparable baseline and motion evidence. A vehicle gate may miss debris/tape; it must not be the only way the obstruction reaches analysis. |
 | 8: real vs. simulated map placement | Adopt. Use real coordinates only with source evidence. Selected obstruction footage has unknown coordinates; label its demo marker simulated. A known camera location is still not a measured object location. |
@@ -159,7 +201,7 @@ Prepare instructions only during the overnight run. [Cloudflare Quick Tunnels](h
 
 ## Spend controls
 
-These are ceilings for a future authorized build, not spending performed by this planning task.
+The table records the overnight ceilings. **Follow-up exception, November 7, 2026:** the user explicitly approved up to **$5 total Gemini billed usage** to validate the obstruction clip. Retain a five-inference-attempt limit, fixed `gemini-3.5-flash-lite` pricing/profile, persistent reservations, and no automatic retries/provider changes. The key is supplied privately through `clearway/.env`; see [MODEL-SETUP.md](clearway/docs/MODEL-SETUP.md). This does not authorize hosting, tunnels, or other providers.
 
 | Service | Overnight cap | Enabled use |
 | --- | --- | --- |
@@ -172,7 +214,7 @@ At least 90% of automated checks use fixtures; core correctness/reset tests use 
 
 `clearway/data/spend-ledger.jsonl` records provider/model, request ID/hash, request time, status, usage, estimated charge, retries, cache behavior, and known price basis. Reserve worst-case estimated cost before concurrent requests; fail closed if pricing is missing or the cap would be exceeded. Distinguish billable charge from out-of-pocket charge after credits. Unknown costs are unknown, not zero. Local Codex session usage is not automatically spending from the user's API balances.
 
-If Gemini access or zero-charge eligibility fails, keep the adapter and fixtures, log the limitation, and continue the workflow. Paid Gemini validation requires a later explicit nonzero cap. Never print, log, or commit secrets; sanitize provider errors and secret-bearing URLs. No outbound messages, organizer contact, deployments, or public tunnels during the overnight run.
+If Gemini access fails, keep fixtures visibly separate and log the limitation. Paid Gemini validation is now authorized only within the $5/five-attempt follow-up exception above. Never print, log, or commit secrets; sanitize provider errors and secret-bearing URLs. No outbound messages, organizer contact, deployments, or public tunnels are authorized by this inference follow-up.
 
 ## Build sequence and fallbacks
 
@@ -294,13 +336,14 @@ no_escape/
   clearway/
     docs/                 # plan decisions, footage sources, scenario, attribution
     data/                 # local media/cache/ledger, ignored in Git
-    web/                  # planned frontend
-    api/                  # planned backend
-    tests/                # planned workflow and integration checks
+    web/                  # React/Cesium interface and frontend checks
+    api/                  # FastAPI operator, responder, analysis, and storage
+    tests/                # API, budget/cache, evaluation, and media checks
+    scripts/              # local launcher, media restore, cycle verification, evaluation
   ECC/                    # existing local tool checkout, ignored in project Git
   ECC-codex-reviewed/     # existing local plugin package, ignored in project Git
 ```
 
-Repository remote: [ZelinZhu-Richard/no-escape](https://github.com/ZelinZhu-Richard/no-escape). Connecting the local remote does not publish files. Keep downloaded footage, caches, credentials, and unrelated tool-installation artifacts out of commits.
+Repository remote: [ZelinZhu-Richard/no-escape](https://github.com/ZelinZhu-Richard/no-escape). The documentation baseline is on `main`; the authorized overnight implementation is on `feat/clearway-overnight-demo` in [draft PR #1](https://github.com/ZelinZhu-Richard/no-escape/pull/1). Keep downloaded footage, caches, credentials, and unrelated tool-installation artifacts out of commits.
 
-Current completed work: judging criteria/tracks transcribed, planning and source review, licensed footage downloaded/inspected/decoded, reference scenario, folder relocation, and local Git connection. Application code, inference, labeling UI, reset tests, tunnel/cellular validation, evaluation metrics, and projection are still future work.
+Current implementation adds genuine local YOLO video overlays, shadow gate decisions, person-in-roadway replay, voice brief controls, dated official camera inventory, stable map labels, and a temporary read-only HTTPS responder. Actual Gemini semantic analysis, human evaluation labels, physical cellular validation, photorealistic-service validation, and projection remain unfinished. The user deferred the Cesium token. See [MORNING_REPORT.md](MORNING_REPORT.md) for tested behavior, commands, limitations, and PR status. Fixtures and unlabeled detections do not establish incident-classifier accuracy.
