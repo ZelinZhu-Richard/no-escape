@@ -230,15 +230,6 @@ function Operator() {
   const [pending, setPending] = useState("");
   const [tab, setTab] = useState<"desk" | "labels">("desk");
   const [playbackKey, setPlaybackKey] = useState(0);
-  const [sourceAnalyses, setSourceAnalyses] = useState<
-    Record<
-      string,
-      {
-        runId: string;
-        result: State["analysis"];
-      }
-    >
-  >({});
   const [replayPlayback, setReplayPlayback] = useState<{
     id: number;
     sourceId: string;
@@ -450,7 +441,6 @@ function Operator() {
         if (mounted.current && generation === epoch.current) {
           setState(result);
           autoSelectCandidate.current = true;
-          setSourceAnalyses({});
           setSelectedId(null);
           setPlaybackKey((k) => k + 1);
           if (nextSource) setSourceId(nextSource);
@@ -493,10 +483,6 @@ function Operator() {
       });
       if (mounted.current && generation === epoch.current) {
         setState(result);
-        setSourceAnalyses((current) => ({
-          ...current,
-          [sourceId]: { runId: result.run.id, result: result.analysis },
-        }));
         if (replayPlaybackId.current === playbackId)
           setSelectedId(
             result.incidents.find((i) => i.source_id === sourceId)?.id ?? null,
@@ -566,10 +552,7 @@ function Operator() {
   };
   const confirmedCount =
     state?.incidents.filter((i) => i.review_status === "confirmed").length ?? 0;
-  const selectedAnalysis =
-    sourceAnalyses[sourceId]?.runId === state?.run.id
-      ? sourceAnalyses[sourceId]?.result
-      : undefined;
+  const selectedAnalysis = state?.source_analyses?.[sourceId];
   const displayedMode: AnalysisMode =
     selectedAnalysis?.status === "unavailable"
       ? "unavailable"
@@ -844,15 +827,17 @@ function Operator() {
                       <Icon name="layers" size={21} />
                     </span>
                     <p>
-                      {selectedAnalysis?.status === "unavailable"
-                        ? "Analysis is unavailable for this scene."
-                        : selectedAnalysis?.status === "complete"
-                          ? selectedAnalysis.mode === "fixture"
-                            ? "This fixture produced no incident candidate."
-                            : selectedAnalysis.mode === "cached"
-                              ? "The saved model result contains no incident candidate."
-                              : "Fresh analysis produced no incident candidate."
-                          : "Start a replay to bring its evidence into the review queue."}
+                      {selectedAnalysis?.status === "running"
+                        ? "Analysis is running for this source."
+                        : selectedAnalysis?.status === "unavailable"
+                          ? "Analysis is unavailable for this scene."
+                          : selectedAnalysis?.status === "complete"
+                            ? selectedAnalysis.mode === "fixture"
+                              ? "This fixture produced no incident candidate."
+                              : selectedAnalysis.mode === "cached"
+                                ? "The saved model result contains no incident candidate."
+                                : "Fresh analysis produced no incident candidate."
+                            : "Start a replay to bring its evidence into the review queue."}
                       <small>
                         {selectedAnalysis?.status === "complete"
                           ? selectedAnalysis.mode === "fixture"
@@ -1056,19 +1041,23 @@ function Operator() {
                         </span>
                       </div>
                       <div className="fixture-note">
-                        {selectedAnalysis ? (
+                        {selectedAnalysis?.status === "running" ? (
+                          <Badge kind="muted">Analysis in progress</Badge>
+                        ) : selectedAnalysis ? (
                           <ModeBadge mode={displayedMode} />
                         ) : (
                           <Badge kind="muted">Not analyzed in this view</Badge>
                         )}
                         <p>
-                          {displayedMode === "unavailable"
-                            ? "Analysis is unavailable. No model result was generated or retrieved for this scene."
-                            : mode === "fixture"
-                              ? "The next replay uses a labeled fixture to exercise the workflow without paid model calls."
-                              : mode === "cached"
-                                ? "Frozen cache only. A missing genuine model result will be shown as unavailable."
-                                : "Fresh analysis can call the configured model within the server budget. Review its observations before confirming."}
+                          {selectedAnalysis?.status === "running"
+                            ? "Analysis is running for this source. Results will appear here when ready."
+                            : displayedMode === "unavailable"
+                              ? "No source-specific analysis result is available for this preview."
+                              : mode === "fixture"
+                                ? "The next replay uses a labeled fixture to exercise the workflow without paid model calls."
+                                : mode === "cached"
+                                  ? "Frozen cache only. A missing genuine model result will be shown as unavailable."
+                                  : "Fresh analysis can call the configured model within the server budget. Review its observations before confirming."}
                         </p>
                       </div>
                     </div>

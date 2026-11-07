@@ -41,7 +41,7 @@ class Store:
                 );
                 CREATE TABLE IF NOT EXISTS jobs (
                     run_id TEXT NOT NULL, source_id TEXT NOT NULL, mode TEXT NOT NULL,
-                    token TEXT NOT NULL, status TEXT NOT NULL,
+                    token TEXT NOT NULL, status TEXT NOT NULL, analysis TEXT,
                     PRIMARY KEY(run_id, source_id)
                 );
                 CREATE TABLE IF NOT EXISTS labels (
@@ -54,6 +54,9 @@ class Store:
                 );
             """)
         with self.transaction() as db:
+            # Serialize migration across the operator/responder startup processes.
+            if "analysis" not in {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}:
+                db.execute("ALTER TABLE jobs ADD COLUMN analysis TEXT")
             if db.execute("SELECT 1 FROM settings WHERE key='current_run'").fetchone() is None:
                 self._new_run(db)
 
@@ -152,17 +155,29 @@ class Store:
                 raise StateError(404, "Evidence image not found in this run.")
             return bytes(row[0])
 
-    def snapshot(self) -> dict:
+    def snapshot(self, *, expected_run_id: str | None = None, analysis_source_id: str | None = None) -> dict:
         with self.connect() as db:
             # A read transaction guarantees the run and incident list share a snapshot.
             db.execute("BEGIN")
+            if expected_run_id is not None:
+                self._require_current(db, expected_run_id)
             run_id = self._current_id(db)
             run = db.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
             incidents = [json.loads(r[0]) for r in db.execute("SELECT payload FROM incidents WHERE run_id=? ORDER BY rowid", (run_id,))]
+            source_analyses = {
+                row["source_id"]: json.loads(row["analysis"]) if row["analysis"] else {
+                    "mode": "unavailable", "status": "unavailable",
+                    "message": "This older replay has no stored source-specific analysis status. Reset to analyze it again; existing incident evidence retains its own provenance.",
+                }
+                for row in db.execute("SELECT source_id, analysis FROM jobs WHERE run_id=?", (run_id,))
+            }
+            if analysis_source_id is not None and analysis_source_id not in source_analyses:
+                raise StateError(404, "Replay analysis not found in this run.")
             return {
                 "run": {"id": run["id"], "created_at": run["created_at"], "status": run["status"]},
                 "incidents": incidents,
-                "analysis": json.loads(run["analysis"]),
+                "analysis": source_analyses[analysis_source_id] if analysis_source_id is not None else json.loads(run["analysis"]),
+                "source_analyses": source_analyses,
             }
 
     def reserve_replay(self, run_id: str, source_id: str, mode: str) -> str | None:
@@ -174,8 +189,9 @@ class Store:
                     raise StateError(409, "Reset the run before changing its analysis mode.")
                 return None
             token = str(uuid4())
-            db.execute("INSERT INTO jobs VALUES(?,?,?,?,?)", (run_id, source_id, mode, token, "running"))
             analysis = {"mode": mode, "status": "running", "message": "Preparing the selected replay analysis."}
+            db.execute("INSERT INTO jobs(run_id,source_id,mode,token,status,analysis) VALUES(?,?,?,?,?,?)",
+                       (run_id, source_id, mode, token, "running", json.dumps(analysis)))
             db.execute("UPDATE runs SET status='replaying', analysis=? WHERE id=?", (json.dumps(analysis), run_id))
             return token
 
@@ -199,7 +215,7 @@ class Store:
                 }
                 db.execute("INSERT INTO incidents VALUES(?,?,?,?)", (incident_id, run_id, source_id, json.dumps(payload)))
             analysis = {k: result[k] for k in ("mode", "status", "message")}
-            db.execute("UPDATE jobs SET status='done' WHERE run_id=? AND source_id=?", (run_id, source_id))
+            db.execute("UPDATE jobs SET status='done', analysis=? WHERE run_id=? AND source_id=?", (json.dumps(analysis), run_id, source_id))
             db.execute("UPDATE runs SET status=?, analysis=? WHERE id=?", ("ready" if result["status"] == "complete" else "unavailable", json.dumps(analysis), run_id))
 
     def review(self, run_id: str, incident_id: str, action: str) -> dict:

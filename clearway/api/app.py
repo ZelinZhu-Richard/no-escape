@@ -145,8 +145,8 @@ def create_app(
     async def state_error(_request, error: StateError):
         return JSONResponse({"detail": error.detail}, status_code=error.status)
 
-    def snapshot():
-        state = store.snapshot()
+    def snapshot(*, expected_run_id=None, analysis_source_id=None):
+        state = store.snapshot(expected_run_id=expected_run_id, analysis_source_id=analysis_source_id)
         state["telemetry"] = analysis_service.telemetry() if analysis_service else {
             "network_inference_calls": 0, "cache_hits": 0, "fixture_runs": 0,
             "estimated_spend_usd": 0,
@@ -311,7 +311,7 @@ def create_app(
             run = str(run_id)
             token = store.reserve_replay(run, body.source_id, body.analysis_mode)
             if token is None:
-                return snapshot()
+                return snapshot(expected_run_id=run, analysis_source_id=body.source_id)
             try:
                 result = AnalysisResult.model_validate(analysis_service.analyze(body.source_id, body.analysis_mode)).model_dump()
                 if any(o["timestamp_seconds"] > SOURCES[body.source_id]["duration_seconds"] for o in result["observations"]):
@@ -324,7 +324,7 @@ def create_app(
                 # Provider errors may contain auth material; never reflect or log them.
                 result = _unavailable()
             store.finish_replay(run, body.source_id, token, result, source_record(data, body.source_id))
-            return snapshot()
+            return snapshot(expected_run_id=run, analysis_source_id=body.source_id)
 
         @application.post("/api/runs/{run_id}/incidents/{incident_id}/confirm")
         def confirm(run_id: UUID, incident_id: UUID):

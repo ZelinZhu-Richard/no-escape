@@ -162,6 +162,59 @@ def test_mode_change_requires_reset_and_cache_miss_stays_unavailable(services):
     assert result["incidents"] == []
 
 
+def test_repeated_replay_returns_its_own_result_after_other_source_and_restart(services):
+    client, _, analyzer, data, dist = services
+    run_id = client.get("/api/state").json()["run"]["id"]
+    missing = replay(client, run_id, mode="cached").json()["analysis"]
+    assert missing["status"] == "unavailable"
+    analyzer.result_override = {
+        **deepcopy(POSITIVE), "mode": "cached", "candidate": False,
+        "observations": [], "message": "Synthetic cached no-candidate result for source B.",
+        "provenance": {"fixture": False, "provider": "test", "model": "test"},
+    }
+    other = replay(client, run_id, source_id="street-traffic", mode="cached").json()["analysis"]
+    assert other["mode"] == "cached" and other["status"] == "complete"
+    for _ in range(2):
+        repeated = replay(client, run_id, mode="cached").json()
+        assert repeated["analysis"] == missing
+        assert repeated["source_analyses"] == {"road-obstruction": missing, "street-traffic": other}
+    assert analyzer.calls == 2
+    with TestClient(create_app(data_dir=data, analysis_service=analyzer, web_dist=dist)) as restarted:
+        assert replay(restarted, run_id, mode="cached").json()["analysis"] == missing
+        assert restarted.get("/api/state").json()["source_analyses"]["street-traffic"] == other
+    assert analyzer.calls == 2
+    assert client.post("/api/reset", json={}).json()["source_analyses"] == {}
+
+
+def test_duplicate_pending_replay_does_not_borrow_a_completed_sources_status(services, monkeypatch):
+    client, _, analyzer, _, _ = services
+    run_id = client.get("/api/state").json()["run"]["id"]
+    started, release = threading.Event(), threading.Event()
+    original_analyze = analyzer.analyze
+
+    def analyze(source_id, mode):
+        if source_id == "road-obstruction":
+            started.set()
+            assert release.wait(5)
+        return original_analyze(source_id, mode)
+
+    monkeypatch.setattr(analyzer, "analyze", analyze)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(replay, client, run_id)
+        try:
+            assert started.wait(2)
+            assert replay(client, run_id, source_id="street-traffic").json()["analysis"]["status"] == "complete"
+            repeated = replay(client, run_id).json()
+            assert repeated["analysis"]["status"] == "running"
+            assert repeated["source_analyses"]["road-obstruction"]["status"] == "running"
+            assert repeated["source_analyses"]["street-traffic"]["status"] == "complete"
+        finally:
+            release.set()
+        assert pending.result(timeout=2).json()["analysis"]["status"] == "complete"
+    assert analyzer.calls == 2
+    assert client.get("/api/state").json()["source_analyses"]["road-obstruction"]["status"] == "complete"
+
+
 def test_control_does_not_claim_human_ground_truth(services):
     client, _, _, _, _ = services
     run_id = client.get("/api/state").json()["run"]["id"]

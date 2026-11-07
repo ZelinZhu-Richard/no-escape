@@ -228,6 +228,7 @@ describe("operator mutation and polling consistency", () => {
       status: "unavailable",
       message: "No cache entry",
     };
+    currentState.source_analyses = { [source.id]: currentState.analysis };
     await mount();
     vi.mocked(post).mockResolvedValue(currentState);
     await click("start-replay");
@@ -460,6 +461,8 @@ describe("requested replay playback and source provenance", () => {
       status: "complete",
       message: "Fresh result for road obstruction",
     };
+    freshResult.source_analyses = { [source.id]: freshResult.analysis };
+    currentState = freshResult;
     vi.mocked(post).mockResolvedValue(freshResult);
     await click("start-replay");
     expect(evidence().textContent).toContain("Fresh inference");
@@ -485,5 +488,108 @@ describe("requested replay playback and source provenance", () => {
         .click(),
     );
     expect(evidence().textContent).toContain("Fresh inference");
+  });
+});
+
+describe("server-owned per-source analysis", () => {
+  const otherSource: Source = {
+    ...source,
+    id: "street-traffic",
+    video_url: "/other.webm",
+  };
+  const unavailable: State["analysis"] = {
+    mode: "unavailable",
+    status: "unavailable",
+    message: "Road obstruction has no genuine cache entry",
+  };
+  const cached: State["analysis"] = {
+    mode: "cached",
+    status: "complete",
+    message: "Street traffic cache completed with no candidate",
+  };
+  const evidence = () =>
+    container.querySelector('[data-testid="evidence-panel"]')!;
+  const select = async (label: string) => {
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(`[aria-label="Select ${label}"]`)!
+        .click(),
+    );
+  };
+
+  it("keeps an idempotent A cache miss distinct from B's completed cache result", async () => {
+    availableSources = [source, otherSource];
+    currentState = {
+      ...stateFor(),
+      analysis: cached,
+      source_analyses: {
+        [source.id]: unavailable,
+        [otherSource.id]: cached,
+      },
+    };
+    await mount();
+    expect(evidence().textContent).toContain("Analysis unavailable");
+    expect(evidence().textContent).not.toContain("Cached model result");
+    await select("Ordinary street traffic");
+    expect(evidence().textContent).toContain("Cached model result");
+    await select("Road obstruction");
+    vi.mocked(post).mockResolvedValue(currentState);
+    await click("start-replay");
+    expect(evidence().textContent).toContain("Analysis unavailable");
+    expect(evidence().textContent).not.toContain("Cached model result");
+    expect(container.textContent).toContain(unavailable.message);
+    expect(container.textContent).not.toContain(cached.message);
+    await tick();
+    expect(evidence().textContent).toContain("Analysis unavailable");
+  });
+
+  it("updates a running source from polling without presenting another source's result as completion", async () => {
+    currentState = {
+      ...stateFor(),
+      analysis: cached,
+      source_analyses: {
+        [source.id]: {
+          mode: "fresh",
+          status: "running",
+          message: "Road obstruction analysis is running",
+        },
+        [otherSource.id]: cached,
+      },
+    };
+    await mount();
+    expect(evidence().textContent).toContain("Analysis in progress");
+    expect(evidence().textContent).not.toContain("Fresh inference");
+    expect(evidence().textContent).not.toContain("Cached model result");
+    const fresh: State["analysis"] = {
+      mode: "fresh",
+      status: "complete",
+      message: "Road obstruction completed without a candidate",
+    };
+    currentState = {
+      ...currentState,
+      source_analyses: { ...currentState.source_analyses, [source.id]: fresh },
+    };
+    await tick();
+    expect(evidence().textContent).toContain("Fresh inference");
+    expect(evidence().textContent).not.toContain("Analysis in progress");
+    expect(container.textContent).toContain(fresh.message);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("restores the selected source's result after reload and drops it with a new run", async () => {
+    currentState = {
+      ...stateFor(),
+      analysis: unavailable,
+      source_analyses: { [source.id]: cached },
+    };
+    await mount();
+    expect(evidence().textContent).toContain("Cached model result");
+    expect(evidence().textContent).not.toContain("Not analyzed in this view");
+    expect(post).not.toHaveBeenCalled();
+    currentState = { ...stateFor("newrun02"), source_analyses: {} };
+    vi.mocked(post).mockResolvedValue(currentState);
+    await click("reset-demo");
+    expect(evidence().textContent).toContain("Not analyzed in this view");
+    expect(evidence().textContent).not.toContain("Cached model result");
   });
 });

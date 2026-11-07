@@ -67,6 +67,7 @@ export interface State {
   run: { id: string; created_at: string; status: string };
   incidents: Incident[];
   analysis: { mode: AnalysisMode; status: string; message: string };
+  source_analyses?: Record<string, State["analysis"]>;
   telemetry: {
     network_inference_calls: number | null;
     cache_hits: number | null;
