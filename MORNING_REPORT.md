@@ -2,7 +2,7 @@
 
 November 7, 2026. The local review-to-handoff workflow is implemented. **The working demonstration uses explicit fixture analysis on real licensed footage. Genuine model detection and cellular phone handoff are not yet validated.**
 
-Implementation branch: `feat/clearway-overnight-demo`. Draft PR status is recorded below. Nothing has been deployed, no public tunnel was started, and no organizer was contacted.
+Implementation branch: `feat/clearway-overnight-demo`. [Draft PR #1](https://github.com/ZelinZhu-Richard/no-escape/pull/1) is open for review and has not been merged. Nothing has been deployed, no public tunnel was started, and no organizer was contacted.
 
 ## Start the demo
 
@@ -93,4 +93,4 @@ The default production map is restored after offline testing. The local operator
 
 The GitHub connection rejected creating `.github/workflows/checks.yml` because its OAuth authorization lacks the `workflow` scope. No permissions were expanded. The optional configuration is retained as [ci-checks.example.yml](clearway/docs/ci-checks.example.yml), which does not run as a workflow. All reported checks above were run locally; there is no hosted CI result. A maintainer with the appropriate repository authorization can later install that template under `.github/workflows/`.
 
-Draft PR link is added once GitHub confirms creation.
+GitHub confirmed [draft PR #1 — Build Clearway's replay-to-responder demo](https://github.com/ZelinZhu-Richard/no-escape/pull/1). The implementation and this handoff are committed to its feature branch; `main` retains the documentation baseline. Keep the PR in draft while the morning model, labeling, and cellular checks remain open.

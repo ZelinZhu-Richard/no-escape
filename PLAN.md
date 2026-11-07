@@ -302,6 +302,6 @@ no_escape/
   ECC-codex-reviewed/     # existing local plugin package, ignored in project Git
 ```
 
-Repository remote: [ZelinZhu-Richard/no-escape](https://github.com/ZelinZhu-Richard/no-escape). The documentation baseline is on `main`; the authorized overnight implementation is on `feat/clearway-overnight-demo` for a draft PR. Keep downloaded footage, caches, credentials, and unrelated tool-installation artifacts out of commits.
+Repository remote: [ZelinZhu-Richard/no-escape](https://github.com/ZelinZhu-Richard/no-escape). The documentation baseline is on `main`; the authorized overnight implementation is on `feat/clearway-overnight-demo` in [draft PR #1](https://github.com/ZelinZhu-Richard/no-escape/pull/1). Keep downloaded footage, caches, credentials, and unrelated tool-installation artifacts out of commits.
 
 Current implementation: the local operator/responder applications, licensed replay, evidence review, confirmation/reset lifecycle, human-labeling UI, fixture/genuine-cache separation, guarded Gemini Developer API adapter, evaluation script, and startup/media-restore tools exist. Actual model inference, human evaluation labels, public phone/cellular validation, photorealistic-service validation, and projection remain unfinished. See [MORNING_REPORT.md](MORNING_REPORT.md) for final tested behavior, commands, limitations, and PR status. Fixtures do not establish Computer Vision performance.
