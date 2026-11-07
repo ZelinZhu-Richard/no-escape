@@ -1,136 +1,159 @@
+/* Public camera network, Dispatch edition. */
 .live-camera-panel {
-  background: #14232c;
-  border: 1px solid #2c424b;
-  border-radius: 6px;
-  padding: 18px;
-  color: #edf1ed;
+  padding: 22px 0 28px;
+  color: var(--ink, #0e0e0e);
 }
 .live-camera-heading {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule-soft, #d2cec3);
+}
+.live-camera-heading .eyebrow::before {
+  content: "§ 04 — ";
+  color: var(--cobalt, #1f3bff);
 }
 .live-camera-heading h2 {
-  margin-top: 5px;
-  font-size: 17px;
+  margin-top: 8px;
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: -0.05em;
 }
 .live-camera-count {
-  color: #b7dcca;
-  border: 1px solid #3a6053;
-  border-radius: 4px;
-  padding: 6px 8px;
+  padding: 5px 9px;
+  font-family: var(--font-wire, monospace);
   font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   white-space: nowrap;
+  color: #fff;
+  background: var(--cobalt, #1f3bff);
 }
 .live-camera-intro,
 .live-catalog-credit {
-  color: #afc1c5;
-  font-size: 10px;
-  line-height: 1.65;
-  margin-top: 11px;
+  margin-top: 12px;
+  max-width: 760px;
+  font-family: var(--font-serif, serif);
+  font-style: italic;
+  font-size: 18px;
+  line-height: 1.3;
+  color: var(--ink-2, #2d2c29);
 }
 .live-camera-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
-  margin-top: 16px;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr);
+  gap: 0;
+  margin-top: 18px;
+  border: 1px solid var(--ink, #0e0e0e);
+}
+.live-camera-browser {
+  min-width: 0;
+  padding: 14px;
+  border-right: 1px solid var(--ink, #0e0e0e);
+  background: var(--card, #fbfaf7);
 }
 .live-camera-filters {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 7px;
+  gap: 6px;
 }
 .live-camera-filters input,
 .live-camera-filters select {
   width: 100%;
   min-width: 0;
-  color: #dce9e5;
-  background: #0f1c24;
-  border: 1px solid #425760;
-  border-radius: 4px;
   padding: 9px;
-  font-size: 11px;
+  font-size: 14px;
+  color: var(--ink, #0e0e0e);
+  background: var(--paper, #f3f1ec);
+  border: 1px solid var(--ink, #0e0e0e);
+  border-radius: 0;
 }
 .live-camera-filters input::placeholder {
-  color: #aebec2;
+  color: var(--muted, #6b6860);
 }
 .live-camera-result-count {
-  color: #afc1c5;
+  margin: 12px 0 6px;
+  font-family: var(--font-wire, monospace);
   font-size: 9px;
-  margin: 10px 0 6px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted, #6b6860);
 }
 .live-camera-list {
   margin: 0;
   padding: 0;
   list-style: none;
-  max-height: 155px;
+  max-height: 340px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: #5c786e #14232c;
 }
 .live-camera-list li + li {
-  margin-top: 4px;
+  border-top: 1px solid var(--rule-soft, #d2cec3);
 }
 .live-camera-list button {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  text-align: left;
-  padding: 9px 8px;
-  background: #1a2c35;
-  color: #dce9e5;
+  gap: 9px;
   width: 100%;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  padding: 10px 8px;
+  text-align: left;
+  color: var(--ink, #0e0e0e);
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 .live-camera-list button:hover {
-  background: #263d44;
+  background: var(--paper-2, #ebe8e0);
 }
 .live-camera-list button.is-selected {
-  border-color: #93c9ac;
-  background: #254136;
+  color: #fff;
+  background: var(--cobalt, #1f3bff);
 }
 .live-camera-list button > svg {
   margin-top: 2px;
-  color: #a5c7bd;
 }
 .live-camera-list strong {
   display: block;
-  font-size: 10px;
-  line-height: 1.45;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 .live-camera-list small {
   display: block;
-  font-size: 9px;
-  color: #b3c6c4;
-  line-height: 1.5;
   margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.8;
 }
 .live-camera-list .live-camera-capability {
-  color: #bce0cb;
-  font-size: 8px;
   margin-top: 5px;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 1;
 }
 .live-media-mode {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   margin: 0 0 10px;
 }
 .live-media-mode button {
-  background: #1b3038;
-  border: 1px solid #47645f;
-  color: #d5e5df;
-  border-radius: 4px;
-  padding: 8px;
+  padding: 7px 10px;
+  font-family: var(--font-wire, monospace);
   font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink, #0e0e0e);
+  border: 1px solid var(--ink, #0e0e0e);
 }
 .live-media-mode button[aria-pressed="true"] {
-  background: #2c4c3c;
-  border-color: #98c7a7;
+  color: var(--paper, #f3f1ec);
+  background: var(--ink, #0e0e0e);
 }
 .live-image-boxes {
   position: absolute;
@@ -152,7 +175,7 @@
   overflow: hidden;
 }
 .live-video-overlay .detection-box {
-  stroke-width: 1.25px;
+  stroke-width: 1.5px;
   fill: transparent;
 }
 .live-detection-summary {
@@ -160,86 +183,101 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
-  color: #c4dfd2;
   padding-top: 10px;
+  font-family: var(--font-wire, monospace);
+  font-size: 11px;
+  color: var(--ink, #0e0e0e);
   font-variant-numeric: tabular-nums;
 }
-.live-detection-summary > span:last-child { color: #afc5c9; }
+.live-detection-summary > span:last-child {
+  color: var(--muted, #6b6860);
+}
 .live-camera-shortcut {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 14px;
-  margin-top: 12px;
-  padding: 10px 12px;
-  color: #d5f7e1;
-  background: #233d33;
-  border: 1px solid #638b71;
-  border-radius: 4px;
-  font-size: 12px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink, #0e0e0e);
+  border: 2px solid var(--ink, #0e0e0e);
+  box-shadow: 4px 4px 0 var(--ink, #0e0e0e);
+  transition: transform 0.12s;
 }
-.live-camera-shortcut span { color: #b3cfc2; font-size: 10px; }
-.live-camera-shortcut:hover { background: #2b4b3e; }
+.live-camera-shortcut span {
+  font-family: var(--font-wire, monospace);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--muted, #6b6860);
+}
+.live-camera-shortcut:hover {
+  transform: translate(-1px, -1px);
+}
 .live-yolo-counts {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px 12px;
-  color: #c4dfd2;
-  font-size: 9px;
+  gap: 5px 14px;
+  margin-top: 8px;
+  font-size: 13px;
   line-height: 1.6;
-  margin-top: 7px;
+  color: var(--ink-2, #2d2c29);
 }
 .live-yolo-counts b {
-  font-size: 14px;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--ink, #0e0e0e);
   font-variant-numeric: tabular-nums;
 }
 .live-yolo-counts > span:last-child {
   flex-basis: 100%;
-  color: #afc5c9;
-  font-size: 8px;
+  font-size: 11px;
+  color: var(--muted, #6b6860);
 }
 .live-camera-preview {
   min-width: 0;
-  background: #101d24;
-  border: 1px solid #30464e;
-  border-radius: 5px;
-  padding: 10px;
+  padding: 14px;
 }
 .live-preview-heading {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
   justify-content: space-between;
-  margin-bottom: 9px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 .live-preview-heading h3 {
-  font-size: 12px;
-  letter-spacing: -0.02em;
   margin-top: 5px;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
   overflow-wrap: anywhere;
 }
 .live-snapshot-badge {
-  color: #b5d9c4;
-  font:
-    8px ui-monospace,
-    SFMono-Regular,
-    monospace;
-  letter-spacing: 0.05em;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--cobalt, #1f3bff);
 }
 .live-close {
   display: flex;
-  background: #1c3039;
-  color: #c9d8d8;
   padding: 7px;
-  border-radius: 4px;
+  color: var(--ink, #0e0e0e);
+  border: 1px solid var(--ink, #0e0e0e);
+}
+.live-close:hover {
+  color: var(--paper, #f3f1ec);
+  background: var(--ink, #0e0e0e);
 }
 .live-snapshot-frame {
   position: relative;
   aspect-ratio: 16/9;
-  background: #081319;
   overflow: hidden;
-  border-radius: 3px;
+  background: #000;
+  border: 2px solid var(--ink, #0e0e0e);
 }
 .live-snapshot-frame > img {
   display: block;
@@ -253,41 +291,42 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  text-align: center;
   gap: 10px;
-  color: #b1c5c9;
   padding: 16px;
-  font-size: 10px;
-  line-height: 1.55;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2, #2d2c29);
 }
 .live-snapshot-placeholder {
   height: 100%;
+  color: var(--paper, #f3f1ec);
 }
 .live-camera-empty-preview {
-  min-height: 240px;
+  min-height: 280px;
+  background: radial-gradient(rgba(14, 14, 14, 0.1) 0.8px, transparent 0.9px) 0
+    0 / 6px 6px;
 }
 .live-camera-empty-preview strong {
-  color: #d4e2de;
-  font-size: 12px;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--ink, #0e0e0e);
 }
 .live-image-status {
   position: absolute;
-  left: 6px;
-  top: 6px;
-  background: #10251de8;
-  color: #c4edcf;
-  border: 1px solid #689777;
-  border-radius: 2px;
-  padding: 4px 5px;
-  font:
-    7px ui-monospace,
-    SFMono-Regular,
-    monospace;
+  left: 8px;
+  top: 8px;
+  z-index: 2;
+  padding: 4px 6px;
+  font: 500 9px var(--font-wire, monospace);
+  letter-spacing: 0.1em;
+  color: var(--ink, #0e0e0e);
+  background: var(--paper, #f3f1ec);
 }
 .live-image-status.is-stale {
-  background: #332a16ed;
-  color: #f6d497;
-  border-color: #9d814f;
+  color: #fff;
+  background: var(--signal, #ff4f00);
 }
 .live-camera-refresh {
   display: flex;
@@ -295,27 +334,32 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 7px;
-  margin-top: 9px;
-  font-size: 9px;
-  color: #b7cac8;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted, #6b6860);
 }
 .live-camera-refresh button {
-  color: #c8e4d6;
-  background: #223b34;
-  border: 1px solid #4c7161;
-  padding: 7px 8px;
+  padding: 7px 10px;
+  font-family: var(--font-wire, monospace);
   font-size: 9px;
-  border-radius: 3px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink, #0e0e0e);
+  border: 1px solid var(--ink, #0e0e0e);
+}
+.live-camera-refresh button:hover:not(:disabled) {
+  color: var(--paper, #f3f1ec);
+  background: var(--ink, #0e0e0e);
 }
 .live-snapshot-notice {
-  color: #f1d19b;
-  font-size: 9px;
-  line-height: 1.6;
   margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--signal-2, #e64700);
 }
 .live-snapshot-facts {
   margin: 11px 0 0;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.7;
 }
 .live-snapshot-facts > div {
@@ -323,74 +367,93 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 2px 10px;
+  padding: 3px 0;
+  border-top: 1px solid var(--rule-soft, #d2cec3);
 }
 .live-snapshot-facts dt {
-  color: #9db5bb;
+  font-family: var(--font-wire, monospace);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted, #6b6860);
 }
 .live-snapshot-facts dd {
-  color: #d4e2df;
   margin: 0;
 }
 .live-camera-disclosure {
-  color: #b1c4c7;
-  font-size: 9px;
-  line-height: 1.6;
   margin-top: 9px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #6b6860);
 }
 .live-provider-link {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #b1dcca;
-  font-size: 9px;
   margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
 }
 .live-camera-empty {
-  color: #b8c9cb;
-  font-size: 11px;
-  line-height: 1.6;
   padding: 16px 0;
+  font-family: var(--font-serif, serif);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--ink-2, #2d2c29);
 }
 .live-excluded-region {
   fill: none;
-  stroke: #aab6bc;
+  stroke: var(--paper, #f3f1ec);
   stroke-width: 1;
   stroke-dasharray: 3 3;
   vector-effect: non-scaling-stroke;
 }
 .live-alert-monitor {
-  border-top: 1px solid #3e535c;
   margin-top: 12px;
   padding-top: 10px;
-  color: #bdccce;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
+  color: var(--ink-2, #2d2c29);
+  border-top: 1px solid var(--ink, #0e0e0e);
 }
-.live-alert-monitor strong { color: #d9e9df; font-size: 11px; }
-.live-alert-monitor p { margin: 7px 0 0; }
+.live-alert-monitor strong {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink, #0e0e0e);
+}
+.live-alert-monitor p {
+  margin: 7px 0 0;
+}
 .live-catalog-credit {
-  font-size: 8px;
-  border-top: 1px solid #2b4149;
-  padding-top: 10px;
   margin-top: 14px;
+  padding-top: 10px;
+  font-family: var(--font-wire, monospace);
+  font-style: normal;
+  font-size: 10px;
+  color: var(--muted, #6b6860);
+  border-top: 1px solid var(--rule-soft, #d2cec3);
 }
-@media (max-width: 600px) {
-  .live-camera-panel {
-    padding: 14px;
-  }
+@media (max-width: 1100px) {
   .live-camera-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
-  .live-camera-filters {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  .live-camera-browser {
+    border-right: 0;
+    border-bottom: 1px solid var(--ink, #0e0e0e);
   }
   .live-camera-list {
-    max-height: 155px;
+    max-height: 220px;
+  }
+}
+@media (max-width: 600px) {
+  .live-camera-heading h2 {
+    font-size: 30px;
+  }
+  .live-camera-list {
+    max-height: 180px;
   }
   .live-camera-empty-preview {
-    min-height: 130px;
-  }
-  .live-snapshot-frame {
-    max-height: 260px;
+    min-height: 150px;
   }
 }

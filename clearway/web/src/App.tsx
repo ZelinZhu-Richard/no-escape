@@ -61,20 +61,67 @@ function Brand({ compact = false }: { compact?: boolean }) {
       <span className="brand-symbol">
         <svg
           viewBox="0 0 32 32"
-          width="23"
-          height="23"
+          width="26"
+          height="26"
           fill="none"
           aria-hidden="true"
         >
-          <path d="M6 25 12 7h7l-6 18H6Z" fill="currentColor" />
-          <path d="m19 25 5-15 3 15h-8Z" fill="currentColor" opacity=".6" />
+          <circle
+            cx="16"
+            cy="16"
+            r="11"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <circle
+            cx="16"
+            cy="16"
+            r="5.2"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            opacity=".55"
+          />
+          <path
+            d="M16 1.5v7M16 23.5v7M1.5 16h7M23.5 16h7"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <circle
+            className="brand-core"
+            cx="16"
+            cy="16"
+            r="2.2"
+            fill="currentColor"
+          />
         </svg>
       </span>
-      <span>
-        clearway<span className="brand-period">.</span>
+      <span className="brand-word">
+        clearway<span className="brand-period">/</span>
       </span>
       {!compact && <span className="brand-separator" />}
     </div>
+  );
+}
+function Clock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <span className="topbar-clock mono" aria-label="Local time">
+      {now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      })}
+      <small>
+        {now
+          .toLocaleDateString([], { month: "short", day: "2-digit" })
+          .toUpperCase()}
+      </small>
+    </span>
   );
 }
 function Badge({
@@ -246,6 +293,8 @@ function Operator() {
   const [liveLoading, setLiveLoading] = useState(true);
   const [liveError, setLiveError] = useState("");
   const [liveSelectedId, setLiveSelectedId] = useState<string | null>(null);
+  // The public camera browser stays mounted but folded until it is needed.
+  const [cctvOpen, setCctvOpen] = useState(false);
   const [visibleLiveCameras, setVisibleLiveCameras] = useState<LiveCamera[]>(
     [],
   );
@@ -560,35 +609,112 @@ function Operator() {
         ? selectedAnalysis.mode
         : mode;
 
+  const pendingCount = runIncidents.filter(
+    (item) => item.review_status === "candidate",
+  ).length;
+  const alertState = pendingCount
+    ? "alert"
+    : confirmedCount
+      ? "confirmed"
+      : "idle";
+  const feedCount = liveCatalog?.cameras?.length ?? 0;
+  const cctvVisible = cctvOpen || Boolean(liveSelectedId);
+
   return (
-    <div className="operator-app">
+    <div className={`operator-app state-${alertState} tab-${tab}`}>
+      <div className="alert-frame" aria-hidden="true" />
       <header className="topbar">
-        <a className="brand-link" href="/" aria-label="Clearway incident desk">
-          <Brand />
-        </a>
-        <nav aria-label="Main navigation">
-          <button
-            className={tab === "desk" ? "nav-button active" : "nav-button"}
-            onClick={() => setTab("desk")}
+        <div className="masthead">
+          <a
+            className="brand-link"
+            href="/"
+            aria-label="Clearway incident desk"
           >
-            Incident desk
-          </button>
-          <button
-            className={tab === "labels" ? "nav-button active" : "nav-button"}
-            onClick={() => {
-              cancelReplayPlayback();
-              setTab("labels");
-            }}
-          >
-            Label windows
-          </button>
-        </nav>
-        <div className="topbar-status">
-          <span className="status-dot" />
-          Local demo
-          <span className="topbar-shortid mono">
-            {state ? `RUN ${shortId(state.run.id)}` : "CONNECTING"}
-          </span>
+            <Brand />
+          </a>
+          <p className="edition mono">
+            <span>Durham, North Carolina</span>
+            <span>Road operations desk</span>
+          </p>
+          <div className="topbar-status">
+            <span className="status-dot" />
+            Local demo
+            <span className="topbar-shortid mono">
+              {state ? `RUN ${shortId(state.run.id)}` : "CONNECTING"}
+            </span>
+            <Clock />
+          </div>
+        </div>
+        <div className="nav-row">
+          <nav aria-label="Main navigation">
+            <button
+              className={tab === "desk" ? "nav-button active" : "nav-button"}
+              onClick={() => setTab("desk")}
+            >
+              Incident desk
+            </button>
+            <button
+              className={tab === "labels" ? "nav-button active" : "nav-button"}
+              onClick={() => {
+                cancelReplayPlayback();
+                setTab("labels");
+              }}
+            >
+              Label windows
+            </button>
+          </nav>
+          <div className="topbar-telemetry mono">
+            <span className={`telemetry-cell ${pendingCount ? "is-hot" : ""}`}>
+              <small>Pending</small>
+              <b>{pendingCount.toString().padStart(2, "0")}</b>
+            </span>
+            <span className="telemetry-cell">
+              <small>Cleared</small>
+              <b>{confirmedCount.toString().padStart(2, "0")}</b>
+            </span>
+          </div>
+          <div className="run-controls">
+            <label className="analysis-select">
+              <span className="sr-only">Analysis mode</span>
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value as AnalysisMode)}
+                disabled={Boolean(pending)}
+                aria-label="Analysis mode"
+              >
+                <option value="fixture">Fixture walkthrough</option>
+                <option value="cached">Frozen model cache</option>
+                <option
+                  value="fresh"
+                  disabled={!config?.model_configured}
+                  title={config?.model_readiness?.message}
+                >
+                  Fresh inference
+                  {!config?.model_configured ? " · unavailable" : ""}
+                </option>
+              </select>
+            </label>
+            <button
+              className="secondary-button reset-button"
+              onClick={() => void reset()}
+              disabled={pending === "reset" || !state}
+              data-testid="reset-demo"
+            >
+              <Icon name="reset" />
+              <span>{pending === "reset" ? "Resetting…" : "Reset demo"}</span>
+            </button>
+            <button
+              className="primary-button"
+              onClick={() => void replay()}
+              disabled={Boolean(pending) || !state || !source}
+              data-testid="start-replay"
+            >
+              <Icon name="play" size={17} />
+              <span>
+                {pending === "replay" ? "Preparing…" : "Start replay"}
+              </span>
+            </button>
+          </div>
         </div>
       </header>
       {error && (
@@ -605,256 +731,40 @@ function Operator() {
       ) : (
         <>
           <section className="desk-toolbar">
-            <div>
-              <div className="eyebrow">ROAD OPERATIONS / REVIEW WORKSPACE</div>
-              <h1>Every incident. A clearer picture.</h1>
-              <p>
-                See the evidence. Make the call. Keep the handoff connected.
-              </p>
-            </div>
-            <div className="run-controls">
-              <label className="analysis-select">
-                <span className="sr-only">Analysis mode</span>
-                <select
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as AnalysisMode)}
-                  disabled={Boolean(pending)}
-                  aria-label="Analysis mode"
-                >
-                  <option value="fixture">Fixture walkthrough</option>
-                  <option value="cached">Frozen model cache</option>
-                  <option
-                    value="fresh"
-                    disabled={!config?.model_configured}
-                    title={config?.model_readiness?.message}
-                  >
-                    Fresh inference
-                    {!config?.model_configured ? " · unavailable" : ""}
-                  </option>
-                </select>
-              </label>
-              <button
-                className="secondary-button reset-button"
-                onClick={() => void reset()}
-                disabled={pending === "reset" || !state}
-                data-testid="reset-demo"
-              >
-                <Icon name="reset" />
-                <span>{pending === "reset" ? "Resetting…" : "Reset demo"}</span>
-              </button>
-              <button
-                className="primary-button"
-                onClick={() => void replay()}
-                disabled={Boolean(pending) || !state || !source}
-                data-testid="start-replay"
-              >
-                <Icon name="play" size={17} />
-                <span>
-                  {pending === "replay" ? "Preparing…" : "Start replay"}
-                </span>
-              </button>
-            </div>
-          </section>
-          <div className="workspace-grid">
-            <aside className="source-rail" aria-label="Replay sources">
-              <div className="rail-heading">
-                <h2>Replay sources</h2>
-                <span className="count-label">
-                  {sources.length.toString().padStart(2, "0")}
-                </span>
-              </div>
-              <p className="rail-intro">Recorded scenes, ready to review.</p>
-              <div className="source-list">
-                {sources.map((s, index) => (
-                  <button
-                    key={s.id}
-                    className={`source-card ${sourceId === s.id ? "selected" : ""}`}
-                    onClick={() => {
-                      // Source browsing must not expire another camera's evidence.
-                      autoSelectCandidate.current = false;
-                      cancelReplayPlayback();
-                      videoRef.current?.pause();
-                      setSourceId(s.id);
-                      setSelectedId(
-                        state?.incidents.find((item) => item.source_id === s.id)
-                          ?.id ?? null,
-                      );
-                      setPlaybackKey((key) => key + 1);
-                    }}
-                    disabled={Boolean(pending)}
-                    aria-pressed={sourceId === s.id}
-                    aria-label={`Select ${sourceName(s.id)}`}
-                  >
-                    <div className="source-thumb">
-                      {s.media_available && s.poster_available !== false && (
-                        <img
-                          src={s.poster_url}
-                          alt=""
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      )}
-                      <span className="thumb-icon">
-                        <Icon name="camera" size={22} />
-                      </span>
-                      <span className="source-number mono">
-                        CAM {String(index + 1).padStart(2, "0")}
-                      </span>
-                      <span className="duration mono">
-                        {timeLabel(s.duration_seconds)}
-                      </span>
-                    </div>
-                    <div className="source-card-text">
-                      <strong>{sourceName(s.id)}</strong>
-                      <small>{sourceHint(s.id)}</small>
-                      <span className="source-availability">
-                        <i
-                          className={
-                            s.media_available
-                              ? "tiny-dot"
-                              : "tiny-dot unavailable"
-                          }
-                        />
-                        {s.media_available
-                          ? "Recorded replay"
-                          : "Media unavailable"}
-                        {sourceId === s.id && <Icon name="check" size={13} />}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <div className="rail-footnote">
-                <Icon name="shield" size={16} />
+            <div className="desk-headline">
+              <span className="headline-signal" aria-hidden="true">
+                <i />
+              </span>
+              <div>
+                <div className="eyebrow">
+                  ROAD OPERATIONS / REVIEW WORKSPACE
+                </div>
+                <h1>
+                  {alertState === "alert"
+                    ? `${pendingCount} ${pendingCount === 1 ? "signal" : "signals"} awaiting your call`
+                    : alertState === "confirmed"
+                      ? "Incident confirmed. Handoff ready."
+                      : "All sectors quiet. Watching."}
+                </h1>
                 <p>
-                  Recorded demo scenes.
-                  <br />
-                  Every source keeps its original credit.
+                  See the evidence. Make the call. Keep the handoff connected.
                 </p>
               </div>
-            </aside>
-            <main className="center-column">
-              <Suspense
-                fallback={
-                  <section className="map-shell">
-                    <div className="loading-state">
-                      Preparing the spatial view…
-                    </div>
-                  </section>
-                }
-              >
-                <MapView
-                  source={evidenceSource}
-                  incident={incident}
-                  incidents={runIncidents}
-                  onSelect={() => openEvidence()}
-                  onSelectIncident={openEvidence}
-                  liveCameras={visibleLiveCameras}
-                  liveSelectedId={liveSelectedId}
-                  onSelectLiveCamera={selectMapCamera}
-                />
-              </Suspense>
-              <div
-                ref={livePreviewRef}
-                tabIndex={-1}
-                aria-label="Selected public camera preview"
-              >
-                <LiveCameraPanel
-                  runId={state?.run.id}
-                  catalog={liveCatalog}
-                  selectedId={liveSelectedId}
-                  onSelect={setLiveSelectedId}
-                  onVisibleCamerasChange={setVisibleLiveCameras}
-                  loading={liveLoading}
-                  catalogError={liveError}
-                />
-              </div>
-              <section className="incident-tray">
-                <div className="tray-heading">
-                  <div>
-                    <span className="eyebrow">REVIEW QUEUE</span>
-                    <h2>
-                      {runIncidents.length
-                        ? "Incidents with evidence."
-                        : "Ready when you are."}
-                    </h2>
-                  </div>
-                  <span className="count-label">
-                    {runIncidents.length.toString().padStart(2, "0")}
-                  </span>
-                </div>
-                {runIncidents.length ? (
-                  runIncidents.map((i) => (
-                    <button
-                      key={i.id}
-                      className={`incident-card ${selectedId === i.id || incident?.id === i.id ? "selected" : ""}`}
-                      data-testid="incident-card"
-                      onClick={() => openEvidence(i.id)}
-                    >
-                      <span
-                        className={`incident-icon ${i.review_status === "confirmed" ? "confirmed" : ""}`}
-                      >
-                        <Icon
-                          name={
-                            i.review_status === "confirmed" ? "check" : "alert"
-                          }
-                          size={20}
-                        />
-                      </span>
-                      <span className="incident-card-content">
-                        <strong>{i.title}</strong>
-                        <span>
-                          <span className="mono">#{shortId(i.id)}</span>
-                          <span>·</span>
-                          {i.review_status === "candidate"
-                            ? "Needs human review"
-                            : i.review_status}
-                          <span>·</span>
-                          {i.source_mode === "live"
-                            ? "Live CCTV"
-                            : i.analysis_mode === "fixture"
-                              ? "Fixture"
-                              : i.analysis_mode}
-                        </span>
-                      </span>
-                      <Icon name="arrow" size={17} />
-                    </button>
-                  ))
-                ) : (
-                  <div className="queue-empty">
-                    <span className="empty-icon">
-                      <Icon name="layers" size={21} />
+            </div>
+            {alertState === "alert" && (
+              <div className="ticker" aria-hidden="true">
+                <div className="ticker-track">
+                  {[0, 1].map((copy) => (
+                    <span key={copy}>
+                      Incident candidate ◆ Awaiting operator review ◆ Evidence
+                      attached ◆ No automatic dispatch ◆{" "}
                     </span>
-                    <p>
-                      {selectedAnalysis?.status === "running"
-                        ? "Analysis is running for this source."
-                        : selectedAnalysis?.status === "unavailable"
-                          ? "Analysis is unavailable for this scene."
-                          : selectedAnalysis?.status === "complete"
-                            ? selectedAnalysis.mode === "fixture"
-                              ? "This fixture produced no incident candidate."
-                              : selectedAnalysis.mode === "cached"
-                                ? "The saved model result contains no incident candidate."
-                                : "Fresh analysis produced no incident candidate."
-                            : "Start a replay to bring its evidence into the review queue."}
-                      <small>
-                        {selectedAnalysis?.status === "complete"
-                          ? selectedAnalysis.mode === "fixture"
-                            ? "Fixture behavior is not a measured detection result."
-                            : "No candidate does not establish that the scene is safe. Review the source footage."
-                          : "The demo keeps source, analysis, and review status separate."}
-                      </small>
-                    </p>
-                  </div>
-                )}
-                {selectedAnalysis?.message && (
-                  <p className="analysis-message" role="status">
-                    {selectedAnalysis.message}
-                  </p>
-                )}
-              </section>
-            </main>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+          <div className="workspace-grid">
             <aside
               className="evidence-panel"
               ref={evidenceRef}
@@ -938,17 +848,20 @@ function Operator() {
                           </li>
                         ))}
                       </ol>
-                      <div className="unknowns">
-                        <div>
+                      <details className="unknowns">
+                        <summary>
                           <Icon name="alert" size={15} />
                           <strong>Still unknown</strong>
-                        </div>
+                          <span className="unknowns-count mono">
+                            {incident.unknowns.length || 1}
+                          </span>
+                        </summary>
                         <p>
                           {incident.unknowns.length
                             ? incident.unknowns.join(" · ")
                             : "Original location and capture time are unverified."}
                         </p>
-                      </div>
+                      </details>
                       <div className="context-note">
                         <Icon name="pin" size={15} />
                         <p>
@@ -1070,6 +983,242 @@ function Operator() {
                 </div>
               )}
             </aside>
+            <div className="lower-band">
+              <div className="stage" aria-label="City map stage">
+                <Suspense
+                  fallback={
+                    <section className="map-shell">
+                      <div className="loading-state">
+                        Preparing the spatial view…
+                      </div>
+                    </section>
+                  }
+                >
+                  <MapView
+                    source={evidenceSource}
+                    incident={incident}
+                    incidents={runIncidents}
+                    onSelect={() => openEvidence()}
+                    onSelectIncident={openEvidence}
+                    liveCameras={visibleLiveCameras}
+                    liveSelectedId={liveSelectedId}
+                    onSelectLiveCamera={selectMapCamera}
+                  />
+                </Suspense>
+              </div>
+              <div className="dock" aria-label="Control deck">
+                <aside className="source-rail" aria-label="Replay sources">
+                  <div className="rail-heading">
+                    <h2>Replay sources</h2>
+                    <span className="count-label">
+                      {sources.length.toString().padStart(2, "0")}
+                    </span>
+                  </div>
+                  <p className="rail-intro">
+                    Recorded scenes, ready to review.
+                  </p>
+                  <div className="source-list">
+                    {sources.map((s, index) => (
+                      <button
+                        key={s.id}
+                        className={`source-card ${sourceId === s.id ? "selected" : ""}`}
+                        onClick={() => {
+                          // Source browsing must not expire another camera's evidence.
+                          autoSelectCandidate.current = false;
+                          cancelReplayPlayback();
+                          videoRef.current?.pause();
+                          setSourceId(s.id);
+                          setSelectedId(
+                            state?.incidents.find(
+                              (item) => item.source_id === s.id,
+                            )?.id ?? null,
+                          );
+                          setPlaybackKey((key) => key + 1);
+                        }}
+                        disabled={Boolean(pending)}
+                        aria-pressed={sourceId === s.id}
+                        aria-label={`Select ${sourceName(s.id)}`}
+                      >
+                        <div className="source-thumb">
+                          {s.media_available &&
+                            s.poster_available !== false && (
+                              <img
+                                src={s.poster_url}
+                                alt=""
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                }}
+                              />
+                            )}
+                          <span className="thumb-icon">
+                            <Icon name="camera" size={22} />
+                          </span>
+                          <span className="source-number mono">
+                            CAM {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span className="duration mono">
+                            {timeLabel(s.duration_seconds)}
+                          </span>
+                        </div>
+                        <div className="source-card-text">
+                          <strong>{sourceName(s.id)}</strong>
+                          <small>{sourceHint(s.id)}</small>
+                          <span className="source-availability">
+                            <i
+                              className={
+                                s.media_available
+                                  ? "tiny-dot"
+                                  : "tiny-dot unavailable"
+                              }
+                            />
+                            {s.media_available
+                              ? "Recorded replay"
+                              : "Media unavailable"}
+                            {sourceId === s.id && (
+                              <Icon name="check" size={13} />
+                            )}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="rail-footnote">
+                    <Icon name="shield" size={16} />
+                    <p>
+                      Recorded demo scenes.
+                      <br />
+                      Every source keeps its original credit.
+                    </p>
+                  </div>
+                </aside>
+                <section className="incident-tray">
+                  <div className="tray-heading">
+                    <div>
+                      <span className="eyebrow">REVIEW QUEUE</span>
+                      <h2>
+                        {runIncidents.length
+                          ? "Incidents with evidence."
+                          : "Ready when you are."}
+                      </h2>
+                    </div>
+                    <span className="count-label">
+                      {runIncidents.length.toString().padStart(2, "0")}
+                    </span>
+                  </div>
+                  {runIncidents.length ? (
+                    runIncidents.map((i) => (
+                      <button
+                        key={i.id}
+                        className={`incident-card ${selectedId === i.id || incident?.id === i.id ? "selected" : ""}`}
+                        data-testid="incident-card"
+                        onClick={() => openEvidence(i.id)}
+                      >
+                        <span
+                          className={`incident-icon ${i.review_status === "confirmed" ? "confirmed" : ""}`}
+                        >
+                          <Icon
+                            name={
+                              i.review_status === "confirmed"
+                                ? "check"
+                                : "alert"
+                            }
+                            size={20}
+                          />
+                        </span>
+                        <span className="incident-card-content">
+                          <strong>{i.title}</strong>
+                          <span>
+                            <span className="mono">#{shortId(i.id)}</span>
+                            <span>·</span>
+                            {i.review_status === "candidate"
+                              ? "Needs human review"
+                              : i.review_status}
+                            <span>·</span>
+                            {i.source_mode === "live"
+                              ? "Live CCTV"
+                              : i.analysis_mode === "fixture"
+                                ? "Fixture"
+                                : i.analysis_mode}
+                          </span>
+                        </span>
+                        <Icon name="arrow" size={17} />
+                      </button>
+                    ))
+                  ) : (
+                    <div className="queue-empty">
+                      <span className="empty-icon">
+                        <Icon name="layers" size={21} />
+                      </span>
+                      <p>
+                        {selectedAnalysis?.status === "running"
+                          ? "Analysis is running for this source."
+                          : selectedAnalysis?.status === "unavailable"
+                            ? "Analysis is unavailable for this scene."
+                            : selectedAnalysis?.status === "complete"
+                              ? selectedAnalysis.mode === "fixture"
+                                ? "This fixture produced no incident candidate."
+                                : selectedAnalysis.mode === "cached"
+                                  ? "The saved model result contains no incident candidate."
+                                  : "Fresh analysis produced no incident candidate."
+                              : "Start a replay to bring its evidence into the review queue."}
+                        <small>
+                          {selectedAnalysis?.status === "complete"
+                            ? selectedAnalysis.mode === "fixture"
+                              ? "Fixture behavior is not a measured detection result."
+                              : "No candidate does not establish that the scene is safe. Review the source footage."
+                            : "The demo keeps source, analysis, and review status separate."}
+                        </small>
+                      </p>
+                    </div>
+                  )}
+                  {selectedAnalysis?.message && (
+                    <p className="analysis-message" role="status">
+                      {selectedAnalysis.message}
+                    </p>
+                  )}
+                </section>
+                <button
+                  className={`cctv-toggle ${cctvVisible ? "is-open" : ""}`}
+                  aria-expanded={cctvVisible}
+                  onClick={() => {
+                    if (cctvVisible) {
+                      setCctvOpen(false);
+                      setLiveSelectedId(null);
+                    } else setCctvOpen(true);
+                  }}
+                >
+                  <span className="cctv-toggle-icon">
+                    <Icon name="camera" size={16} />
+                  </span>
+                  <span className="cctv-toggle-text">
+                    <strong>Public CCTV network</strong>
+                    <small className="mono">
+                      {feedCount} Caltrans cameras · live video + local YOLO
+                    </small>
+                  </span>
+                  <span className="cctv-toggle-action mono">
+                    {cctvVisible ? "Hide" : "Browse"}
+                    <Icon name="chevron" size={14} />
+                  </span>
+                </button>
+              </div>
+            </div>
+            <div
+              ref={livePreviewRef}
+              tabIndex={-1}
+              aria-label="Selected public camera preview"
+              className={`cctv-drawer ${cctvVisible ? "is-open" : ""}`}
+            >
+              <LiveCameraPanel
+                runId={state?.run.id}
+                catalog={liveCatalog}
+                selectedId={liveSelectedId}
+                onSelect={setLiveSelectedId}
+                onVisibleCamerasChange={setVisibleLiveCameras}
+                loading={liveLoading}
+                catalogError={liveError}
+              />
+            </div>
           </div>
           <footer className="desk-footer">
             <div>
@@ -1133,8 +1282,8 @@ function Handoff({
             value={publicUrl}
             size={100}
             marginSize={3}
-            bgColor="#faf9f5"
-            fgColor="#15222a"
+            bgColor="#ffffff"
+            fgColor="#0e0e0e"
             title="Open this incident's responder brief"
           />
           <p>
