@@ -1,0 +1,40 @@
+ByteTrack upstream license
+Source: https://github.com/ifzhang/ByteTrack
+Pinned commit: d1bf0191adff59bc8fcfeaa0b33d3d1642552a99
+Upstream files: yolox/tracker/byte_tracker.py, kalman_filter.py, matching.py,
+basetrack.py.
+
+MIT License
+
+Copyright (c) 2021 Yifu Zhang
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Clearway adaptation (api/live_tracking.py):
+- Preserves XYAH Kalman prediction/correction, score-fused high association,
+  low-score second association, tentative confirmation and lost-track recovery.
+- Replaces LAP/SciPy/Cython with NumPy Kalman linear solves, continuous-coordinate
+  IoU, and exact Hungarian assignment with explicit unmatched costs.
+- Adds class isolation, media/wall-clock TTLs, session and input bounds, exact
+  image/configuration provenance, and resets on invalid/discontinuous frames.
+- Uses the detector's own high threshold for new tracks. Tentative high
+  observations remain visible; only current observations are returned. Lost
+  predictions remain internal and never become incident-monitor evidence.
+- Does not include ReID embeddings, persistent IDs, appearance/identity models,
+  upstream detector code, model weights, video data, or network access.

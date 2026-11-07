@@ -1,6 +1,48 @@
 # Public CCTV detection quality
 
-Live CCTV uses **YOLO11s VisDrone, 640×640, confidence 0.40**, following the user's explicit AGPL-3.0 approval. Recorded demos retain YOLOX-Tiny and their existing caches. The live page shows the actual model, vehicle/person counts, inference time, source resolution, and update frequency. Labels toggle without restarting the stream.
+Live CCTV defaults to **YOLO11s VisDrone, 640×640, confidence 0.40**, following the user's explicit AGPL-3.0 approval. Fremont has the explicit YOLOX-M selection described below. The live page shows the actual model, vehicle/person counts, inference time, source resolution, and update frequency. Labels toggle without restarting the stream.
+
+## Live ByteTrack — November 7, 2026
+
+Selected live video now uses an adaptation of the [official MIT ByteTrack core](https://github.com/ifzhang/ByteTrack/tree/d1bf0191adff59bc8fcfeaa0b33d3d1642552a99/yolox/tracker). It preserves the XYAH Kalman model, score-fused high-confidence association, a second low-confidence association, tentative confirmation and brief lost-track recovery. A NumPy Hungarian assignment replaces upstream LAP/SciPy dependencies. Full attribution and adaptation notes are in `clearway/licenses/BYTETRACK-MIT.txt`.
+
+The detector's normal high-confidence boxes and counts remain separate from a candidate pool down to 0.10. Only low observations associated with an active track are displayed; low observations cannot start tracks. Every returned box is an actual detection from the current JPEG. Lost predictions remain internal and never reach the overlay or incident monitor. IDs are ephemeral to a run/camera/stream; sessions, candidates and tracks are bounded, with reset on invalid/repeated frames, timing gaps, seek, dimensions or configuration changes. The frontend matches stable IDs for its existing short redraw estimates and preserves the 350ms media/500ms wall freshness limits. Pausing alerts preserves display tracking but clears incident-observation continuity.
+
+A bounded 9.6-second official Fremont development segment was sampled at 6fps using the browser-equivalent 640×480/JPEG80 input. Across **58 frames**, raw detection produced **461 high-confidence observations**. ByteTrack displayed those same observations plus **77 low-confidence recoveries**, across 19 track IDs; 13 IDs had a high→low→high sequence. Raw high boxes were unchanged on every frame and no prediction-only box was returned. The measured tracking median was **0.560ms**, maximum **2.308ms** (n=58); detector median was 67.811ms, maximum 253.355ms including initialization.
+
+Visual inspection found recoveries on visible near vehicles, especially around 9 seconds. Blur, distant misses, imperfect boxes and possible identity switches remain. These are development observations and continuity diagnostics, **not accuracy, recall, IDF1, unique vehicle counts or human labels**. ByteTrack improves continuity where low-confidence detections exist; it does not restore missing image detail or establish an incident.
+
+Reproduce locally with an already permitted short segment (the script does not download footage or create alerts):
+
+```sh
+clearway/.venv/bin/python clearway/scripts/compare_live_tracking.py --video .local/fremont-quality/source.ts --output .local/fremont-quality/bytetrack
+```
+
+The ignored output contains a side-by-side diagnostic video, five annotated frames and numeric results. It compares both raw high detections and a high-only tracking ablation against the same input. This is development material, not a held-out evaluation.
+
+## Fremont correction — November 7, 2026
+
+The user reported missed vehicles on TVD01 — I-80 at Fremont (`caltrans-d4-49`). Browser inspection reproduced just 1–3 detections while the stream and overlay continued at about 6 updates/s. The installed VisDrone model performed poorly on this view; it was not a stalled player.
+
+One bounded official HLS segment supplied three development frames. The stream has 704×480 coded pixels with 10:11 sample aspect ratio; the browser presents 704×528 and captures 640×480 JPEGs. Comparisons used the same aspect-corrected 640×480 images, JPEG quality 80, and existing pinned profiles:
+
+| Development frame | VisDrone 640, confidence 0.40 | YOLOX-M 640, confidence 0.30 |
+| --- | ---: | ---: |
+| 1 | 1 vehicle | 10 vehicles |
+| 2 | 4 vehicles | 13 vehicles |
+| 3 | 0 vehicles | 7 vehicles |
+
+Visual checks showed more near/mid-distance vehicles covered by YOLOX-M. Distant, blurred and occluded cars remain missed; some boxes can span neighboring vehicles. These are development counts, not labeled accuracy or evidence of an incident. Cropped/tiled variants did not consistently improve coverage and were not selected. No profile thresholds or motion-retention limits were relaxed.
+
+`make live-detect` now prepares the approved default plus an explicit Fremont-only YOLOX-M override. On an existing installation with both pinned weights already present:
+
+```sh
+clearway/.venv/bin/python clearway/scripts/setup_live_detector.py --profile yolox-m640 --camera-id caltrans-d4-49
+```
+
+Restart the operator after changing the selector. The UI says **YOLOX-M · Camera-specific model** on Fremont; other cameras retain their default. `camera_profiles` entries in the ignored local selector preserve the global selection and other overrides. Profile-specific weights, thresholds and preprocessing enter evidence/cache provenance; runtimes and failure cooldowns are isolated by model while all inference shares one bounded slot. Missing weights fail visibly without a substitute or an automatic download.
+
+After the no-reload restart, actual Fremont video displayed the new model at approximately 6 updates/s and 69–73 ms inference in spot checks. The existing run and all three incidents survived. Local diagnostic files remain ignored under `.local/fremont-quality/`, with browser proof in `clearway/data/verification/fremont-live-yolo.jpg`.
 
 ## What changed
 
@@ -33,7 +75,7 @@ make build
 make serve
 ```
 
-`make live-detect` downloads the pinned YOLO11s weights, verifies SHA-256, and writes `clearway/data/models/live-detector.json` with the explicit AGPL choice. Restart the operator after changing profile. The user approved this selection on November 7, 2026. Full AGPL text is included in the repository and built app; the UI links to license and corresponding source. Third-party notices remain separate. Model weights are restored separately, not committed.
+`make live-detect` prepares pinned YOLO11s weights plus YOLOX-M for Fremont, verifies SHA-256, and writes `clearway/data/models/live-detector.json` with the explicit AGPL choice. Restart the operator after changing profile. The user approved this selection on November 7, 2026. Full AGPL text is included in the repository and built app; the UI links to license and corresponding source. Third-party notices remain separate. Model weights are restored separately, not committed.
 
 Model source: [RISEF/yolov11s-visdrone, pinned revision](https://huggingface.co/RISEF/yolov11s-visdrone/tree/16d8d1709ae6fd7a9920398fbed5612e6208e0f0). Artifact: `weights/best.onnx`. SHA-256: `5abd18e5b630c330e68fe56b2bdc3875b10fbea07fe6912bde3cb9e68b58ca23`. Runtime: ONNX Runtime CPU, without the Ultralytics Python package.
 

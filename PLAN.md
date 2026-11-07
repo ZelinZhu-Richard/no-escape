@@ -43,6 +43,26 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Prefer live public video — November 7, 2026
+
+The user wants moving video whenever the official camera supports it. Default both the public-camera list and map to the 191 advertised video feeds, with an explicit All cameras option for the 576 snapshot-only entries. Selecting a video camera starts its stream; retain disclosed snapshot fallback and Retry live video when the provider fails. Re-selecting a list item retries video instead of retaining a previous fallback or manual snapshot choice. Keep selected-feed-only loading and existing local YOLO/ByteTrack. Refresh the user's stale built-in-browser tab after rebuilding, verify actual advancing video, and update the existing PR.
+
+## Bay Area public CCTV only — November 7, 2026
+
+The user requested removing NC public-camera points and expanding Bay Area endpoints. Interpret “May area” as Bay Area. Retire the NCDOT inventory dataset, route, refresh task and map controls. Use the official Caltrans District 4 catalog across Alameda, Contra Costa, Marin, Napa, San Francisco, San Mateo, Santa Clara, Solano and Sonoma; filter other counties, invalid coordinates/URLs and out-of-service entries. Retain up to 1,000 validated cameras, list pagination and all matching map pins. Advertised HLS availability is distinct from tested playback; preserve snapshot fallback, existing detections/tracking and selected-camera-only loading. Historical replay placement and retained incident evidence do not change. Update the existing PR and handoff after tests and browser verification. This supersedes the earlier requirement to retain 20 NC inventory points.
+
+## Tiled replay detection and live ByteTrack — November 7, 2026
+
+The user authorized higher-resolution tiled detection for Dense traffic and ByteTrack for live CCTV, same-footage comparisons on Dense/Fremont, and an update to the existing PR. Dense traffic uses original 1920×1080 pixels with 768px overlapping crops plus a full-frame pass, a 0.50 output floor, boundary-fragment rejection and duplicate suppression. Prepare the 4fps cache locally; keep other replay sources unchanged and an explicit full-frame fallback. Bind tiling settings to cache provenance.
+
+Live CCTV uses bounded, in-memory ByteTrack association: high-confidence matching, low-confidence recovery, Kalman motion prediction and ephemeral per-stream IDs. Return only actual current-frame observations; lost predictions remain internal. Preserve raw high-confidence boxes/counts and the existing incident rules. Tracking must continue when alerts are paused, while the alert observation window resets. Keep exact frame/config/run/stream binding and the existing overlay age limits, with resets on seek/gap/source/run/config changes. No paid inference or model training. Report development counts and measured latency, not unlabelled accuracy.
+
+## Fremont and Dense traffic corrections — November 7, 2026
+
+The user reported missed vehicles on Fremont CCTV and a nonworking Dense traffic source. Inspect the actual images and player before changing models. Use explicit camera-specific local profiles: Fremont (`caltrans-d4-49`) selects the already pinned Apache-2.0 YOLOX-M model after same-frame visual comparisons; other cameras keep the approved YOLO11s VisDrone default. Preserve model-specific preprocessing, thresholds, provenance, cache identity and failure isolation, and show the selected model honestly. No runtime model downloads or paid inference.
+
+Dense traffic video plays, but its Tiny saved detections miss visible vehicles. Rebuild that source's genuine timestamped cache with the approved VisDrone model while preserving other replay caches. Keep object detection separate from the fixture incident result: when the selected fixture completes without a candidate, say so in its evidence panel even if other incidents are queued. Do not invent a congestion emergency. Verify real playback/boxes, selected-source result text, existing incident retention, and appropriate regression checks before updating the PR and handoff.
+
 ## Live CCTV review candidates — November 7, 2026
 
 The user now authorizes connecting live detections to incident alerts, map markers, and the evidence/confirmation workflow. This supersedes the prior viewing-only restriction on creating public-camera candidates. Monitor only the selected, visible, playing video; snapshots remain detection-only. Use bounded local temporal rules for a possible stationary vehicle (at least 12 seconds) or sustained person presence (at least 3 seconds). Do not infer a collision, injury, exact lane, or danger from these rules. High vehicle count alone is not an alert.

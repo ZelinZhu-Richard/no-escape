@@ -9,7 +9,7 @@ import pytest
 
 from api.traffic_detection import (
     DEFAULT_PROFILE, PROFILES, TrafficDetectionError, TrafficDetector,
-    install_profile, prepare_input, selected_profile, validate_model_io,
+    install_profile, prepare_input, selected_profile, selected_profiles, validate_model_io,
 )
 
 
@@ -125,6 +125,42 @@ def test_optional_setup_is_blocked_before_copy_or_download_without_license_choic
     assert list(tmp_path.iterdir()) == []
 
 
+def test_camera_setup_preserves_default_and_other_choices_and_survives_default_setup(tmp_path, monkeypatch):
+    profile, contents = fixture_profile(monkeypatch)
+    source = tmp_path / "source.onnx"
+    source.write_bytes(contents)
+    write_config(tmp_path, profile="yolo11s-visdrone640", agpl_choice_accepted=True,
+                 camera_profiles={"other-camera": {"profile": "yolo11s-visdrone640", "agpl_choice_accepted": True}})
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_a, **_kw: pytest.fail("No implicit download"))
+    install_profile(tmp_path, profile.id, from_file=source, camera_id="caltrans-d4-49")
+    default, overrides = selected_profiles(tmp_path)
+    assert default.id == "yolo11s-visdrone640"
+    assert overrides["caltrans-d4-49"] == profile
+    assert overrides["other-camera"].id == "yolo11s-visdrone640"
+    install_profile(tmp_path, profile.id)  # Use pinned local file, change default only.
+    new_default, new_overrides = selected_profiles(tmp_path)
+    assert new_default == profile and new_overrides == overrides
+    assert not list((tmp_path / "models").glob("*.tmp"))
+
+
+@pytest.mark.parametrize("overrides", [
+    [], {"../camera": {"profile": DEFAULT_PROFILE}},
+    {"camera": {"profile": "unknown"}},
+    {"camera": {"profile": "yolo11s-visdrone640"}},
+    {"camera": {"profile": DEFAULT_PROFILE, "weights_sha256": "wrong"}},
+    {str(i): {"profile": DEFAULT_PROFILE} for i in range(17)},
+])
+def test_invalid_camera_selections_fail_closed_before_setup_writes(tmp_path, overrides):
+    path = write_config(tmp_path, camera_profiles=overrides)
+    before = path.read_bytes()
+    with pytest.raises(TrafficDetectionError):
+        selected_profiles(tmp_path)
+    with pytest.raises(TrafficDetectionError):
+        install_profile(tmp_path, DEFAULT_PROFILE, camera_id="caltrans-d4-49")
+    assert path.read_bytes() == before
+    assert not list((tmp_path / "models").glob("*.tmp"))
+
+
 class SessionInfo:
     def __init__(self, input_shape, output_shape):
         self.input = SimpleNamespace(name="images", shape=input_shape, type="tensor(float)")
@@ -218,6 +254,31 @@ def test_visdrone_filters_low_confidence_candidates_before_nms():
     assert len(boxes) == 1
     assert boxes[0]["confidence"] == pytest.approx(0.41)
     assert boxes[0]["xyxy"] == pytest.approx([380 / 640, 300 / 640, 420 / 640, 340 / 640])
+
+
+def test_tracking_floor_keeps_low_candidates_without_changing_high_detections():
+    _, np = vision_modules()
+    output = np.zeros((1, 14, 8400), dtype=np.float32)
+    for index, confidence in enumerate((0.2, 0.39, 0.41, 0.85)):
+        output[0, :4, index] = [80 + 150 * index, 320, 40, 40]
+        output[0, 4 + 3, index] = confidence
+    # A low duplicate must not displace the stronger box during NMS.
+    output[0, :4, 4] = output[0, :4, 3]
+    output[0, 4 + 3, 4] = 0.25
+    detector = tensor_detector("yolo11s-visdrone640", output)
+    frame = np.zeros((640, 640, 3), dtype=np.uint8)
+    high = detector.detect(frame)
+    candidates = detector.detect(frame, confidence_floor=0.1)
+    assert len(candidates) == 4
+    assert [box for box in candidates if box["confidence"] > detector.profile.confidence] == high
+
+
+@pytest.mark.parametrize("floor", [0, -1, True, 0.5, float("nan"), float("inf"), "0.1"])
+def test_tracking_floor_rejects_invalid_configuration_before_inference(floor):
+    _, np = vision_modules()
+    detector = tensor_detector("yolo11s-visdrone640", np.zeros((1, 14, 8400), dtype=np.float32))
+    with pytest.raises(TrafficDetectionError, match="confidence floor"):
+        detector.detect(np.zeros((640, 640, 3), dtype=np.uint8), confidence_floor=floor)
 
 
 def test_decoded_boxes_clip_to_source_image_and_discard_padding_only_boxes():

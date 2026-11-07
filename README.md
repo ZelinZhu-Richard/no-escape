@@ -2,7 +2,7 @@
 
 A local road-incident review desk: replay licensed footage, inspect a candidate on the map, review timestamped evidence, confirm it, and open a run-specific responder brief.
 
-The replay now shows **genuine local YOLOX detections** synchronized to licensed video. Incident narratives remain **explicit fixtures** until Gemini is configured and validated; boxes alone do not diagnose danger. Map placement for the obstruction/person clips is simulated. Fresh Gemini access and billing have not been verified. See [PLAN.md](PLAN.md) and the [morning report](MORNING_REPORT.md) for tested behavior and remaining work.
+The replay shows **genuine local YOLO detections** synchronized to licensed video. Incident narratives remain **explicit fixtures** until Gemini is configured and validated; boxes alone do not diagnose danger. Map placement for the obstruction/person clips is simulated. Fresh Gemini access and billing have not been verified. See [PLAN.md](PLAN.md) and the [morning report](MORNING_REPORT.md) for tested behavior and remaining work.
 
 ## Run locally
 
@@ -14,6 +14,7 @@ From the repository root:
 make setup
 make footage
 make detection-setup
+make live-detect
 make detect
 make build
 make serve
@@ -28,15 +29,15 @@ Open **http://127.0.0.1:8000** for the operator console. `make serve` runs the o
 
 No keys are required for the fixture workflow. Frozen cached mode uses only genuine saved model results; an empty cache is shown as unavailable. A fixture never becomes a genuine cached result.
 
-`make detect` prepares actual local YOLOX boxes at four samples per second using a checksum-pinned Apache-2.0 model. Playback uses the saved detections, so no cloud inference is needed for boxes. The counter compares a shadow gate with one request per two-second window: it is an estimate of requests avoided, not actual bill savings or measured incident recall. See [VISION.md](clearway/docs/VISION.md).
+`make detect` prepares local boxes at four samples per second: approved YOLO11s VisDrone with overlapping original-resolution tiles for Dense traffic, Apache-2.0 YOLOX-Tiny for the other recorded sources. Prepare weights with `make live-detect` first. Playback uses source/hash-bound saved detections, so no cloud inference is needed for boxes. The counter compares a shadow gate with one request per two-second window: it is an estimate of requests avoided, not actual bill savings or measured incident recall. A completed fixture without an incident candidate is reported explicitly. See [VISION.md](clearway/docs/VISION.md).
 
 `make tunnel` explicitly starts a temporary public connection to the read-only responder. The QR origin updates automatically; `make tunnel-stop` closes it. Follow [TUNNEL.md](clearway/docs/TUNNEL.md), including the human phone test with Wi-Fi off. `make serve` itself never starts a tunnel and uses no reload watcher.
 
-The map includes **100 public Caltrans traffic-camera points** around San Francisco/Oakland, with county/search filters and selected-camera previews. Click a purple pin to open its preview; enlarged hit areas and automatic scrolling make the selection visible. Forty catalog entries advertise **HLS video**, including the verified **TVD33 — Bay Bridge SAS Tower West**. Supported cameras play the provider's live video; other cameras and failed streams use the labeled five-minute snapshot fallback.
+The public CCTV map includes **767 official Caltrans cameras across the nine Bay Area counties**, including **191 advertised HLS video endpoints** and 576 snapshot-only entries. Search or filter by county; the list shows 50 at a time while all matches remain selectable on the map. Click a purple pin to open its preview. Supported cameras play provider video; other cameras and failed streams use the labeled snapshot fallback. The North Carolina inventory layer has been removed.
 
-The traffic-trained YOLO11s VisDrone model draws boxes **directly over the playing live video**, using frequent sampled detections and short motion estimates between them. Boxes follow the playback clock and disappear when results become stale or playback pauses. Snapshot boxes remain bound to their exact image. Run `make live-detect` to prepare its pinned local weights. The player is wider, labels are optional, and **Open 6th Street live** selects a tested traffic view. Missing detection resources show unavailable state. Only the selected visible camera loads, with no cloud inference or continuous camera archive. Sustained stationary-vehicle or person-presence signals create review candidates with one saved trigger frame; confirmation remains manual. Availability and image quality remain provider-controlled. See [LIVE-CAMERAS.md](clearway/docs/LIVE-CAMERAS.md) and [LIVE-ALERTS.md](clearway/docs/LIVE-ALERTS.md).
+The configured local detector draws boxes **directly over the playing live video**, using frequent sampled detections and short motion estimates between them. YOLO11s VisDrone is the default; Fremont uses an explicit YOLOX-M override after same-frame comparison. The UI identifies its active model. Boxes follow the playback clock and disappear when results become stale or playback pauses. Snapshot boxes remain bound to their exact image. Run `make live-detect` to prepare both pinned weights and these selections. The player is wider, labels are optional, and **Open 6th Street live** selects a tested traffic view. Missing detection resources show unavailable state. Only the selected visible camera loads, with no cloud inference or continuous camera archive. Sustained stationary-vehicle or person-presence signals create review candidates with one saved trigger frame; confirmation remains manual. Availability and image quality remain provider-controlled. See [LIVE-CAMERAS.md](clearway/docs/LIVE-CAMERAS.md) and [LIVE-ALERTS.md](clearway/docs/LIVE-ALERTS.md).
 
-The separate 20 dated NCDOT camera inventory locations remain metadata only; DriveNC's camera API needs a developer key. `make camera-refresh` refreshes that inventory, and `make live-camera-refresh` refreshes the Caltrans catalog (at most daily by default, without fetching images). Both networks are unrelated to the recorded incident evidence. Google photorealistic 3D is prepared but awaits the team's Cesium token; activation steps are in [MAP-SETUP.md](clearway/docs/MAP-SETUP.md).
+`make live-camera-refresh` refreshes the Bay Area Caltrans catalog (at most daily by default, without fetching images). Public cameras remain separate from recorded incident evidence and its simulated placement. Google photorealistic 3D is prepared but awaits the team's Cesium token; activation steps are in [MAP-SETUP.md](clearway/docs/MAP-SETUP.md).
 
 ## Footage
 

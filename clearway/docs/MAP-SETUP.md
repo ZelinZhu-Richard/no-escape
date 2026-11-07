@@ -23,7 +23,7 @@ Map context shows observed root and child resource counts. These browser observa
 
 **View map context** explains the current clip's placement, coordinates, duration, evidence count, and map loads. Unknown-location footage stays **simulated placement** regardless of how realistic the city looks. The map is not lane projection.
 
-The cyan NCDOT points are an official camera **inventory snapshot**, with source and retrieval dates. They do not indicate working streams, current traffic, or corroboration of the historical replay. **Fit camera network** shows the Durham-area inventory; **Focus selected camera** returns to the replay marker. Inventory pins can be hidden independently of the incident. A schematic fallback does not draw geospatial inventory points.
+Public camera pins use official Caltrans coordinates across the nine Bay Area counties. **Fit public camera network** fits all current search/county matches, not just the first list page. Select a pin to open its video/snapshot preview; the public layer can be hidden independently of replay/incident markers. The North Carolina inventory has been removed. Recorded footage keeps its original unknown-location/simulated-placement disclosure and does not become Bay Area incident evidence simply because public cameras are nearby.
 
 The selected replay label is ordinary HTML positioned using [Cesium SceneTransforms](https://cesium.com/learn/cesiumjs/ref-doc/SceneTransforms.html). It no longer recreates Cesium glyph labels during polling or incident state changes. It is hidden when it would overlap fixed map controls; the fixed evidence callout remains available.
 

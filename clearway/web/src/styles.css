@@ -778,7 +778,12 @@ h3 {
   font-weight: 600;
 }
 .gate-metric small {
-  display: none;
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--muted);
 }
 .gate-metric > strong {
   font-size: 22px;
@@ -792,7 +797,13 @@ h3 {
   color: var(--muted);
 }
 .detection-note {
-  display: none;
+  display: block;
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 .media-credit {
   grid-area: credit;
@@ -951,6 +962,12 @@ button.timestamp:hover {
   margin-top: 18px;
   border: 1px solid var(--ink);
   background: var(--card);
+}
+.detection-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 .unknowns summary {
   position: relative;
@@ -1201,7 +1218,11 @@ button.timestamp:hover {
   margin-top: 22px;
 }
 .fixture-note p {
-  display: none;
+  display: block;
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
 }
 
 /* Lower band: location + feeds */
@@ -2389,6 +2410,8 @@ button.timestamp:hover {
 }
 .live-incident-facts {
   padding: 12px 14px;
+  color: var(--ink);
+  background: var(--card);
   font-size: 13px;
   line-height: 1.5;
 }

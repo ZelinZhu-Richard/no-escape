@@ -11,7 +11,29 @@ vi.mock("../src/api", async (importOriginal) => ({
   post: vi.fn(),
 }));
 vi.mock("../src/MapView", () => ({
-  MapView: () => createElement("div", null, "Map placeholder"),
+  MapView: ({
+    incidents = [],
+    onSelectIncident,
+  }: {
+    incidents?: Incident[];
+    onSelectIncident?: (id: string) => void;
+  }) =>
+    createElement(
+      "div",
+      null,
+      "Map placeholder",
+      ...incidents.map((incident) =>
+        createElement(
+          "button",
+          {
+            key: incident.id,
+            "data-map-incident": incident.id,
+            onClick: () => onSelectIncident?.(incident.id),
+          },
+          incident.title,
+        ),
+      ),
+    ),
 }));
 
 const source: Source = {
@@ -591,5 +613,212 @@ describe("server-owned per-source analysis", () => {
     await click("reset-demo");
     expect(evidence().textContent).toContain("Not analyzed in this view");
     expect(evidence().textContent).not.toContain("Cached model result");
+  });
+});
+
+describe("stacked Dispatch layout", () => {
+  it.each([
+    [false, "smooth"],
+    [true, "instant"],
+  ] as const)(
+    "reveals committed desktop map evidence with reduced motion %s",
+    async (reducedMotion, behavior) => {
+      const previousWidth = window.innerWidth;
+      const previousMatchMedia = window.matchMedia;
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: 1440,
+      });
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: vi.fn(() => ({ matches: reducedMotion })),
+      });
+      const other: Incident = {
+        ...candidate,
+        id: "second-map-incident",
+        title: "Second camera evidence",
+      };
+      currentState = stateFor("oldrun01", [candidate, other]);
+      try {
+        await mount();
+        const panel = container.querySelector<HTMLElement>(
+          '[data-testid="evidence-panel"]',
+        )!;
+        const scroll = vi.fn(function (this: HTMLElement) {
+          expect(this.querySelector("h3")?.textContent).toBe(other.title);
+          expect(document.activeElement).toBe(this);
+        });
+        panel.scrollIntoView = scroll;
+        const mapButton = container.querySelector<HTMLButtonElement>(
+          '[data-map-incident="second-map-incident"]',
+        )!;
+        expect(
+          panel.compareDocumentPosition(mapButton) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+        mapButton.focus();
+        await act(async () => mapButton.click());
+        expect(scroll).toHaveBeenCalledOnce();
+        expect(scroll).toHaveBeenCalledWith({ behavior, block: "start" });
+        await tick();
+        expect(scroll).toHaveBeenCalledOnce();
+      } finally {
+        Object.defineProperty(window, "innerWidth", {
+          configurable: true,
+          value: previousWidth,
+        });
+        Object.defineProperty(window, "matchMedia", {
+          configurable: true,
+          value: previousMatchMedia,
+        });
+      }
+    },
+  );
+
+  it("does not imply active monitoring or clear roads when there are no candidates", async () => {
+    await mount();
+    expect(container.querySelector("h1")?.textContent).toBe(
+      "No candidates yet.",
+    );
+    expect(container.querySelector("h1")?.textContent).not.toMatch(
+      /quiet|watching|safe|clear/i,
+    );
+  });
+});
+
+describe("selected replay result beside other incidents", () => {
+  const denseSource: Source = {
+    ...source,
+    id: "traffic-jam",
+    title: "Dense traffic",
+    video_url: "/traffic-jam.webm",
+  };
+  const evidence = () =>
+    container.querySelector('[data-testid="evidence-panel"]')!;
+  const selectDense = async () => {
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Select Dense traffic"]',
+        )!
+        .click(),
+    );
+  };
+
+  it.each([
+    [
+      "fixture",
+      "Fixture complete. No candidate.",
+      "Fixture analysis",
+      "not a measured detection result",
+    ],
+    [
+      "cached",
+      "No candidate in the saved result.",
+      "Cached model result",
+      "No candidate does not establish",
+    ],
+    [
+      "fresh",
+      "Analysis complete. No candidate.",
+      "Fresh inference",
+      "No candidate does not establish",
+    ],
+  ] as const)(
+    "shows a completed %s no-candidate result without borrowing another incident",
+    async (mode, title, badge, limitation) => {
+      availableSources = [source, denseSource];
+      currentState = stateFor("oldrun01", [candidate]);
+      await mount();
+      await selectDense();
+      const result: State = {
+        ...currentState,
+        source_analyses: {
+          "traffic-jam": {
+            mode,
+            status: "complete",
+            message: "Selected clip completed",
+          },
+        },
+      };
+      vi.mocked(post).mockResolvedValue(result);
+      await click("start-replay");
+      expect(evidence().querySelector("h3")?.textContent).toBe(title);
+      expect(evidence().textContent).toContain(badge);
+      expect(evidence().textContent).toContain(limitation);
+      expect(evidence().textContent).not.toContain("Start the scene");
+      expect(evidence().querySelector(".walkthrough-steps")).toBeNull();
+      expect(
+        evidence().querySelector('[data-testid="confirm-incident"]'),
+      ).toBeNull();
+      const cards = container.querySelectorAll('[data-testid="incident-card"]');
+      expect(cards).toHaveLength(1);
+      expect(cards[0].textContent).toContain(candidate.title);
+      expect(evidence().textContent).not.toContain(candidate.title);
+    },
+  );
+
+  it.each([
+    [
+      "running",
+      "cached",
+      "Analysis in progress.",
+      "Dense traffic cache lookup is pending",
+    ],
+    [
+      "unavailable",
+      "unavailable",
+      "Analysis unavailable.",
+      "No genuine cache entry for Dense traffic",
+    ],
+  ] as const)(
+    "shows %s for Dense traffic even while another source has a completed result",
+    async (status, mode, title, message) => {
+      availableSources = [source, denseSource];
+      const unrelated: State["analysis"] = {
+        mode: "fresh",
+        status: "complete",
+        message: "Other source completed",
+      };
+      currentState = {
+        ...stateFor("oldrun01", [candidate]),
+        analysis: unrelated,
+        source_analyses: {
+          [source.id]: unrelated,
+          "traffic-jam": { mode, status, message },
+        },
+      };
+      await mount();
+      await selectDense();
+      expect(evidence().querySelector("h3")?.textContent).toBe(title);
+      expect(evidence().textContent).toContain(message);
+      expect(evidence().textContent).not.toContain("Fresh inference");
+      expect(evidence().textContent).not.toContain("Cached model result");
+      expect(evidence().textContent).not.toContain("Other source completed");
+      expect(evidence().querySelector(".walkthrough-steps")).toBeNull();
+      expect(
+        container.querySelectorAll('[data-testid="incident-card"]'),
+      ).toHaveLength(1);
+    },
+  );
+
+  it("keeps an untouched Dense traffic preview distinct from other completed analysis", async () => {
+    availableSources = [source, denseSource];
+    const unrelated: State["analysis"] = {
+      mode: "fresh",
+      status: "complete",
+      message: "Other source completed",
+    };
+    currentState = {
+      ...stateFor("oldrun01", [candidate]),
+      analysis: unrelated,
+      source_analyses: { [source.id]: unrelated },
+    };
+    await mount();
+    await selectDense();
+    expect(evidence().textContent).toContain("Not analyzed in this view");
+    expect(evidence().textContent).toContain("Start the scene");
+    expect(evidence().textContent).not.toContain("No candidate");
+    expect(evidence().textContent).not.toContain("Fresh inference");
   });
 });

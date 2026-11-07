@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { request } from "./api";
 import { jpegHash } from "./LiveImageDetections";
@@ -6,6 +6,8 @@ import { readImageDetections, readLiveAlertMonitor } from "./liveCameras";
 import type { ImageDetections, LiveAlertMonitor } from "./liveCameras";
 import { projectLiveFrame, trackLiveFrame } from "./liveOverlayTracking";
 import type { LiveTrackedFrame } from "./liveOverlayTracking";
+import { readLiveTracking } from "./liveTracking";
+import type { LiveTracking } from "./liveTracking";
 
 const SAMPLE_INTERVAL_MS = 140;
 
@@ -50,6 +52,8 @@ interface OverlayView {
   mediaAgeMs: number | null;
   wallAgeMs: number | null;
   alertMonitor: LiveAlertMonitor | null;
+  alertVersion: number;
+  tracking: LiveTracking | null;
 }
 const initialView = (cameraId: string): OverlayView => ({
   cameraId,
@@ -61,6 +65,8 @@ const initialView = (cameraId: string): OverlayView => ({
   mediaAgeMs: null,
   wallAgeMs: null,
   alertMonitor: null,
+  alertVersion: -1,
+  tracking: null,
 });
 
 export function useLiveVideoOverlay(
@@ -68,8 +74,21 @@ export function useLiveVideoOverlay(
   cameraId: string,
   enabled: boolean,
   runId?: string,
+  alertsEnabled = true,
 ) {
   const [view, setView] = useState<OverlayView>(() => initialView(cameraId));
+  const alertSettings = useRef({
+    enabled: alertsEnabled,
+    version: 0,
+    pendingPause: !alertsEnabled,
+  });
+  if (alertSettings.current.enabled !== alertsEnabled) {
+    alertSettings.current = {
+      enabled: alertsEnabled,
+      version: alertSettings.current.version + 1,
+      pendingPause: alertSettings.current.pendingPause || !alertsEnabled,
+    };
+  }
   useEffect(() => {
     const video = videoRef.current;
     setView(initialView(cameraId));
@@ -84,6 +103,7 @@ export function useLiveVideoOverlay(
     let animationHandle = 0;
     let tracked: LiveTrackedFrame | null = null;
     let details: ImageDetections | null = null;
+    let trackingDetails: LiveTracking | null = null;
     let mediaTime = video.currentTime;
     let lastPresentedTime: number | null = null;
     let lastSampledMediaTime: number | null = null;
@@ -94,6 +114,7 @@ export function useLiveVideoOverlay(
     let lastViewKey = "";
     let message = "";
     let alertMonitor: LiveAlertMonitor | null = null;
+    let alertMonitorVersion = alertSettings.current.version;
     let streamId = runId ? crypto.randomUUID() : "";
     const nativeFrames = typeof video.requestVideoFrameCallback === "function";
 
@@ -101,6 +122,7 @@ export function useLiveVideoOverlay(
       ++epoch;
       tracked = null;
       details = null;
+      trackingDetails = null;
       alertMonitor = null;
       streamId = runId ? crypto.randomUUID() : "";
       lastPresentedTime = null;
@@ -167,7 +189,13 @@ export function useLiveVideoOverlay(
         mediaTime,
         mediaAgeMs: projection.mediaAgeMs,
         wallAgeMs: projection.wallAgeMs,
-        alertMonitor,
+        alertMonitor:
+          alertSettings.current.enabled &&
+          alertMonitorVersion === alertSettings.current.version
+            ? alertMonitor
+            : null,
+        alertVersion: alertMonitorVersion,
+        tracking: fresh ? trackingDetails : null,
       });
     };
 
@@ -207,23 +235,39 @@ export function useLiveVideoOverlay(
         controller = new AbortController();
         const active = controller;
         requestTimeout = setTimeout(() => active.abort(), 750);
+        const requestedAlertVersion = alertSettings.current.version;
+        const monitorActive =
+          alertSettings.current.enabled && !alertSettings.current.pendingPause;
+        // Even a rapid pause/resume sends one pause, resetting alert continuity
+        // without resetting the independent ByteTrack stream session.
         const raw = await request<unknown>(
           `/api/live-cameras/${encodeURIComponent(cameraId)}/detect-frame`,
           {
             method: "POST",
             headers: {
               "Content-Type": "image/jpeg",
-              ...(runId ? {
-                "X-Clearway-Run-ID": runId,
-                "X-Clearway-Stream-ID": streamId,
-                "X-Clearway-Media-Time": String(captured.mediaTime),
-              } : {}),
+              ...(runId
+                ? {
+                    "X-Clearway-Run-ID": runId,
+                    "X-Clearway-Stream-ID": streamId,
+                    "X-Clearway-Media-Time": String(captured.mediaTime),
+                    ...(!monitorActive
+                      ? { "X-Clearway-Alert-Monitor": "paused" }
+                      : {}),
+                  }
+                : {}),
             },
             body: captured.blob,
             signal: active.signal,
           },
         );
         if (disposed || generation !== epoch || active.signal.aborted) return;
+        if (
+          runId &&
+          !monitorActive &&
+          requestedAlertVersion === alertSettings.current.version
+        )
+          alertSettings.current.pendingPause = false;
         const receivedAtMs = performance.now();
         const result = readImageDetections(raw, captured.hash);
         if (!result) {
@@ -255,15 +299,31 @@ export function useLiveVideoOverlay(
           message = "Local YOLO delayed · old boxes are hidden.";
           return;
         }
+        trackingDetails = runId
+          ? readLiveTracking((raw as Record<string, unknown>).tracking, {
+              imageHash: captured.hash,
+              configurationHash: result.provenance.configuration_sha256,
+              cameraId,
+              runId,
+              streamId,
+              mediaTime: captured.mediaTime,
+            })
+          : null;
         tracked = trackLiveFrame(tracked, {
-          sourceId: cameraId,
+          sourceId: `${cameraId}:${result.provenance.configuration_sha256 ?? "raw"}`,
           mediaTime: captured.mediaTime,
           capturedAtMs: captured.capturedAtMs,
           receivedAtMs,
-          boxes: result.boxes,
+          boxes: trackingDetails?.tracks ?? result.boxes,
         });
         details = tracked ? result : null;
-        alertMonitor = runId ? readLiveAlertMonitor((raw as Record<string, unknown>).alert_monitor) : null;
+        alertMonitorVersion = requestedAlertVersion;
+        alertMonitor =
+          runId && monitorActive
+            ? readLiveAlertMonitor(
+                (raw as Record<string, unknown>).alert_monitor,
+              )
+            : null;
         updates.push(receivedAtMs);
         message = "";
       } catch {
@@ -325,5 +385,13 @@ export function useLiveVideoOverlay(
       events.forEach((event) => video.removeEventListener(event, reset));
     };
   }, [videoRef, cameraId, enabled, runId]);
-  return enabled && view.cameraId === cameraId ? view : initialView(cameraId);
+  return enabled && view.cameraId === cameraId
+    ? {
+        ...view,
+        alertMonitor:
+          alertsEnabled && view.alertVersion === alertSettings.current.version
+            ? view.alertMonitor
+            : null,
+      }
+    : initialView(cameraId);
 }

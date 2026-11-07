@@ -29,11 +29,14 @@ class Detector:
         self.release = None
         self.entered = threading.Event()
 
-    def analyze_jpeg(self, raw, camera_id=None):
+    def analyze_jpeg(self, raw, camera_id=None, *, tracking=False):
         self.entered.set()
         if self.release:
             assert self.release.wait(3)
-        return detection(raw, camera_id, self.boxes)
+        result = detection(raw, camera_id, self.boxes)
+        if tracking:
+            result.update(confidence_threshold=0.3, tracking_candidates=list(self.boxes))
+        return result
 
 
 @pytest.fixture
@@ -127,6 +130,50 @@ def test_sustained_person_goes_through_same_review_flow(services):
     assert incident["category"] == "sustained_person_visible"
     assert "injury" in " ".join(incident["unknowns"])
     assert "danger" not in incident["title"].lower()
+
+
+def test_paused_alerts_keep_tracking_context_but_break_alert_observation(services):
+    calls = []
+    class Tracker:
+        def process(self, context, result):
+            calls.append((context, result))
+            return {"status": "available", "algorithm": "ByteTrack", "tracks": []}
+    # The route's injected service is used, so spy on that instance.
+    tracker = services.local.app.state.live_tracking_service
+    original = tracker.process
+    tracker.process = Tracker().process
+    try:
+        for second in range(12):
+            send(services, second)
+        paused, _ = send(services, 12, headers={"X-Clearway-Alert-Monitor": "paused"})
+        assert paused["tracking"]["status"] == "available"
+        assert paused["alert_monitor"]["phase"] == "paused"
+        assert services.monitor._streams == {}
+        assert "tracking_candidates" not in paused
+        assert calls[-1][0] == {"run_id": services.run, "camera_id": CAMERA_ID,
+                                "stream_id": services.stream, "media_time_seconds": 12.0}
+        assert calls[-1][1]["tracking_candidates"] == [CAR]
+        resumed, _ = send(services, 13)
+        assert resumed["alert_monitor"]["observed_seconds"] == 0
+        assert services.store.snapshot()["incidents"] == []
+    finally:
+        tracker.process = original
+
+
+def test_recovered_low_boxes_never_enter_incident_monitor_or_evidence(services):
+    services.detector.boxes = []
+    detector = services.detector.analyze_jpeg
+    def candidates_only(raw, camera_id=None, *, tracking=False):
+        result = detector(raw, camera_id, tracking=tracking)
+        result["tracking_candidates"] = [{**CAR, "confidence": .2}]
+        return result
+    services.detector.analyze_jpeg = candidates_only
+    for second in range(14):
+        result, _ = send(services, second)
+        assert result["boxes"] == []
+        assert "tracking_candidates" not in result
+    assert services.store.snapshot()["incidents"] == []
+    assert result["alert_monitor"]["observed_seconds"] == 0
 
 
 def test_no_header_frames_and_real_snapshot_route_never_create_candidates(services):

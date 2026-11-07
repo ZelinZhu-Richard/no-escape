@@ -1,4 +1,4 @@
-"""Local YOLOX detections for honest, video-synchronized replay overlays.
+"""Pinned local detections for honest, video-synchronized replay overlays.
 
 Preprocessing/grid decoding follows Megvii YOLOX's ONNX example (Apache-2.0,
 Copyright (c) Megvii, Inc. and its affiliates). Clearway's implementation adds
@@ -20,6 +20,8 @@ import time
 import urllib.request
 
 from .sources import SOURCES, media_path
+from .traffic_detection import PROFILES, TrafficDetectionError, TrafficDetector
+from .tiled_detection import TiledDetector, TilingConfig, TilingError, tile_regions
 
 MODEL_NAME = "YOLOX-Tiny"
 MODEL_VERSION = "0.1.1rc0"
@@ -33,6 +35,46 @@ CONFIDENCE = 0.30
 NMS_IOU = 0.45
 WINDOW_SECONDS = 2.0
 MAX_CACHE_BYTES = 20_000_000
+# The aerial dense-traffic clip needs the approved traffic-trained detector.
+# Other replay sources retain their existing Tiny model and cache contract.
+REPLAY_PROFILE_BY_SOURCE = {"traffic-jam": "yolo11s-visdrone640"}
+FULL_FRAME_STRATEGY = {"mode": "full_frame", "version": "full-frame-v1"}
+DENSE_TILE_SIZES = (640, 768, 960)
+
+
+def requested_replay_strategy(source_id: str, dense_strategy: str = "tiled", dense_tile_size: int = 768):
+    if source_id != "traffic-jam":
+        return None
+    if dense_strategy == "full-frame":
+        return dict(FULL_FRAME_STRATEGY)
+    if dense_strategy != "tiled" or dense_tile_size not in DENSE_TILE_SIZES:
+        raise DetectionError("Select Dense traffic tiled preparation (640/768/960px) or the full-frame fallback.")
+    return TilingConfig(tile_size=dense_tile_size).metadata()
+
+
+def strategy_digest(strategy: dict) -> str:
+    return hashlib.sha256(json.dumps(strategy, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def _validated_strategy(provenance: dict, source_id: str) -> TilingConfig | None:
+    strategy = provenance.get("inference_strategy")
+    if strategy is None:
+        return None  # Existing verified full-frame caches remain readable.
+    if source_id != "traffic-jam" or provenance.get("inference_strategy_sha256") != strategy_digest(strategy):
+        raise ValueError("Replay inference strategy does not match this source.")
+    if strategy == FULL_FRAME_STRATEGY:
+        return None
+    if not isinstance(strategy, dict) or strategy.get("tile_size") not in DENSE_TILE_SIZES:
+        raise ValueError("Unsupported replay tiling configuration.")
+    config = TilingConfig(tile_size=strategy["tile_size"])
+    if strategy != config.metadata():
+        raise ValueError("Replay tiling parameters differ from the validated strategy.")
+    return config
+
+
+def replay_profile(source_id: str):
+    identifier = REPLAY_PROFILE_BY_SOURCE.get(source_id)
+    return PROFILES[identifier] if identifier else None
 
 
 class DetectionError(ValueError):
@@ -126,24 +168,44 @@ def _number(value, *, low=0, high=1) -> bool:
 def validate_report(report: dict, source_id: str, source_sha: str) -> bool:
     """Reject malformed/stale/fixture outputs before they reach a video overlay."""
     try:
-        if report["schema_version"] != SCHEMA_VERSION or report["status"] != "available" or report["source_id"] != source_id:
+        if source_id not in SOURCES or report["schema_version"] != SCHEMA_VERSION or report["status"] != "available" or report["source_id"] != source_id:
             return False
         provenance, model = report["provenance"], report["model"]
+        tiling = _validated_strategy(provenance, source_id)
+        profile = replay_profile(source_id)
+        expected_model = ((profile.name, profile.version, profile.sha256) if profile
+                          else (MODEL_NAME, MODEL_VERSION, MODEL_SHA256))
+        preprocessing = profile.preprocessing_version if profile else PREPROCESSING_VERSION
+        confidence = tiling.confidence_floor if tiling else profile.confidence if profile else CONFIDENCE
+        nms_iou = profile.nms_iou if profile else NMS_IOU
+        classes = set(dict(profile.display_classes).values()) if profile else set(CLASS_NAMES.values())
+        vehicle_names = classes - {"person"}
+        native_map = ({name: dict(profile.display_classes)[index] for index, name in profile.native_classes}
+                      if profile else {})
         if (provenance["kind"] != "local_yolo_cached" or provenance["fixture"] is not False
-                or provenance["source_sha256"] != source_sha or provenance["preprocessing_version"] != PREPROCESSING_VERSION
-                or model["name"] != MODEL_NAME or model["version"] != MODEL_VERSION or model["weights_sha256"] != MODEL_SHA256):
+                or provenance["source_sha256"] != source_sha or provenance["preprocessing_version"] != preprocessing
+                or (model["name"], model["version"], model["weights_sha256"]) != expected_model):
             return False
-        if report["confidence_threshold"] != CONFIDENCE or report["nms_iou"] != NMS_IOU:
+        if profile and (model.get("profile") != profile.id or model.get("license") != profile.license
+                        or model.get("input_size") != [profile.input_size, profile.input_size]):
+            return False
+        if report["confidence_threshold"] != confidence or report["nms_iou"] != nms_iou:
             return False
         duration, fps = report["duration_seconds"], report["sample_fps"]
         if not _number(duration, high=600) or duration <= 0 or not _number(fps, low=1, high=30):
             return False
         if any(type(report[key]) is not int or not 1 <= report[key] <= 16384 for key in ("video_width", "video_height")):
             return False
+        if tiling:
+            regions = tile_regions(report["video_width"], report["video_height"], tiling)
+            if report["processing"]["model_passes_per_sample"] != len(regions) + 1:
+                return False
         frames = report["frames"]
         if not isinstance(frames, list) or not frames or len(frames) > 18000:
             return False
         if abs(len(frames) - duration * fps) > 2:
+            return False
+        if tiling and report["processing"]["model_passes_total"] != (len(regions) + 1) * len(frames):
             return False
         previous = -1
         for frame in frames:
@@ -155,11 +217,14 @@ def validate_report(report: dict, source_id: str, source_sha: str) -> bool:
             previous = timestamp
             for box in boxes:
                 coords = box["xyxy"]
-                if (box["class_name"] not in CLASS_NAMES.values() or not _number(box["confidence"], low=CONFIDENCE)
+                if (box["class_name"] not in classes or not _number(box["confidence"], low=confidence)
                         or not isinstance(coords, list) or len(coords) != 4 or not all(_number(v) for v in coords)
                         or coords[0] >= coords[2] or coords[1] >= coords[3]):
                     return False
-            if frame["vehicle_count"] != sum(box["class_name"] in VEHICLE_NAMES for box in boxes):
+                if profile and "native_class_name" in box:
+                    if native_map.get(box["native_class_name"]) != box["class_name"]:
+                        return False
+            if frame["vehicle_count"] != sum(box["class_name"] in vehicle_names for box in boxes):
                 return False
             if frame["person_count"] != sum(box["class_name"] == "person" for box in boxes):
                 return False
@@ -262,13 +327,28 @@ class YoloDetector:
         return sorted(boxes, key=lambda box: -box["confidence"])[:300]
 
 
-def prepare_detections(data_dir: Path, source_id: str, *, sample_fps: float = 4.0) -> dict:
+def prepare_detections(data_dir: Path, source_id: str, *, sample_fps: float = 4.0,
+                       dense_strategy: str = "tiled", dense_tile_size: int = 768) -> dict:
     if source_id not in SOURCES or not _number(sample_fps, low=1, high=30):
         raise DetectionError("Select a registered source and a sample rate between 1 and 30 fps.")
     media = media_path(data_dir, source_id, "video")
     if media is None:
         raise DetectionError("The registered source footage is not available.")
-    detector = YoloDetector(Path(data_dir) / "models" / "yolox_tiny.onnx")
+    profile = replay_profile(source_id)
+    strategy = requested_replay_strategy(source_id, dense_strategy, dense_tile_size)
+    tiling = TilingConfig(tile_size=dense_tile_size) if strategy and strategy["mode"] == "tiled" else None
+    try:
+        detector = (TrafficDetector(Path(data_dir) / "models" / profile.filename, profile) if profile
+                    else YoloDetector(Path(data_dir) / "models" / "yolox_tiny.onnx"))
+    except TrafficDetectionError as error:
+        raise DetectionError("Dense traffic requires the pinned local YOLO11s VisDrone weights. "
+                             "Install them explicitly before preparing this replay; no download, Tiny fallback, "
+                             "or live-camera configuration change was performed. "
+                             "setup_live_detector.py --profile yolo11s-visdrone640 --download --accept-agpl "
+                             f"also selects the live-camera default. {error}") from None
+    if tiling:
+        detector = TiledDetector(detector, tiling)
+    vehicle_names = (set(dict(profile.display_classes).values()) - {"person"}) if profile else VEHICLE_NAMES
     capture = detector.cv2.VideoCapture(str(media))
     # WebM can advertise a 1000fps time base as avg_frame_rate. Read actual
     # decoded timestamps below and count frames instead of trusting that field.
@@ -292,6 +372,11 @@ def prepare_detections(data_dir: Path, source_id: str, *, sample_fps: float = 4.
     if not _number(duration, low=0.001, high=600):
         capture.release()
         raise DetectionError("Replay preparation is limited to ten-minute clips.")
+    try:
+        model_passes = 1 + len(tile_regions(width, height, tiling)) if tiling else 1
+    except TilingError as error:
+        capture.release()
+        raise DetectionError(str(error)) from None
     sample_fps = min(sample_fps, fps)
     source_sha = sha256_file(media)
     started = time.perf_counter()
@@ -311,10 +396,12 @@ def prepare_detections(data_dir: Path, source_id: str, *, sample_fps: float = 4.
                 boxes = detector.detect(frame)
                 latencies.append((time.perf_counter() - infer_start) * 1000)
                 frames.append({"time_seconds": round(timestamp, 6), "boxes": boxes,
-                               "vehicle_count": sum(box["class_name"] in VEHICLE_NAMES for box in boxes),
+                               "vehicle_count": sum(box["class_name"] in vehicle_names for box in boxes),
                                "person_count": sum(box["class_name"] == "person" for box in boxes)})
                 next_sample_index += 1
             frame_index += 1
+    except (TilingError, TrafficDetectionError) as error:
+        raise DetectionError(str(error)) from None
     finally:
         capture.release()
     if frame_index < frame_count - 1 or not frames:
@@ -323,13 +410,14 @@ def prepare_detections(data_dir: Path, source_id: str, *, sample_fps: float = 4.
         raise DetectionError("Footage changed during preparation; detections were not saved.")
     report = {
         "schema_version": SCHEMA_VERSION, "status": "available", "source_id": source_id,
-        "model": {"name": MODEL_NAME, "version": MODEL_VERSION, "weights_sha256": MODEL_SHA256,
+        "model": profile.metadata(detector.runtime_version) if profile else {"name": MODEL_NAME, "version": MODEL_VERSION, "weights_sha256": MODEL_SHA256,
                   "license": "Apache-2.0", "source_url": "https://github.com/Megvii-BaseDetection/YOLOX",
                   "runtime": "ONNX Runtime CPU", "runtime_version": detector.runtime_version},
         "provenance": {"kind": "local_yolo_cached", "fixture": False, "generated_at": datetime.now(timezone.utc).isoformat(),
-                       "source_sha256": source_sha, "preprocessing_version": PREPROCESSING_VERSION},
+                       "source_sha256": source_sha, "preprocessing_version": profile.preprocessing_version if profile else PREPROCESSING_VERSION},
         "sample_fps": sample_fps, "duration_seconds": duration, "video_width": width, "video_height": height,
-        "confidence_threshold": CONFIDENCE, "nms_iou": NMS_IOU, "frames": frames,
+        "confidence_threshold": tiling.confidence_floor if tiling else profile.confidence if profile else CONFIDENCE,
+        "nms_iou": profile.nms_iou if profile else NMS_IOU, "frames": frames,
         "gate": shadow_gate(frames, duration),
         "processing": {"frame_count": len(frames), "decoded_frames": frame_index,
                        "wall_seconds": round(time.perf_counter() - started, 4),
@@ -339,6 +427,11 @@ def prepare_detections(data_dir: Path, source_id: str, *, sample_fps: float = 4.
                         "Object detections can be wrong and do not establish injury, obstruction, or road-lane membership.",
                         "No calibrated road ROI or normal-traffic baseline; gate savings are a shadow comparison, not billed savings."],
     }
+    if strategy:
+        report["provenance"].update(inference_strategy=strategy, inference_strategy_sha256=strategy_digest(strategy))
+        report["processing"].update(model_passes_per_sample=model_passes, model_passes_total=model_passes * len(frames))
+        if tiling:
+            report["limitations"].append("Full-frame plus overlapping original-pixel crops are merged offline. Tiles can add false detections; markings, occlusion and adjacent vehicles remain ambiguous.")
     if not validate_report(report, source_id, source_sha):
         raise DetectionError("Generated detector output failed validation; it was not saved.")
     folder = Path(data_dir) / "detections"

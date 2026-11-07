@@ -55,6 +55,45 @@ const sourceHint = (id: string) =>
         ? "Congestion candidate · unverified"
         : "Licensed scene · human review required";
 
+function emptyEvidenceCopy(analysis?: State["analysis"]) {
+  if (analysis?.status === "running")
+    return {
+      title: "Analysis in progress.",
+      summary:
+        "This clip is being analyzed. Its result will appear here when ready.",
+      disclosure: analysis.message,
+    };
+  if (analysis?.status === "unavailable" || analysis?.mode === "unavailable")
+    return {
+      title: "Analysis unavailable.",
+      summary: "No source-specific analysis result is available for this clip.",
+      disclosure:
+        analysis.message ||
+        "An unavailable result does not establish that the scene is safe.",
+    };
+  if (analysis?.status !== "complete") return null;
+  if (analysis.mode === "fixture")
+    return {
+      title: "Fixture complete. No candidate.",
+      summary:
+        "The predefined fixture produced no incident candidate for this clip.",
+      disclosure:
+        "Fixture behavior is not a measured detection result. It does not establish that the scene is safe.",
+    };
+  return {
+    title:
+      analysis.mode === "cached"
+        ? "No candidate in the saved result."
+        : "Analysis complete. No candidate.",
+    summary:
+      analysis.mode === "cached"
+        ? "The cached model result contains no incident candidate for this clip."
+        : "Fresh analysis returned no incident candidate for this clip.",
+    disclosure:
+      "No candidate does not establish that the scene is safe. Review the source footage.",
+  };
+}
+
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="brand">
@@ -308,6 +347,19 @@ function Operator() {
   const mounted = useRef(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const evidenceRef = useRef<HTMLElement>(null);
+  const [evidenceReveal, setEvidenceReveal] = useState(0);
+  useEffect(() => {
+    if (!evidenceReveal) return;
+    // Reveal after the selected evidence has committed. In the stacked layout
+    // the map and queue sit below this panel, including on desktop.
+    evidenceRef.current?.focus({ preventScroll: true });
+    evidenceRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+      block: "start",
+    });
+  }, [evidenceReveal]);
   const livePreviewRef = useRef<HTMLDivElement>(null);
   const selectMapCamera = useCallback((id: string) => {
     setLiveSelectedId(id);
@@ -352,7 +404,6 @@ function Operator() {
         const catalog = readLiveCameraCatalog(raw);
         if (!catalog) throw new Error("Invalid public camera catalog");
         setLiveCatalog(catalog);
-        setVisibleLiveCameras(catalog.cameras);
       })
       .catch(() => {
         if (!controller.signal.aborted)
@@ -583,14 +634,7 @@ function Operator() {
   const openEvidence = (id?: string) => {
     cancelReplayPlayback();
     if (id ?? incident?.id) setSelectedId(id ?? incident!.id);
-    evidenceRef.current?.focus({ preventScroll: true });
-    if (window.innerWidth < 1100)
-      evidenceRef.current?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "instant"
-          : "smooth",
-        block: "start",
-      });
+    setEvidenceReveal((version) => version + 1);
   };
   const seek = (time: number) => {
     if (liveIncident) return;
@@ -602,6 +646,7 @@ function Operator() {
   const confirmedCount =
     state?.incidents.filter((i) => i.review_status === "confirmed").length ?? 0;
   const selectedAnalysis = state?.source_analyses?.[sourceId];
+  const emptyResult = emptyEvidenceCopy(selectedAnalysis);
   const displayedMode: AnalysisMode =
     selectedAnalysis?.status === "unavailable"
       ? "unavailable"
@@ -744,7 +789,7 @@ function Operator() {
                     ? `${pendingCount} ${pendingCount === 1 ? "signal" : "signals"} awaiting your call`
                     : alertState === "confirmed"
                       ? "Incident confirmed. Handoff ready."
-                      : "All sectors quiet. Watching."}
+                      : "No candidates yet."}
                 </h1>
                 <p>
                   See the evidence. Make the call. Keep the handoff connected.
@@ -935,42 +980,48 @@ function Operator() {
                         {sourceName(evidenceSource.id)}
                       </span>
                       <h3>
-                        A short replay.
-                        <br />A complete review.
+                        {emptyResult ? (
+                          emptyResult.title
+                        ) : (
+                          <>
+                            A short replay.
+                            <br />A complete review.
+                          </>
+                        )}
                       </h3>
                       <p>
-                        Start the scene, inspect timestamped evidence, then
-                        confirm what should be handed off.
+                        {emptyResult?.summary ??
+                          "Start the scene, inspect timestamped evidence, then confirm what should be handed off."}
                       </p>
-                      <div className="walkthrough-steps">
-                        <span>
-                          <b>01</b>Replay the source
-                        </span>
-                        <span>
-                          <b>02</b>Review the evidence
-                        </span>
-                        <span>
-                          <b>03</b>Confirm & hand off
-                        </span>
-                      </div>
+                      {!emptyResult && (
+                        <div className="walkthrough-steps">
+                          <span>
+                            <b>01</b>Replay the source
+                          </span>
+                          <span>
+                            <b>02</b>Review the evidence
+                          </span>
+                          <span>
+                            <b>03</b>Confirm & hand off
+                          </span>
+                        </div>
+                      )}
                       <div className="fixture-note">
                         {selectedAnalysis?.status === "running" ? (
                           <Badge kind="muted">Analysis in progress</Badge>
-                        ) : selectedAnalysis ? (
+                        ) : emptyResult ? (
                           <ModeBadge mode={displayedMode} />
                         ) : (
                           <Badge kind="muted">Not analyzed in this view</Badge>
                         )}
                         <p>
-                          {selectedAnalysis?.status === "running"
-                            ? "Analysis is running for this source. Results will appear here when ready."
-                            : displayedMode === "unavailable"
-                              ? "No source-specific analysis result is available for this preview."
-                              : mode === "fixture"
-                                ? "The next replay uses a labeled fixture to exercise the workflow without paid model calls."
-                                : mode === "cached"
-                                  ? "Frozen cache only. A missing genuine model result will be shown as unavailable."
-                                  : "Fresh analysis can call the configured model within the server budget. Review its observations before confirming."}
+                          {emptyResult
+                            ? emptyResult.disclosure
+                            : mode === "fixture"
+                              ? "The next replay uses a labeled fixture to exercise the workflow without paid model calls."
+                              : mode === "cached"
+                                ? "Frozen cache only. A missing genuine model result will be shown as unavailable."
+                                : "Fresh analysis can call the configured model within the server budget. Review its observations before confirming."}
                         </p>
                       </div>
                     </div>
@@ -1193,7 +1244,7 @@ function Operator() {
                   <span className="cctv-toggle-text">
                     <strong>Public CCTV network</strong>
                     <small className="mono">
-                      {feedCount} Caltrans cameras · live video + local YOLO
+                      {liveCatalog?.cameras.filter(camera => camera.streaming_url).length ?? 0} video feeds · {feedCount} total cameras · local YOLO
                     </small>
                   </span>
                   <span className="cctv-toggle-action mono">

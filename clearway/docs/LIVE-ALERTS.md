@@ -4,6 +4,8 @@ Open a public camera with working live video. Local YOLO observations from that 
 
 **Pause alerts** stops candidate monitoring while YOLO boxes can continue. Pause YOLO, pause video, switch to snapshots, close the camera, or hide the tab to stop observations. Only the selected video is monitored; this is not continuous monitoring of all 100 cameras. Five-minute snapshots do not provide the timing evidence needed by these rules and do not create candidates.
 
+The live display also uses ByteTrack for ephemeral object association. Its recovered low-confidence observations and internal predictions never enter these incident rules or frozen evidence. The monitor receives only the detector's original high-confidence boxes. Pausing alerts preserves display track IDs but clears the monitor's observation window, so resuming cannot bridge a paused interval.
+
 ## Rules and limits
 
 | Review cue | Required observations | What it does not establish |

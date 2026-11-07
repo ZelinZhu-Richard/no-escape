@@ -1,4 +1,4 @@
-.PHONY: setup build serve test verify footage gemini-check gemini-smoke gemini-replay detection-setup detect live-detect live-detect-apache camera-refresh live-camera-refresh tunnel tunnel-status tunnel-stop
+.PHONY: setup build serve test verify footage gemini-check gemini-smoke gemini-replay detection-setup detect live-detect live-detect-apache live-camera-refresh tunnel tunnel-status tunnel-stop
 
 setup:
 	python3 -m venv clearway/.venv
@@ -31,12 +31,10 @@ detect:
 
 live-detect:
 	clearway/.venv/bin/python clearway/scripts/setup_live_detector.py --profile yolo11s-visdrone640 --download --accept-agpl
+	clearway/.venv/bin/python clearway/scripts/setup_live_detector.py --profile yolox-m640 --camera-id caltrans-d4-49 --download
 
 live-detect-apache:
 	clearway/.venv/bin/python clearway/scripts/setup_live_detector.py --profile yolox-m640 --download
-
-camera-refresh:
-	python3 clearway/scripts/refresh_camera_context.py
 
 live-camera-refresh:
 	python3 clearway/scripts/refresh_live_cameras.py

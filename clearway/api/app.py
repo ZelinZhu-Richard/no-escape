@@ -79,7 +79,7 @@ def _unavailable() -> dict:
 def create_app(
     *, data_dir: Path | str | None = None, analysis_service=None,
     detection_service=None, live_camera_service=None, live_detection_service=None,
-    live_monitor_service=None,
+    live_monitor_service=None, live_tracking_service=None,
     read_only: bool = False, web_dist: Path | str | None = None,
 ) -> FastAPI:
     data = Path(data_dir or os.environ.get("CLEARWAY_DATA_DIR", ROOT / "data")).resolve()
@@ -100,6 +100,9 @@ def create_app(
     if live_monitor_service is None and not read_only:
         from .live_monitor import LiveAlertMonitor
         live_monitor_service = LiveAlertMonitor(store)
+    if live_tracking_service is None and not read_only:
+        from .live_tracking import LiveTrackingService
+        live_tracking_service = LiveTrackingService()
     frame_request_lock = threading.Lock()
     last_frame_attempt = float("-inf")
     application = FastAPI(
@@ -110,6 +113,7 @@ def create_app(
     application.state.analysis_service = analysis_service
     application.state.data_dir = data
     application.state.live_monitor_service = live_monitor_service
+    application.state.live_tracking_service = live_tracking_service
 
     @application.middleware("http")
     async def boundaries(request: Request, call_next):
@@ -241,11 +245,6 @@ def create_app(
                 raise HTTPException(404, "Source not found.")
             return detection_service.get(source_id)
 
-        @application.get("/api/camera-context")
-        def camera_context():
-            from .camera_context import camera_context_record
-            return camera_context_record()
-
         @application.get("/api/live-cameras")
         def live_cameras():
             return live_camera_service.catalog()
@@ -277,20 +276,42 @@ def create_app(
                 raw.extend(chunk)
             if live_detection_service is None:
                 raise HTTPException(503, "Local camera detection is unavailable.")
-            result = await run_in_threadpool(live_detection_service.analyze_jpeg, bytes(raw), camera_id=camera_id)
             from .live_monitor import monitor_status, parse_monitor_headers
+            context, context_error = None, None
             try:
                 context = parse_monitor_headers(request.headers)
             except ValueError as error:
-                return {**result, "alert_monitor": monitor_status("unavailable", str(error))}
+                context_error = str(error)
+            kwargs = {"camera_id": camera_id}
+            if context is not None:
+                kwargs["tracking"] = True
+            result = await run_in_threadpool(live_detection_service.analyze_jpeg, bytes(raw), **kwargs)
+            # The candidate pool is internal to tracking, never the public
+            # raw-detection/evidence contract or the alert monitor input.
+            response = {key: value for key, value in result.items() if key != "tracking_candidates"}
+            if context_error:
+                return {**response, "alert_monitor": monitor_status("unavailable", context_error)}
             if context is not None:
                 run, stream, media_time = context
                 try:
-                    status = await run_in_threadpool(live_monitor_service.observe, run, camera, stream, media_time, bytes(raw), result)
+                    if store.snapshot()["run"]["id"] != run:
+                        raise ValueError("Expired tracking run")
+                    response["tracking"] = await run_in_threadpool(live_tracking_service.process, {
+                        "run_id": run, "camera_id": camera_id,
+                        "stream_id": stream, "media_time_seconds": media_time,
+                    }, result)
+                except Exception:
+                    response["tracking"] = {"status": "unavailable", "algorithm": "ByteTrack"}
+                if request.headers.get("x-clearway-alert-monitor") == "paused":
+                    await run_in_threadpool(live_monitor_service.pause, run, camera_id, stream)
+                    return {**response, "alert_monitor": monitor_status("paused", "Live alerts are paused; display tracking remains active.")}
+                try:
+                    status = await run_in_threadpool(live_monitor_service.observe, run, camera, stream, media_time, bytes(raw),
+                                                    {key: value for key, value in response.items() if key != "tracking"})
                 except Exception:
                     status = monitor_status("unavailable", "Live review monitoring is unavailable; detection boxes remain separate.")
-                return {**result, "alert_monitor": status}
-            return result
+                return {**response, "alert_monitor": status}
+            return response
 
         @application.get("/api/runs/{run_id}/incidents/{incident_id}/evidence")
         def live_evidence(run_id: UUID, incident_id: UUID):
@@ -304,6 +325,7 @@ def create_app(
         def reset():
             store.reset()
             live_monitor_service.reset()
+            live_tracking_service.reset()
             return snapshot()
 
         @application.post("/api/runs/{run_id}/replay")

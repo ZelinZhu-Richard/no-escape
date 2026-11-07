@@ -1,5 +1,63 @@
 # Clearway morning handoff
 
+## Live video by default — November 7, 2026
+
+**Fixed:** the user's sidebar tab still ran an older build and its TV317 stream had fallen back to a snapshot. Retrying restored genuine video. Public CCTV now defaults to **Live video (191)** for both its list and map; **All cameras (767)** explicitly includes snapshot-only locations. Selecting a video camera starts its stream. Re-selecting a list item retries a failed stream or exits a prior manual snapshot choice; provider failure still produces a disclosed snapshot fallback with Retry live video.
+
+**Verified:** 113 frontend tests, TypeScript/production build and emitted asset/license checks passed. New tests cover default video filtering, map/list synchronization, snapshot opt-in, pagination reset and video retry after failure. In the visible built-in browser, the refreshed sidebar tab played Fremont at a decoded 704×528 with YOLOX-M/ByteTrack; playback advanced from 4.954 to 11.349 seconds while switching All cameras → Live video. The tab is left on the playing Fremont feed. Proof: `clearway/data/verification/video-first-fremont.jpg` (ignored).
+
+**Run:** the existing no-reload server stays at `http://127.0.0.1:8000/`; no restart or run reset was needed. Refresh other already-open tabs to load the new UI. Open Public CCTV, keep Camera feeds on Live video, then select a camera. Use All cameras only when you want snapshot-only sources too. Provider uptime is not guaranteed; no new inference costs, backend changes or model changes were introduced.
+
+## Bay Area-only public CCTV — November 7, 2026
+
+**Working:** the NC camera inventory layer, dataset, endpoint and refresh task are removed. Public CCTV now includes **767 Caltrans cameras across all nine Bay Area counties**, an increase of 667. **191 advertise HLS video**; the other 576 provide snapshots only. Every record has a snapshot endpoint. County and geographic validation excludes out-of-scope entries. The camera list shows 50 matches at a time, with county/search filters and all matching map pins selectable.
+
+**Verification:** **386 backend tests and 111 frontend tests passed**, plus TypeScript/production build and emitted asset/license checks. The visible built-in browser verified list pagination from 50 to 100, Santa Clara's 148-camera filter, map selection of newly added **TVC95 — SR-237 just west of Lawrence Expressway**, and actual 1280×720 playback with local YOLO/ByteTrack at approximately 6–6.5 updates/s. Fitting the network shows the expanded Bay Area camera points. The removed NC API returns 404 on both services.
+
+One announced no-reload restart loaded the expansion; the current run and all four existing incidents survived. The selected SR-237 feed subsequently generated one additional unconfirmed review candidate through the existing temporal rule. This is not a verified emergency or an accuracy measurement. Network inference calls and spend remain zero. No model download, public tunnel or deployment was used.
+
+**Run:** the updated app is running at `http://127.0.0.1:8000/`; use `make serve` when stopped. Open **Public CCTV**, filter by county or search by roadway, and select a list item or blue map pin. Use **Show 50 more** for additional list rows and **Fit public camera network** to see all matching points. Refresh metadata with `make live-camera-refresh` and reload the page. Historical replay placement remains honestly labeled as simulated Durham context, separate from the public-camera network.
+
+**Availability limits:** counts describe provider-advertised endpoints, not fleet uptime. Two of three bounded new HLS master-playlist probes succeeded (Santa Clara and Napa); the Marin probe failed. Only the Santa Clara stream was played in this expansion check. Snapshot fallback remains available; individual sources can show outages or stale images. Existing detector/alert limitations and the deferred credentials, physical phone test and human evaluation labels still apply.
+
+Ignored browser proofs: `clearway/data/verification/bay-area-camera-map.jpg` and `bay-area-expanded-live.jpg`. Local catalog/probe/state evidence is under `.local/bay-area-expansion/`; source media and runtime artifacts remain untracked. See [LIVE-CAMERAS.md](clearway/docs/LIVE-CAMERAS.md) for county counts and official sources.
+
+## Tiled Dense traffic and live ByteTrack — November 7, 2026
+
+**Working:** Dense traffic now uses 768px overlapping crops from the original 1080p frame plus a full-frame pass. Its final 45-sample cache took 17.074 seconds to prepare; playback reads saved detections. Same 1/4/8-second frames returned **88/60/68 boxes versus 69/41/51 before** (full frame at the same new 0.50 cutoff: 55/30/41). Visual coverage improved, with remaining roof/background false boxes, overlaps and occluded misses.
+
+**Working:** live CCTV now uses ByteTrack with ephemeral IDs and high/low-confidence association. In 58 Fremont development frames, all **461 raw high-confidence detections stayed unchanged**, with **77 additional low-confidence observations** associated with existing tracks; 13 IDs continued high→low→high. Tracking median was 0.560ms, maximum 2.308ms. Only current detections are displayed; lost predictions remain internal. Raw detector counts and incident evidence remain separate from recovered low-confidence boxes. This is a continuity diagnostic, not labeled accuracy or incident recall.
+
+**Verification:** 390 backend tests and 107 frontend tests passed across the full run and final focused frozen-frame regression; TypeScript/production build and emitted asset checks passed. Independent read-only review found no material issues. The visible built-in browser played Fremont with ByteTrack at approximately 6–6.5 updates/s, verified tracking while alerts were paused, cleared boxes on video pause, resumed with fresh IDs and re-enabled monitoring. Dense playback advanced with the tiled boxes and honest no-candidate fixture message. Two announced no-reload restarts loaded the feature and final frozen-frame correction; the existing run and all four incident records were retained. No paid inference, model download, deployment or tunnel was used.
+
+**Run:** the no-reload app is running at `http://127.0.0.1:8000/`. Start it with `make serve` when stopped. Existing local models and licensed media are already installed. Rebuild Dense with:
+
+```sh
+clearway/.venv/bin/python clearway/scripts/run_detection.py --source traffic-jam --fps 4 --dense-strategy tiled --dense-tile-size 768 --force
+```
+
+Use `--dense-strategy full-frame --force` for the explicit fallback. Reproduction commands and benchmark details are in [CCTV-QUALITY.md](clearway/docs/CCTV-QUALITY.md) and [VISION.md](clearway/docs/VISION.md). Ignored browser proofs: `clearway/data/verification/fremont-bytetrack.jpg` and `dense-traffic-tiled.jpg`. Local comparisons remain under `.local/fremont-quality/bytetrack/` and `.local/cctv-quality/dense-tiling/`.
+
+**Still needed:** human-labeled crowded/blurred video to measure missed vehicles, false positives and identity switches; the deferred Gemini key, Google 3D token, and physical cellular handoff test. No fine-tuning was attempted. Do not claim the extra boxes establish detection accuracy or an emergency.
+
+## Fremont and Dense traffic corrections — November 7, 2026
+
+**Fremont CCTV:** the stream was healthy but the VisDrone model missed visible frontal vehicles. Fremont now explicitly selects pinned YOLOX-M; all other camera defaults remain unchanged. Three matched browser-resolution development frames produced **10/13/7 boxes versus 1/4/0** with VisDrone. The live browser displayed the selected model at about 6 updates/s and 69–73 ms inference. Distant/blurred cars and some neighboring-vehicle boxes remain a limitation. These counts are not accuracy metrics.
+
+**Dense traffic replay:** playback was already functional, but Tiny produced only six boxes across the entire 45-sample cache. Its source-specific cache is rebuilt with the approved VisDrone model at 4 fps; matched 1/4/8-second frames have **69/41/51 boxes versus zero**. Other replay caches stay Tiny. Labels are optional, off by default for Dense traffic so they do not obscure the roadway. False boxes on lane markings and overlapping boxes remain. The source's fixture intentionally creates no incident candidate; the evidence panel now reports that completed result instead of continuing to say “Start the scene.” Saved local detections and fixture incident outcomes stay distinct.
+
+**Verification:** 316 backend tests, 86 frontend tests, TypeScript/production build and emitted asset checks passed. Independent read-only review found no material issues. The built-in browser verified genuine Fremont video, Dense traffic advancing past 5 seconds with saved boxes, the label toggle, and the completed fixture message. Two announced no-reload restarts loaded the successive backend fixes; the existing run and its three incidents were retained. No provider calls, model downloads, public tunnel or deployment was used.
+
+The app remains at `http://127.0.0.1:8000/`. Fresh setup order: `make setup`, `make footage`, `make detection-setup`, `make live-detect`, `make detect`, `make build`, `make serve`. Dense traffic is optional media and is already present locally; `make footage` does not restore it on a new checkout. Rebuild its cache with `clearway/.venv/bin/python clearway/scripts/run_detection.py --source traffic-jam --force` after restoring that licensed source and installing weights. Camera-specific setup details are in [CCTV-QUALITY.md](clearway/docs/CCTV-QUALITY.md); replay results in [VISION.md](clearway/docs/VISION.md). Local ignored browser proofs: `clearway/data/verification/fremont-live-yolo.jpg` and `dense-traffic-fixed.jpg`.
+
+## Dispatch UI verification — November 7, 2026
+
+The teammate's merged Dispatch UI (`8671380`) is pulled and rebuilt locally. Verification found and fixed desktop evidence navigation, a misleading idle monitoring headline, hidden replay-estimate/error disclosures, and unreadable live-evidence metadata. **294 backend and 78 frontend tests, production build and asset/license checks passed.**
+
+Two genuine public HLS feeds ran with YOLO11s at approximately 6–6.5 updates/s, without a new candidate in either two-minute check. Controlled API tests cover positive candidate creation and the complete review/reset lifecycle. The existing real 6th Street alert (created earlier at 20:12:27 UTC; 12.046 seconds, 75 frames) was then verified through its map marker, frozen evidence, confirmation and read-only responder. Its image hash matched throughout. Desktop and 390 px layouts passed after the fixes. This does not claim a newly observed emergency or a physical phone test.
+
+The retained live alert is left **confirmed** in the existing demo run. No reset erased its evidence; the two recorded fixture candidates remain. The isolated live-check service is stopped, the main no-reload server remains running, and cloud inference spend stayed zero. Full results and local proof-artifact paths: [DISPATCH-VERIFICATION.md](clearway/docs/DISPATCH-VERIFICATION.md).
+
 ## PR review fixes — November 7, 2026
 
 The user requested the Codex review be checked, all findings fixed, and PR #1 merged. GitHub Codex initially reported two issues, a local Codex review found another provenance issue, and GitHub's follow-up review found an idempotent replay edge case. All four are addressed:

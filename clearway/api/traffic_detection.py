@@ -9,8 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
+import re
 import tempfile
 import urllib.request
 
@@ -94,39 +96,69 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def selected_profile(data_dir: Path) -> DetectorProfile:
-    """Read a bounded local selector once at service startup; never substitute."""
+def _profile_from_record(raw: dict) -> DetectorProfile:
+    if not isinstance(raw, dict) or not isinstance(raw.get("profile"), str) or raw["profile"] not in PROFILES:
+        raise TrafficDetectionError("Live detector profile is unsupported.")
+    profile = PROFILES[raw["profile"]]
+    if raw.get("weights_sha256", profile.sha256) != profile.sha256:
+        raise TrafficDetectionError("Live detector configuration does not match the pinned weights.")
+    if profile.requires_agpl_choice and raw.get("agpl_choice_accepted") is not True:
+        raise TrafficDetectionError("This optional live detector requires an explicit AGPL-3.0 selection.")
+    return profile
+
+
+def _read_selection(data_dir: Path) -> dict:
+    """Read a bounded explicit selector; invalid overrides fail closed too."""
     path = Path(data_dir) / "models" / CONFIG_FILENAME
     try:
         if path.is_symlink():
             raise TrafficDetectionError("Live detector configuration must be a regular file.")
         if not path.exists():
-            return PROFILES[DEFAULT_PROFILE]
+            return {"schema_version": 1, "profile": DEFAULT_PROFILE}
         if not path.is_file() or path.stat().st_size > 4096:
             raise TrafficDetectionError("Live detector configuration is invalid.")
         raw = json.loads(path.read_text())
-        if not isinstance(raw, dict) or type(raw.get("schema_version")) is not int or raw.get("schema_version") != 1 or raw.get("profile") not in PROFILES:
+        if not isinstance(raw, dict) or type(raw.get("schema_version")) is not int or raw.get("schema_version") != 1:
             raise TrafficDetectionError("Live detector profile is unsupported.")
-        profile = PROFILES[raw["profile"]]
-        if raw.get("weights_sha256", profile.sha256) != profile.sha256:
-            raise TrafficDetectionError("Live detector configuration does not match the pinned weights.")
-        if profile.requires_agpl_choice and raw.get("agpl_choice_accepted") is not True:
-            raise TrafficDetectionError("This optional live detector requires an explicit AGPL-3.0 selection.")
-        return profile
+        _profile_from_record(raw)
+        overrides = raw.get("camera_profiles", {})
+        if not isinstance(overrides, dict) or len(overrides) > 16:
+            raise TrafficDetectionError("Camera detector selections are invalid.")
+        for camera_id, choice in overrides.items():
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", camera_id):
+                raise TrafficDetectionError("Camera detector identifier is invalid.")
+            _profile_from_record(choice)
+        return raw
     except TrafficDetectionError:
         raise
     except (OSError, UnicodeError, ValueError, TypeError):
         raise TrafficDetectionError("Cannot read the local live detector configuration.") from None
 
 
+def selected_profiles(data_dir: Path) -> tuple[DetectorProfile, dict[str, DetectorProfile]]:
+    """Resolve default and explicit camera selections once at startup."""
+    raw = _read_selection(data_dir)
+    return _profile_from_record(raw), {
+        camera_id: _profile_from_record(choice)
+        for camera_id, choice in raw.get("camera_profiles", {}).items()
+    }
+
+
+def selected_profile(data_dir: Path) -> DetectorProfile:
+    return selected_profiles(data_dir)[0]
+
+
 def install_profile(data_dir: Path, profile_id: str, *, from_file: Path | None = None,
-                    download: bool = False, accept_agpl: bool = False) -> DetectorProfile:
+                    download: bool = False, accept_agpl: bool = False,
+                    camera_id: str | None = None) -> DetectorProfile:
     """Explicit CLI setup only: fixed source, size bound and digest before use."""
     if profile_id not in PROFILES or (from_file is not None and download):
         raise TrafficDetectionError("Select one supported profile and one weight source.")
     profile = PROFILES[profile_id]
     if profile.requires_agpl_choice and not accept_agpl:
         raise TrafficDetectionError("The optional VisDrone weights require an explicit --accept-agpl selection.")
+    if camera_id is not None and not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", camera_id):
+        raise TrafficDetectionError("Camera detector identifier is invalid.")
     folder = Path(data_dir) / "models"
     if folder.is_symlink():
         raise TrafficDetectionError("Model storage must be a regular local directory.")
@@ -135,6 +167,20 @@ def install_profile(data_dir: Path, profile_id: str, *, from_file: Path | None =
     config = folder / CONFIG_FILENAME
     if target.is_symlink() or config.is_symlink():
         raise TrafficDetectionError("Live detector files must not be symlinks.")
+    previous = _read_selection(data_dir)
+    choice = {"profile": profile.id, "weights_sha256": profile.sha256,
+              "license": profile.license, "agpl_choice_accepted": bool(profile.requires_agpl_choice and accept_agpl)}
+    if camera_id is not None:
+        overrides = {**previous.get("camera_profiles", {}), camera_id: choice}
+        if len(overrides) > 16:
+            raise TrafficDetectionError("At most 16 explicit camera detector selections are supported.")
+        record = {**previous, "camera_profiles": overrides}
+    else:
+        record = {"schema_version": 1, **choice,
+                  **({"camera_profiles": previous["camera_profiles"]} if previous.get("camera_profiles") else {})}
+    encoded = json.dumps(record, indent=2) + "\n"
+    if len(encoded.encode()) > 4096:
+        raise TrafficDetectionError("Camera detector selections exceed the configuration size limit.")
     valid_existing = target.is_file() and target.stat().st_size <= MAX_MODEL_BYTES and sha256_file(target) == profile.sha256
     temporary = None
     try:
@@ -157,12 +203,9 @@ def install_profile(data_dir: Path, profile_id: str, *, from_file: Path | None =
                 raise TrafficDetectionError("Live model checksum does not match the pinned profile.")
             temporary.replace(target)
             temporary = None
-        record = {"schema_version": 1, "profile": profile.id, "weights_sha256": profile.sha256,
-                  "license": profile.license, "agpl_choice_accepted": bool(profile.requires_agpl_choice and accept_agpl)}
         with tempfile.NamedTemporaryFile("w", dir=folder, suffix=".tmp", delete=False) as output:
             temporary = Path(output.name)
-            json.dump(record, output, indent=2)
-            output.write("\n")
+            output.write(encoded)
         temporary.replace(config)
         temporary = None
         return profile
@@ -242,8 +285,12 @@ class TrafficDetector:
         ])
         self.strides = np.concatenate([np.full(((profile.input_size // stride) ** 2, 1), stride) for stride in (8, 16, 32)])
 
-    def detect(self, image) -> list[dict]:
+    def detect(self, image, *, confidence_floor: float | None = None) -> list[dict]:
         np, cv2, profile = self.np, self.cv2, self.profile
+        threshold = profile.confidence if confidence_floor is None else confidence_floor
+        if (type(threshold) not in (int, float) or not math.isfinite(threshold)
+                or not 0.1 <= threshold <= profile.confidence):
+            raise TrafficDetectionError("Invalid detector confidence floor.")
         tensor, (ratio, offset_x, offset_y) = prepare_input(image, profile, cv2, np)
         output = self.session.run(None, {self.input_name: tensor})[0]
         expected_shape = ((1, 8400, 5 + profile.class_count) if profile.architecture == "yolox-raw-grid"
@@ -266,7 +313,7 @@ class TrafficDetector:
         display, native = dict(profile.display_classes), dict(profile.native_classes)
         class_ids = np.argmax(scores, axis=1)
         confidence = scores[np.arange(len(rows)), class_ids]
-        keep = (confidence >= profile.confidence) & np.isin(class_ids, list(display))
+        keep = (confidence >= threshold) & np.isin(class_ids, list(display))
         rows, confidence, class_ids = rows[keep], confidence[keep], class_ids[keep]
         if not len(rows):
             return []
@@ -278,7 +325,7 @@ class TrafficDetector:
             candidates.append([float((cx - width / 2 - offset_x) / ratio),
                                float((cy - height / 2 - offset_y) / ratio),
                                float(width / ratio), float(height / ratio)])
-        indices = cv2.dnn.NMSBoxes(candidates, confidence.tolist(), profile.confidence, profile.nms_iou)
+        indices = cv2.dnn.NMSBoxes(candidates, confidence.tolist(), threshold, profile.nms_iou)
         image_height, image_width = image.shape[:2]
         boxes = []
         for index in np.asarray(indices).reshape(-1):
@@ -289,6 +336,6 @@ class TrafficDetector:
                 continue
             class_id = int(class_ids[index])
             boxes.append({"class_name": display[class_id], "native_class_name": native[class_id],
-                          "confidence": round(float(confidence[index]), 6),
+                          "confidence": float(confidence[index]),
                           "xyxy": [round(value, 6) for value in coordinates]})
         return sorted(boxes, key=lambda box: -box["confidence"])[:300]

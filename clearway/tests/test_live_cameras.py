@@ -185,9 +185,51 @@ def test_transport_disables_redirects_and_unknown_targets():
 
 
 def test_source_record_timestamp_never_becomes_image_capture_time_and_limit():
-    result = normalize_catalog({"data": [raw_record(i) for i in range(1, 130)]}, NOW.isoformat())
-    assert len(result["cameras"]) == 100
+    result = normalize_catalog({"data": [raw_record(i) for i in range(1, 1010)]}, NOW.isoformat())
+    assert len(result["cameras"]) == live_cameras.MAX_CAMERAS == 1000
     assert all(camera["capture_time"] is None for camera in result["cameras"])
+
+
+def test_nine_county_expansion_excludes_other_regions_and_invalid_feeds(tmp_path):
+    records = [raw_record(i) for i in range(1, 181)]
+    counties = sorted(live_cameras.BAY_AREA_COUNTIES)
+    for i, record in enumerate(records):
+        record["cctv"]["location"]["county"] = counties[i % len(counties)]
+    for i, county in enumerate(("Santa Cruz", "San Joaquin", "Durham"), 181):
+        row = raw_record(i)
+        row["cctv"]["location"]["county"] = county
+        records.append(row)
+    wrong_coordinates, not_in_service, wrong_district = [raw_record(i) for i in (184, 185, 186)]
+    wrong_coordinates["cctv"]["location"].update(latitude="35.99", longitude="-78.9")
+    not_in_service["cctv"]["inService"] = "false"
+    wrong_district["cctv"]["location"]["district"] = "5"
+    result = normalize_catalog({"data": records + [wrong_coordinates, not_in_service, wrong_district]}, NOW.isoformat())
+    assert len(result["cameras"]) == 180
+    assert {camera["region_name"] for camera in result["cameras"]} == set(counties)
+    assert {camera["id"] for camera in result["cameras"]} == {f"caltrans-d4-{i}" for i in range(1, 181)}
+    path = tmp_path / "expanded.json"
+    path.write_text(json.dumps(result))
+    service = LiveCameraService(path, clock=lambda: NOW, image_fetcher=lambda *_: pytest.fail("Metadata never fetches images"))
+    assert len(service.catalog()["cameras"]) == 180
+
+
+@pytest.mark.parametrize("mutation", [
+    {"region_name": "Durham", "region_id": "durham"},
+    {"region_name": "San Francisco", "region_id": "santa-clara"},
+    {"latitude": 35.99, "longitude": -78.9},
+])
+def test_saved_catalog_cannot_reintroduce_non_bay_cameras(tmp_path, mutation):
+    path = catalog_file(tmp_path)
+    document = json.loads(path.read_text())
+    document["cameras"][0].update(mutation)
+    path.write_text(json.dumps(document))
+    assert LiveCameraService(path, clock=lambda: NOW).catalog()["status"] == "unavailable"
+
+
+def test_expanded_catalog_larger_than_old_byte_limit_loads(tmp_path):
+    path = catalog_file(tmp_path, count=1000)
+    assert path.stat().st_size > 300_000
+    assert len(LiveCameraService(path, clock=lambda: NOW).catalog()["cameras"]) == 1000
 
 
 def test_catalog_becomes_stale_without_silent_refresh(tmp_path):

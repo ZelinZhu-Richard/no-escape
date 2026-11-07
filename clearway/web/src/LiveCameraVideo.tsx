@@ -234,7 +234,13 @@ export function LiveCameraVideo({
 
   const sampling =
     active && visible && yoloEnabled && ["live", "playing"].includes(playback);
-  const overlay = useLiveVideoOverlay(video, camera.id, sampling, alertsEnabled ? runId : undefined);
+  const overlay = useLiveVideoOverlay(
+    video,
+    camera.id,
+    sampling,
+    runId,
+    alertsEnabled,
+  );
   const status =
     !active || !visible
       ? "Video paused"
@@ -265,15 +271,20 @@ export function LiveCameraVideo({
             data-media-age-ms={overlay.mediaAgeMs}
             data-wall-age-ms={overlay.wallAgeMs}
             data-source-id={camera.id}
+            data-tracking={overlay.tracking?.algorithm ?? "raw"}
           >
-            <LiveImageBoxes detections={overlay.detections} labels={showLabels} />
+            <LiveImageBoxes
+              detections={overlay.detections}
+              labels={showLabels}
+            />
           </div>
         )}
         <span className="live-image-status">{status.toUpperCase()}</span>
       </div>
       <p className="live-camera-disclosure">
-        {frameSize ? `${frameSize[0]} × ${frameSize[1]} source · ` : ""}Provider HLS stream · capture time and delivery delay unknown. This
-        video stops loading when the tab is hidden.
+        {frameSize ? `${frameSize[0]} × ${frameSize[1]} source · ` : ""}Provider
+        HLS stream · capture time and delivery delay unknown. This video stops
+        loading when the tab is hidden.
       </p>
       {notice && (
         <p className="live-snapshot-notice" role="status">
@@ -282,7 +293,8 @@ export function LiveCameraVideo({
       )}
       <div className="live-camera-refresh">
         <span data-testid="live-yolo-status">
-          Local YOLO · {overlay.updatesPerSecond.toFixed(1)} updates/s
+          Local YOLO{overlay.tracking ? " + ByteTrack" : ""} ·{" "}
+          {overlay.updatesPerSecond.toFixed(1)} updates/s
           {!sampling
             ? " · paused"
             : overlay.phase === "delayed"
@@ -299,15 +311,47 @@ export function LiveCameraVideo({
         >
           {yoloEnabled ? "Pause YOLO" : "Enable YOLO"}
         </button>
-        <button aria-pressed={showLabels} onClick={() => setShowLabels(value => !value)}>
+        <button
+          aria-pressed={showLabels}
+          onClick={() => setShowLabels((value) => !value)}
+        >
           {showLabels ? "Hide labels" : "Show labels"}
         </button>
       </div>
-      {overlay.detections && <div className="live-detection-summary" data-testid="live-detection-summary">
-        <span><b>{overlay.detections.vehicle_count}</b> vehicles · <b>{overlay.detections.person_count}</b> people</span>
-        <span>{overlay.detections.model.name} · {overlay.detections.inference_ms === null ? "local inference" : `${Math.round(overlay.detections.inference_ms)} ms inference`}</span>
-        {!!overlay.detections.excluded_regions?.length && <span>Camera text regions excluded</span>}
-      </div>}
+      {overlay.detections && (
+        <div
+          className="live-detection-summary"
+          data-testid="live-detection-summary"
+        >
+          <span>
+            Raw YOLO: <b>{overlay.detections.vehicle_count}</b> vehicles ·{" "}
+            <b>{overlay.detections.person_count}</b> people
+          </span>
+          {overlay.tracking && (
+            <span>
+              ByteTrack: {overlay.detections.boxes.length} shown ·{" "}
+              {
+                overlay.detections.boxes.filter(
+                  (box) => box.observation === "low_recovery",
+                ).length
+              }{" "}
+              low-confidence recoveries
+            </span>
+          )}
+          <span>
+            {overlay.detections.model.name} ·{" "}
+            {overlay.detections.inference_ms === null
+              ? "local inference"
+              : `${Math.round(overlay.detections.inference_ms)} ms inference`}
+          </span>
+          {overlay.detections.model.selection === "camera_override" && (
+            <span>Camera-specific model</span>
+          )}
+          {!!overlay.detections.excluded_regions?.length && (
+            <span>Camera text regions excluded</span>
+          )}
+        </div>
+      )}
       {overlay.message && (
         <p className="live-snapshot-notice" role="status">
           {overlay.message}
@@ -315,17 +359,37 @@ export function LiveCameraVideo({
       )}
       <div className="live-alert-monitor" data-testid="live-alert-monitor">
         <div className="live-camera-refresh">
-          <strong>{!alertsEnabled ? "Alerts paused" : !runId ? "Alerts waiting for run" : !sampling ? "Alerts waiting for video" :
-            ["delayed", "unavailable"].includes(overlay.phase) ? "Alerts waiting for fresh detections" :
-            overlay.alertMonitor?.phase === "candidate" ? "Candidate in review queue" :
-            overlay.alertMonitor?.phase === "watching" ? "Watching for sustained signals" :
-            overlay.alertMonitor?.phase === "unavailable" ? "Alerts unavailable" : "Collecting live observations"}</strong>
-          <button onClick={() => setAlertsEnabled(value => !value)} aria-pressed={alertsEnabled}>
+          <strong>
+            {!alertsEnabled
+              ? "Alerts paused"
+              : !runId
+                ? "Alerts waiting for run"
+                : !sampling
+                  ? "Alerts waiting for video"
+                  : ["delayed", "unavailable"].includes(overlay.phase)
+                    ? "Alerts waiting for fresh detections"
+                    : overlay.alertMonitor?.phase === "candidate"
+                      ? "Candidate in review queue"
+                      : overlay.alertMonitor?.phase === "watching"
+                        ? "Watching for sustained signals"
+                        : overlay.alertMonitor?.phase === "unavailable"
+                          ? "Alerts unavailable"
+                          : "Collecting live observations"}
+          </strong>
+          <button
+            onClick={() => setAlertsEnabled((value) => !value)}
+            aria-pressed={alertsEnabled}
+          >
             {alertsEnabled ? "Pause alerts" : "Enable alerts"}
           </button>
         </div>
-        {alertsEnabled && sampling && overlay.alertMonitor && <p>{overlay.alertMonitor.message}</p>}
-        <p>Possible stopped vehicle (12 s) or persistent person detection (3 s). Only this playing camera is monitored; every alert needs review.</p>
+        {alertsEnabled && sampling && overlay.alertMonitor && (
+          <p>{overlay.alertMonitor.message}</p>
+        )}
+        <p>
+          Possible stopped vehicle (12 s) or persistent person detection (3 s).
+          Only this playing camera is monitored; every alert needs review.
+        </p>
       </div>
     </div>
   );

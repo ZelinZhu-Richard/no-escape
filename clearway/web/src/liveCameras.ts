@@ -1,3 +1,16 @@
+export const MAX_LIVE_CAMERAS = 1000;
+export const BAY_AREA_REGIONS = {
+  alameda: "Alameda",
+  "contra-costa": "Contra Costa",
+  marin: "Marin",
+  napa: "Napa",
+  "san-francisco": "San Francisco",
+  "san-mateo": "San Mateo",
+  "santa-clara": "Santa Clara",
+  solano: "Solano",
+  sonoma: "Sonoma",
+} as const;
+
 export interface LiveCamera {
   id: string;
   name: string;
@@ -14,6 +27,20 @@ export interface LiveCamera {
   capture_time: string | null;
   source_refresh_seconds: number;
   streaming_url?: string | null;
+}
+
+export function isBayAreaCamera(
+  camera: Pick<LiveCamera, "latitude" | "longitude" | "region_id">,
+): boolean {
+  return (
+    Object.hasOwn(BAY_AREA_REGIONS, camera.region_id) &&
+    Number.isFinite(camera.latitude) &&
+    camera.latitude >= 36.8 &&
+    camera.latitude <= 39.0 &&
+    Number.isFinite(camera.longitude) &&
+    camera.longitude >= -123.5 &&
+    camera.longitude <= -121.0
+  );
 }
 
 export interface LiveCameraCatalog {
@@ -42,25 +69,35 @@ export interface LiveSnapshot {
   detections?: ImageDetections | null;
 }
 
+export interface LiveImageBox {
+  class_name: string;
+  confidence: number;
+  xyxy: [number, number, number, number];
+  track_id?: string;
+  observation?: "high" | "low_recovery";
+  confirmed?: boolean;
+}
+
 export interface ImageDetections {
   status: "available";
   analysis_mode: "fresh" | "cached";
   image_sha256: string;
   image_width: number;
   image_height: number;
-  boxes: {
-    class_name: string;
-    confidence: number;
-    xyxy: [number, number, number, number];
-  }[];
+  boxes: LiveImageBox[];
   vehicle_count: number;
   person_count: number;
-  model: { name: string; version: string };
+  model: {
+    name: string;
+    version: string;
+    selection?: "default" | "camera_override";
+  };
   provenance: {
     kind: "local_yolo_image";
     fixture: false;
     image_sha256: string;
     analyzed_at: string;
+    configuration_sha256?: string;
   };
   inference_ms: number | null;
   excluded_regions?: { id: string; xyxy: [number, number, number, number] }[];
@@ -74,13 +111,30 @@ export interface LiveAlertMonitor {
 
 export function readLiveAlertMonitor(value: unknown): LiveAlertMonitor | null {
   const raw = record(value);
-  if (!raw || !["warming", "watching", "candidate", "unavailable"].includes(String(raw.phase)) ||
-    typeof raw.observed_seconds !== "number" || !Number.isFinite(raw.observed_seconds) ||
-    raw.observed_seconds < 0 || raw.observed_seconds > 86400 ||
-    !(raw.incident_id === null || typeof raw.incident_id === "string" && /^[a-f0-9-]{36}$/.test(raw.incident_id)) ||
-    typeof raw.message !== "string" || raw.message.length > 1000) return null;
-  return {phase: raw.phase as LiveAlertMonitor["phase"], observed_seconds: raw.observed_seconds,
-    incident_id: raw.incident_id, message: raw.message};
+  if (
+    !raw ||
+    !["warming", "watching", "candidate", "unavailable"].includes(
+      String(raw.phase),
+    ) ||
+    typeof raw.observed_seconds !== "number" ||
+    !Number.isFinite(raw.observed_seconds) ||
+    raw.observed_seconds < 0 ||
+    raw.observed_seconds > 86400 ||
+    !(
+      raw.incident_id === null ||
+      (typeof raw.incident_id === "string" &&
+        /^[a-f0-9-]{36}$/.test(raw.incident_id))
+    ) ||
+    typeof raw.message !== "string" ||
+    raw.message.length > 1000
+  )
+    return null;
+  return {
+    phase: raw.phase as LiveAlertMonitor["phase"],
+    observed_seconds: raw.observed_seconds,
+    incident_id: raw.incident_id,
+    message: raw.message,
+  };
 }
 export const isImageHash = (value: unknown): value is string =>
   typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
@@ -195,12 +249,23 @@ export function readImageDetections(
       return null;
     for (const item of raw.excluded_regions) {
       const region = record(item);
-      if (!region || !validId(region.id) || !Array.isArray(region.xyxy) ||
-        region.xyxy.length !== 4 || !region.xyxy.every(
-          n => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1,
-        ) || region.xyxy[2] <= region.xyxy[0] || region.xyxy[3] <= region.xyxy[1])
+      if (
+        !region ||
+        !validId(region.id) ||
+        !Array.isArray(region.xyxy) ||
+        region.xyxy.length !== 4 ||
+        !region.xyxy.every(
+          (n) =>
+            typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1,
+        ) ||
+        region.xyxy[2] <= region.xyxy[0] ||
+        region.xyxy[3] <= region.xyxy[1]
+      )
         return null;
-      excludedRegions.push({id: region.id, xyxy: region.xyxy as [number, number, number, number]});
+      excludedRegions.push({
+        id: region.id,
+        xyxy: region.xyxy as [number, number, number, number],
+      });
     }
   }
   return {
@@ -213,12 +278,21 @@ export function readImageDetections(
     excluded_regions: excludedRegions,
     vehicle_count: vehicles,
     person_count: people,
-    model: { name: model.name, version: safeText(model.version) },
+    model: {
+      name: model.name,
+      version: safeText(model.version),
+      ...(model.selection === "default" || model.selection === "camera_override"
+        ? { selection: model.selection }
+        : {}),
+    },
     provenance: {
       kind: "local_yolo_image",
       fixture: false,
       image_sha256: imageHash,
       analyzed_at: provenance.analyzed_at as string,
+      ...(isImageHash(provenance.configuration_sha256)
+        ? { configuration_sha256: provenance.configuration_sha256 }
+        : {}),
     },
     inference_ms:
       typeof raw.inference_ms === "number" &&
@@ -239,7 +313,7 @@ export function readLiveCameraCatalog(
     raw.mode !== "live_snapshot_catalog" ||
     !["available", "unavailable"].includes(String(raw.status)) ||
     !Array.isArray(raw.cameras) ||
-    raw.cameras.length > 100 ||
+    raw.cameras.length > MAX_LIVE_CAMERAS ||
     !Array.isArray(raw.regions)
   )
     return null;
@@ -261,7 +335,12 @@ export function readLiveCameraCatalog(
         typeof camera.longitude !== "number" ||
         !Number.isFinite(camera.longitude) ||
         Math.abs(camera.longitude) > 180 ||
-        !validId(camera.region_id)
+        !validId(camera.region_id) ||
+        !isBayAreaCamera({
+          latitude: camera.latitude,
+          longitude: camera.longitude,
+          region_id: camera.region_id,
+        })
       )
         continue;
       cameras.push({
@@ -270,7 +349,8 @@ export function readLiveCameraCatalog(
         latitude: camera.latitude,
         longitude: camera.longitude,
         region_id: camera.region_id,
-        region_name: safeText(camera.region_name, camera.region_id),
+        region_name:
+          BAY_AREA_REGIONS[camera.region_id as keyof typeof BAY_AREA_REGIONS],
         roadway: safeText(camera.roadway),
         direction: safeText(camera.direction),
         provider: safeText(camera.provider, "Public provider"),

@@ -13,7 +13,7 @@ Expo reference checkout: God's Eye View is cloned locally under ignored `.local/
 
 The detector uses [Megvii YOLOX](https://github.com/Megvii-BaseDetection/YOLOX), official `0.1.1rc0` YOLOX-Tiny ONNX weights, SHA-256 `427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7`. Preprocessing and grid decoding follow its [ONNX example](https://github.com/Megvii-BaseDetection/YOLOX/tree/main/demo/ONNXRuntime), Apache-2.0, Copyright (c) Megvii, Inc. and its affiliates. The full notice is retained in `clearway/licenses/YOLOX-APACHE-2.0.txt` from the repository root. Clearway adds provenance validation, normalized replay overlays, and an explicitly hypothetical gate comparison. Keep the notice with redistributed detector code; downloaded weights remain local.
 
-Optional detection requirements are pinned separately: NumPy 2.5.4, OpenCV headless 4.14.0.94, and ONNX Runtime 1.31.1. Their installed distributions include their own licenses and third-party notices. The serving process reads prepared detection JSON without loading those inference libraries.
+Optional detection requirements are pinned separately: NumPy 2.5.4, OpenCV headless 4.14.0.94, and ONNX Runtime 1.31.1. Their installed distributions include their own licenses and third-party notices. Recorded playback reads prepared detection JSON without loading the inference libraries. Live sampling and ByteTrack use the optional vision runtime.
 
 ## Person-in-roadway footage
 
@@ -79,3 +79,7 @@ Public-camera inference now selects **YOLO11s VisDrone**, after the user's expli
 Official **YOLOX-M 0.1.1rc0** remains an explicitly selectable alternative: SHA-256 `21ff6cfdeb53b013bac2249599e55f00bff3cfdfdab37ed7a4620818c1d15b3f`, from the [Megvii YOLOX release](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0), Apache-2.0. The existing Apache notice covers the referenced preprocessing/grid-decoding patterns. Recorded replay weights and caches remain YOLOX-Tiny. Selecting Apache model weights does not change the Clearway source license.
 
 No model weights, downloaded camera frames, or source media are published in this repository. See [CCTV-QUALITY.md](CCTV-QUALITY.md) for setup and detection limits.
+
+## Live ByteTrack association
+
+`api/live_tracking.py` adapts the MIT [ByteTrack tracker core](https://github.com/ifzhang/ByteTrack/tree/d1bf0191adff59bc8fcfeaa0b33d3d1642552a99/yolox/tracker), Copyright (c) 2021 Yifu Zhang, pinned commit `d1bf0191adff59bc8fcfeaa0b33d3d1642552a99`. The full notice and adaptation notes are retained in `clearway/licenses/BYTETRACK-MIT.txt`. The adaptation preserves the Kalman model and two-stage association, replaces LAP/SciPy with NumPy operations and Hungarian assignment, adds bounded per-stream state and exact-frame provenance, and emits only observed boxes. No upstream weights, appearance embeddings or source video are bundled. Dense traffic's crop/detect/merge code is local; no SAHI package is added.
