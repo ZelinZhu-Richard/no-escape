@@ -32,6 +32,7 @@ For a fresh checkout, prepare `make setup`, `make footage`, `make detection-setu
 - **20 frontend tests passed** and the production build plus Cesium/license asset check passed.
 - Five complete HTTP replay/evidence/confirm/reset cycles passed. Thirty consecutive HTTP health samples succeeded over one minute; this does not establish long-term uptime.
 - Built-in-browser checks: actual playback/seek updates the boxes and counts; map label is readable; NCDOT point selection/network overview works; voice enters speaking state and stops; the public QR appears; the HTTPS read-only brief loads. At 390×844, operator and public responder had no horizontal page overflow; the responder had no operator controls.
+- Public confirmation propagation was checked separately on an obstruction fixture: the HTTPS status changed from candidate to confirmed after a local confirmation. An expired earlier brief and its video both returned HTTP 410 through the public tunnel. The current person-scene link and state were preserved for the human cellular test; none of these HTTP checks establishes cellular operation.
 - Screenshots and receipts remain local under `clearway/data/verification/`: `expo-person-overlay.jpg`, `expo-public-responder.jpg`, `expo-health.json`, `public-handoff.json`, `api-cycles.json`. These are not human evaluation labels.
 
 ### Remaining human work
