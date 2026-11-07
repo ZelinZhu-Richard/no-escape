@@ -10,6 +10,32 @@ from api.app import create_app
 from api.analysis import AnalysisService, FIXTURES
 
 
+def test_public_camera_browsing_never_changes_replay_or_invokes_inference(tmp_path):
+    class Cameras:
+        calls = []
+
+        def catalog(self):
+            return {"status": "available", "cameras": [{"id": "camera-1"}]}
+
+        def snapshot(self, camera_id):
+            self.calls.append(camera_id)
+            return {"status": "unavailable", "message": "Provider temporarily unavailable."}
+
+    cameras = Cameras()
+    with TestClient(create_app(data_dir=tmp_path, live_camera_service=cameras)) as client:
+        before = client.get("/api/state").json()
+        assert client.get("/api/live-cameras").json()["status"] == "available"
+        response = client.get("/api/live-cameras/camera-1/snapshot")
+        assert response.status_code == 200
+        assert response.json()["status"] == "unavailable"
+        assert client.get("/api/state").json() == before
+        assert cameras.calls == ["camera-1"]
+    with TestClient(create_app(data_dir=tmp_path, read_only=True, live_camera_service=cameras)) as public:
+        assert public.get("/api/live-cameras").status_code == 404
+        assert public.get("/api/live-cameras/camera-1/snapshot").status_code == 404
+        assert cameras.calls == ["camera-1"]
+
+
 def test_detection_read_is_local_and_not_on_public_surface(tmp_path):
     class Detector:
         calls = []

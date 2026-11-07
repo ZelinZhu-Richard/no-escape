@@ -43,6 +43,12 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Public CCTV expansion — November 7, 2026
+
+The user requested more live traffic-camera data points. Add a separate, selectable public CCTV network with actual source imagery, rather than promoting dated inventory pins to live feeds. DriveNC's documented camera API requires a developer key; none is configured. Use the keyless official Caltrans District 4 feed for 100 Bay Area cameras with authentic coordinates and clearly named regions. Preserve the 20 North Carolina inventory points as metadata only.
+
+Show only the selected camera image, source attribution, retrieval time, unknown capture time, and the provider's refresh cadence. These are periodically refreshed snapshots, generally five minutes apart, not continuous live video. Follow the published refresh cadence, bound requests and in-memory caching, and stop polling when the page is hidden or the preview closes. A failed fetch must show unavailable/stale state, never a replay image substituted as live. Do not archive the feed, run paid inference on it, generate automatic incident claims, or reopen the deferred public tunnel. Verify real selected-camera responses, map selection, provider failure behavior, and replay isolation; record the tested sample size separately from catalog size.
+
 ## Expo upgrade authorized November 7, 2026
 
 This follow-up supersedes the overnight feature exclusions below. The user explicitly requested visible YOLO detections on playing video, model-call savings, stable expo serving, Google photorealistic 3D, a public responder tunnel and cellular check, a corrected map label, more map data points, voice, and a licensed person-in-roadway scenario. The user requested a goal and authorized work to start; the existing PR and subagent authorization continue.

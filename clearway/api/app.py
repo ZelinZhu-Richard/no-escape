@@ -74,7 +74,8 @@ def _unavailable() -> dict:
 
 def create_app(
     *, data_dir: Path | str | None = None, analysis_service=None,
-    detection_service=None, read_only: bool = False, web_dist: Path | str | None = None,
+    detection_service=None, live_camera_service=None,
+    read_only: bool = False, web_dist: Path | str | None = None,
 ) -> FastAPI:
     data = Path(data_dir or os.environ.get("CLEARWAY_DATA_DIR", ROOT / "data")).resolve()
     dist = Path(web_dist or ROOT / "web" / "dist").resolve()
@@ -85,6 +86,9 @@ def create_app(
     if detection_service is None and not read_only:
         from .detection import DetectionService
         detection_service = DetectionService(data)
+    if live_camera_service is None and not read_only:
+        from .live_cameras import LiveCameraService
+        live_camera_service = LiveCameraService()
     application = FastAPI(
         title="Clearway responder" if read_only else "Clearway local operator",
         docs_url=None, redoc_url=None, openapi_url=None,
@@ -216,6 +220,14 @@ def create_app(
         def camera_context():
             from .camera_context import camera_context_record
             return camera_context_record()
+
+        @application.get("/api/live-cameras")
+        def live_cameras():
+            return live_camera_service.catalog()
+
+        @application.get("/api/live-cameras/{camera_id}/snapshot")
+        def live_camera_snapshot(camera_id: str):
+            return live_camera_service.snapshot(camera_id)
 
         @application.get("/api/state")
         def state():

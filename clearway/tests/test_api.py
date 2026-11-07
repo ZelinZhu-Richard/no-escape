@@ -174,7 +174,7 @@ def test_control_does_not_claim_human_ground_truth(services):
 def test_public_surface_is_scoped_and_read_only(services):
     client, public, _, _, _ = services
     incident = first_incident(client)
-    for path in ("/api/state", "/api/config", "/api/sources", "/api/labels", "/api/evaluation", "/api/media/road-obstruction/video", "/docs", "/openapi.json", "/", "/labels"):
+    for path in ("/api/state", "/api/config", "/api/sources", "/api/labels", "/api/evaluation", "/api/media/road-obstruction/video", "/api/live-cameras", "/api/live-cameras/example/snapshot", "/docs", "/openapi.json", "/", "/labels"):
         assert public.get(path).status_code == 404, path
     for path in ("/api/reset", f"/api/runs/{incident['run_id']}/incidents/{incident['id']}/confirm", "/api/labels"):
         assert public.post(path, json={}).status_code == 405

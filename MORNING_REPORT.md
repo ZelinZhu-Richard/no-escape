@@ -1,5 +1,27 @@
 # Clearway morning handoff
 
+## Public CCTV expansion — November 7, 2026
+
+Added **100 authentic Caltrans District 4 traffic-camera points** across San Francisco, Alameda, and San Mateo counties, in addition to the twenty metadata-only NCDOT points. The public camera browser has road/name search, county filtering, map selection, a network-overview shortcut, and a selected-camera preview. Selecting a public camera preserves the separate incident/replay workflow.
+
+The preview fetches actual public provider imagery. All selected catalog entries publish a **five-minute snapshot cadence**; this is not continuous live video. Retrieval time, provider Last-Modified, unknown capture time, pause controls, and stale/error states are visible. A catalog entry or successful JPEG download does not prove the camera is online: **three distinct cameras were inspected, two showing traffic and one returning a provider outage card**. One traffic view has an obscured lens. The browser independently displayed the bridge and San Mateo previews. No fleet-wide availability or live incident-detection claim is made.
+
+### Run and use
+
+The no-reload local server is running on `http://127.0.0.1:8000`; the responder tunnel remains stopped. Select **Public CCTV · 100** on the map to see the network, then select a camera in **Public traffic CCTV** or a purple map pin. The first listed camera, **TVD31 — Before YBI Tunnel**, displayed bridge traffic during verification. Provider conditions may change.
+
+For a new session, use `make build` and `make serve`. `make live-camera-refresh` refreshes the metadata catalog at most daily by default, without downloading images; reload the page afterward. No camera key is required for this Caltrans adapter. DriveNC's documented API does require a developer key, so North Carolina locations remain inventory only. Full source/access notes are in [LIVE-CAMERAS.md](clearway/docs/LIVE-CAMERAS.md).
+
+### Verification and limits
+
+- **186 backend tests and 33 frontend tests passed**, including URL/redirect and response bounds, failure/staleness handling, request limits surviving image-cache eviction, selected-camera identity, rapid camera switching, hidden-tab cancellation, filtering, stable map entities, and responder isolation.
+- Production build and emitted Cesium/license checks passed. One announced local server restart loaded the new routes; reload watching remains disabled.
+- Five actual HTTP replay/confirm/reset cycles passed again with **zero network inference calls**. Report: `clearway/data/verification/cctv-api-cycles.json`. The final run is empty and ready for a new replay.
+- Built-in-browser checks passed at desktop width and **390×844**: actual images, county/search filtering, geographic focus, no horizontal overflow, and footer below the expanded content. Screenshots: `clearway/data/verification/cctv-network-desktop.jpg` and `cctv-network-mobile.jpg`.
+- Only the selected camera refreshes. Images are cached briefly in memory; no archive, paid inference, generated incident, deployment, or new public tunnel was created. New camera routes return 404 on the responder service. Existing Gemini/3D/physical-phone deferrals remain unchanged.
+
+This follow-up is included in [draft PR #1](https://github.com/ZelinZhu-Richard/no-escape/pull/1). The earlier upgrade notes below remain useful history; the new section supersedes their camera-count and current-test-count statements.
+
 ## Current expo upgrade — November 7, 2026
 
 The app now shows **genuine YOLOX-Tiny vehicle/person boxes on playing video**, synced to seeks and portrait letterboxing. All four available clips have source-bound local detection caches. Incident narratives still use explicit fixtures because the Gemini key is pending. This is real object detection plus a demonstrated review workflow, not a validated danger classifier.

@@ -5,15 +5,16 @@ import { MapView } from "../src/MapView";
 import { request } from "../src/api";
 import { readCameraContext } from "../src/mapContext";
 import type { Incident, Source } from "../src/types";
+import type { LiveCamera } from "../src/liveCameras";
 
-const mocks = vi.hoisted(() => ({ viewers: [] as any[], createTiles: vi.fn() }));
+const mocks = vi.hoisted(() => ({ viewers: [] as any[], handlers: [] as any[], createTiles: vi.fn() }));
 vi.mock("../src/api", () => ({ request: vi.fn() }));
 vi.mock("cesium", async (original) => {
   const real = await original<object>();
   return { ...real,
     Viewer: class {
       records = new Map<string, any>();
-      entities = { getById: (id: string) => this.records.get(id), add: vi.fn((entity: any) => {
+      entities = { getById: (id: string) => this.records.get(id), removeById: vi.fn((id: string) => this.records.delete(id)), add: vi.fn((entity: any) => {
         this.records.set(entity.id, entity); return entity;
       }) };
       scene = { backgroundColor: null, globe: { baseColor: null, enableLighting: false, show: true },
@@ -26,7 +27,11 @@ vi.mock("cesium", async (original) => {
       isDestroyed = vi.fn(() => false); destroy = vi.fn();
       constructor() { mocks.viewers.push(this); }
     },
-    ScreenSpaceEventHandler: class { setInputAction = vi.fn(); destroy = vi.fn(); },
+    ScreenSpaceEventHandler: class {
+      input: any;
+      setInputAction = vi.fn((fn: any) => { this.input = fn; }); destroy = vi.fn();
+      constructor() { mocks.handlers.push(this); }
+    },
     OpenStreetMapImageryProvider: class { errorEvent = { addEventListener: vi.fn() }; },
     createGooglePhotorealistic3DTileset: mocks.createTiles,
   };
@@ -40,6 +45,12 @@ const point = { id: "ncdot-test", name: "Official camera", description: "NC 147"
   longitude: -78.9, quality: "official_inventory", status: "metadata_only" };
 const context = { status: "available", mode: "inventory_snapshot", fetched_at: "2026-11-07T16:00:00Z",
   stale: false, attribution: "NCDOT", source_url: "https://www.ncdot.gov/", points: [point] };
+const liveCamera: LiveCamera = {
+  id: "caltrans-d4-7", name: "Test public camera", latitude: 37.8, longitude: -122.3,
+  region_id: "alameda", region_name: "Alameda", roadway: "I-80", direction: "East",
+  provider: "Caltrans", provider_url: "https://quickmap.dot.ca.gov/", mode: "refreshed_snapshot",
+  in_service_reported: true, capture_time: null,
+};
 let container: HTMLDivElement;
 let root: Root;
 
@@ -51,10 +62,59 @@ beforeEach(() => {
   vi.stubGlobal("PerformanceObserver", class { observe() {} disconnect() {} });
   vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
   mocks.viewers.length = 0;
+  mocks.handlers.length = 0;
   mocks.createTiles.mockReset();
   vi.mocked(request).mockResolvedValue(context);
   container = document.createElement("div"); document.body.append(container);
   root = createRoot(container);
+});
+
+describe("public snapshot map layer", () => {
+  const renderLive = async (cameras: LiveCamera[], selected: string | null = null, onSelect = vi.fn(), replaySelect = vi.fn()) => {
+    await act(async () => root.render(createElement(MapView, {
+      source, incident, onSelect: replaySelect,
+      liveCameras: cameras, liveSelectedId: selected, onSelectLiveCamera: onSelect,
+    })));
+  };
+
+  it("updates public pins without replacing the viewer, inventory or replay incident", async () => {
+    await renderLive([liveCamera]);
+    const viewer = mocks.viewers[0];
+    const cameraEntity = viewer.records.get(`public-camera:${liveCamera.id}`);
+    expect(cameraEntity).toBeTruthy();
+    await renderLive([{ ...liveCamera }], liveCamera.id);
+    expect(mocks.viewers).toHaveLength(1);
+    expect(viewer.records.get(`public-camera:${liveCamera.id}`)).toBe(cameraEntity);
+    expect(viewer.records.has("selected-source")).toBe(true);
+    expect(viewer.records.has("context-camera:ncdot-test")).toBe(true);
+    expect(container.textContent).toContain("Public traffic cameras");
+    expect(container.textContent).toContain("Separate replay evidence");
+    await renderLive([]);
+    expect(viewer.records.has(`public-camera:${liveCamera.id}`)).toBe(false);
+    expect(viewer.records.has("selected-source")).toBe(true);
+  });
+
+  it("routes a public pin click to the preview, not to replay evidence", async () => {
+    const onLive = vi.fn(); const onReplay = vi.fn();
+    await renderLive([liveCamera], null, onLive, onReplay);
+    mocks.viewers[0].scene.pick.mockReturnValue({ id: { id: `public-camera:${liveCamera.id}` } });
+    await act(async () => mocks.handlers[0].input({ position: {} }));
+    expect(onLive).toHaveBeenCalledWith(liveCamera.id);
+    expect(onReplay).not.toHaveBeenCalled();
+  });
+
+  it("bounds the layer and filters invalid coordinates without claiming online availability", async () => {
+    const cameras = Array.from({ length: 101 }, (_, i) => ({ ...liveCamera, id: `camera-${i}` }));
+    await renderLive([{ ...liveCamera, id: "bad", latitude: 100 }, ...cameras]);
+    const viewer = mocks.viewers[0];
+    expect([...viewer.records.keys()].filter((id) => id.startsWith("public-camera:"))).toHaveLength(100);
+    expect(viewer.records.has("public-camera:bad")).toBe(false);
+    expect(container.textContent).toContain("Pin presence does not prove the camera is online");
+    const toggle = container.querySelector<HTMLInputElement>('[data-testid="map-public-toggle"]')!;
+    await act(async () => toggle.click());
+    expect(viewer.records.get("public-camera:camera-0").show).toBe(false);
+    expect(viewer.records.get("context-camera:ncdot-test").show).toBe(true);
+  });
 });
 afterEach(async () => {
   await act(async () => root.unmount()); container.remove();

@@ -21,6 +21,9 @@ import type {
 import { Icon } from "./Icon";
 import { DetectionOverlay } from "./DetectionOverlay";
 import { VoiceBrief } from "./VoiceBrief";
+import { LiveCameraPanel } from "./LiveCameraPanel";
+import { readLiveCameraCatalog } from "./liveCameras";
+import type { LiveCamera, LiveCameraCatalog } from "./liveCameras";
 const MapView = lazy(() =>
   import("./MapView").then((module) => ({ default: module.MapView })),
 );
@@ -203,6 +206,11 @@ function Operator() {
   const [pending, setPending] = useState("");
   const [tab, setTab] = useState<"desk" | "labels">("desk");
   const [playbackKey, setPlaybackKey] = useState(0);
+  const [liveCatalog, setLiveCatalog] = useState<LiveCameraCatalog | null>(null);
+  const [liveLoading, setLiveLoading] = useState(true);
+  const [liveError, setLiveError] = useState("");
+  const [liveSelectedId, setLiveSelectedId] = useState<string | null>(null);
+  const [visibleLiveCameras, setVisibleLiveCameras] = useState<LiveCamera[]>([]);
   const epoch = useRef(0);
   const configEpoch = useRef(0);
   // Synchronous guard: a render-time pending flag cannot protect polling races.
@@ -218,6 +226,27 @@ function Operator() {
     state?.incidents.find((i) => i.source_id === sourceId);
   const sourceIncidents =
     state?.incidents.filter((i) => i.source_id === sourceId) ?? [];
+
+  useEffect(() => {
+    // Public-camera availability must never block the local replay workflow.
+    const controller = new AbortController();
+    request<unknown>("/api/live-cameras", { signal: controller.signal })
+      .then((raw) => {
+        if (controller.signal.aborted) return;
+        const catalog = readLiveCameraCatalog(raw);
+        if (!catalog) throw new Error("Invalid public camera catalog");
+        setLiveCatalog(catalog);
+        setVisibleLiveCameras(catalog.cameras);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setLiveError("The public camera catalog is unavailable. Recorded replays remain ready.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLiveLoading(false);
+      });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
@@ -609,7 +638,7 @@ function Operator() {
               <div className="rail-footnote">
                 <Icon name="shield" size={16} />
                 <p>
-                  No live monitoring.
+                  Recorded demo scenes.
                   <br />
                   Every source keeps its original credit.
                 </p>
@@ -629,8 +658,19 @@ function Operator() {
                   source={source}
                   incident={incident}
                   onSelect={openEvidence}
+                  liveCameras={visibleLiveCameras}
+                  liveSelectedId={liveSelectedId}
+                  onSelectLiveCamera={setLiveSelectedId}
                 />
               </Suspense>
+              <LiveCameraPanel
+                catalog={liveCatalog}
+                selectedId={liveSelectedId}
+                onSelect={setLiveSelectedId}
+                onVisibleCamerasChange={setVisibleLiveCameras}
+                loading={liveLoading}
+                catalogError={liveError}
+              />
               <section className="incident-tray">
                 <div className="tray-heading">
                   <div>

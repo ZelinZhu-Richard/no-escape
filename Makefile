@@ -1,4 +1,4 @@
-.PHONY: setup build serve test verify footage gemini-check gemini-smoke gemini-replay detection-setup detect camera-refresh tunnel tunnel-status tunnel-stop
+.PHONY: setup build serve test verify footage gemini-check gemini-smoke gemini-replay detection-setup detect camera-refresh live-camera-refresh tunnel tunnel-status tunnel-stop
 
 setup:
 	python3 -m venv clearway/.venv
@@ -31,6 +31,9 @@ detect:
 
 camera-refresh:
 	python3 clearway/scripts/refresh_camera_context.py
+
+live-camera-refresh:
+	python3 clearway/scripts/refresh_live_cameras.py
 
 tunnel:
 	clearway/.venv/bin/python clearway/scripts/tunnel.py start

@@ -285,8 +285,8 @@ h3 {
   grid-template-columns: 210px minmax(280px, 1fr) 358px;
   gap: 16px;
   padding: 0 28px;
-  height: max(660px, calc(100vh - 246px));
-  max-height: 1000px;
+  min-height: max(660px, calc(100vh - 246px));
+  height: auto;
 }
 .source-rail {
   display: flex;
@@ -1889,7 +1889,8 @@ h3 {
     margin-left: auto;
   }
   .workspace-grid {
-    height: 700px;
+    min-height: 700px;
+    height: auto;
     max-height: none;
   }
   .source-rail {
