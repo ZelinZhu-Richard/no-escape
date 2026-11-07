@@ -1,5 +1,13 @@
 # Clearway morning handoff
 
+## Dispatch UI verification — November 7, 2026
+
+The teammate's merged Dispatch UI (`8671380`) is pulled and rebuilt locally. Verification found and fixed desktop evidence navigation, a misleading idle monitoring headline, hidden replay-estimate/error disclosures, and unreadable live-evidence metadata. **294 backend and 78 frontend tests, production build and asset/license checks passed.**
+
+Two genuine public HLS feeds ran with YOLO11s at approximately 6–6.5 updates/s, without a new candidate in either two-minute check. Controlled API tests cover positive candidate creation and the complete review/reset lifecycle. The existing real 6th Street alert (created earlier at 20:12:27 UTC; 12.046 seconds, 75 frames) was then verified through its map marker, frozen evidence, confirmation and read-only responder. Its image hash matched throughout. Desktop and 390 px layouts passed after the fixes. This does not claim a newly observed emergency or a physical phone test.
+
+The retained live alert is left **confirmed** in the existing demo run. No reset erased its evidence; the two recorded fixture candidates remain. The isolated live-check service is stopped, the main no-reload server remains running, and cloud inference spend stayed zero. Full results and local proof-artifact paths: [DISPATCH-VERIFICATION.md](clearway/docs/DISPATCH-VERIFICATION.md).
+
 ## PR review fixes — November 7, 2026
 
 The user requested the Codex review be checked, all findings fixed, and PR #1 merged. GitHub Codex initially reported two issues, a local Codex review found another provenance issue, and GitHub's follow-up review found an idempotent replay edge case. All four are addressed:

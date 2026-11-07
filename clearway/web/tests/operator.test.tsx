@@ -11,7 +11,29 @@ vi.mock("../src/api", async (importOriginal) => ({
   post: vi.fn(),
 }));
 vi.mock("../src/MapView", () => ({
-  MapView: () => createElement("div", null, "Map placeholder"),
+  MapView: ({
+    incidents = [],
+    onSelectIncident,
+  }: {
+    incidents?: Incident[];
+    onSelectIncident?: (id: string) => void;
+  }) =>
+    createElement(
+      "div",
+      null,
+      "Map placeholder",
+      ...incidents.map((incident) =>
+        createElement(
+          "button",
+          {
+            key: incident.id,
+            "data-map-incident": incident.id,
+            onClick: () => onSelectIncident?.(incident.id),
+          },
+          incident.title,
+        ),
+      ),
+    ),
 }));
 
 const source: Source = {
@@ -591,5 +613,75 @@ describe("server-owned per-source analysis", () => {
     await click("reset-demo");
     expect(evidence().textContent).toContain("Not analyzed in this view");
     expect(evidence().textContent).not.toContain("Cached model result");
+  });
+});
+
+describe("stacked Dispatch layout", () => {
+  it.each([
+    [false, "smooth"],
+    [true, "instant"],
+  ] as const)(
+    "reveals committed desktop map evidence with reduced motion %s",
+    async (reducedMotion, behavior) => {
+      const previousWidth = window.innerWidth;
+      const previousMatchMedia = window.matchMedia;
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: 1440,
+      });
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: vi.fn(() => ({ matches: reducedMotion })),
+      });
+      const other: Incident = {
+        ...candidate,
+        id: "second-map-incident",
+        title: "Second camera evidence",
+      };
+      currentState = stateFor("oldrun01", [candidate, other]);
+      try {
+        await mount();
+        const panel = container.querySelector<HTMLElement>(
+          '[data-testid="evidence-panel"]',
+        )!;
+        const scroll = vi.fn(function (this: HTMLElement) {
+          expect(this.querySelector("h3")?.textContent).toBe(other.title);
+          expect(document.activeElement).toBe(this);
+        });
+        panel.scrollIntoView = scroll;
+        const mapButton = container.querySelector<HTMLButtonElement>(
+          '[data-map-incident="second-map-incident"]',
+        )!;
+        expect(
+          panel.compareDocumentPosition(mapButton) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+        mapButton.focus();
+        await act(async () => mapButton.click());
+        expect(scroll).toHaveBeenCalledOnce();
+        expect(scroll).toHaveBeenCalledWith({ behavior, block: "start" });
+        await tick();
+        expect(scroll).toHaveBeenCalledOnce();
+      } finally {
+        Object.defineProperty(window, "innerWidth", {
+          configurable: true,
+          value: previousWidth,
+        });
+        Object.defineProperty(window, "matchMedia", {
+          configurable: true,
+          value: previousMatchMedia,
+        });
+      }
+    },
+  );
+
+  it("does not imply active monitoring or clear roads when there are no candidates", async () => {
+    await mount();
+    expect(container.querySelector("h1")?.textContent).toBe(
+      "No candidates yet.",
+    );
+    expect(container.querySelector("h1")?.textContent).not.toMatch(
+      /quiet|watching|safe|clear/i,
+    );
   });
 });

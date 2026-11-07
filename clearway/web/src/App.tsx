@@ -308,6 +308,19 @@ function Operator() {
   const mounted = useRef(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const evidenceRef = useRef<HTMLElement>(null);
+  const [evidenceReveal, setEvidenceReveal] = useState(0);
+  useEffect(() => {
+    if (!evidenceReveal) return;
+    // Reveal after the selected evidence has committed. In the stacked layout
+    // the map and queue sit below this panel, including on desktop.
+    evidenceRef.current?.focus({ preventScroll: true });
+    evidenceRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+      block: "start",
+    });
+  }, [evidenceReveal]);
   const livePreviewRef = useRef<HTMLDivElement>(null);
   const selectMapCamera = useCallback((id: string) => {
     setLiveSelectedId(id);
@@ -583,14 +596,7 @@ function Operator() {
   const openEvidence = (id?: string) => {
     cancelReplayPlayback();
     if (id ?? incident?.id) setSelectedId(id ?? incident!.id);
-    evidenceRef.current?.focus({ preventScroll: true });
-    if (window.innerWidth < 1100)
-      evidenceRef.current?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "instant"
-          : "smooth",
-        block: "start",
-      });
+    setEvidenceReveal((version) => version + 1);
   };
   const seek = (time: number) => {
     if (liveIncident) return;
@@ -744,7 +750,7 @@ function Operator() {
                     ? `${pendingCount} ${pendingCount === 1 ? "signal" : "signals"} awaiting your call`
                     : alertState === "confirmed"
                       ? "Incident confirmed. Handoff ready."
-                      : "All sectors quiet. Watching."}
+                      : "No candidates yet."}
                 </h1>
                 <p>
                   See the evidence. Make the call. Keep the handoff connected.
