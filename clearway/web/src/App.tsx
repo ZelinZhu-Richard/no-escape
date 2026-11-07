@@ -270,6 +270,8 @@ function Operator() {
   const [liveLoading, setLiveLoading] = useState(true);
   const [liveError, setLiveError] = useState("");
   const [liveSelectedId, setLiveSelectedId] = useState<string | null>(null);
+  // The public camera browser stays mounted but folded until it is needed.
+  const [cctvOpen, setCctvOpen] = useState(false);
   const [visibleLiveCameras, setVisibleLiveCameras] = useState<LiveCamera[]>(
     [],
   );
@@ -593,6 +595,7 @@ function Operator() {
       ? "confirmed"
       : "idle";
   const feedCount = liveCatalog?.cameras?.length ?? 0;
+  const cctvVisible = cctvOpen || Boolean(liveSelectedId);
 
   return (
     <div className={`operator-app state-${alertState} tab-${tab}`}>
@@ -619,14 +622,6 @@ function Operator() {
           </button>
         </nav>
         <div className="topbar-telemetry mono">
-          <span className="telemetry-cell">
-            <small>Feeds</small>
-            <b>{feedCount.toString().padStart(3, "0")}</b>
-          </span>
-          <span className="telemetry-cell">
-            <small>Queue</small>
-            <b>{runIncidents.length.toString().padStart(2, "0")}</b>
-          </span>
           <span className={`telemetry-cell ${pendingCount ? "is-hot" : ""}`}>
             <small>Pending</small>
             <b>{pendingCount.toString().padStart(2, "0")}</b>
@@ -906,10 +901,35 @@ function Operator() {
                   onSelectLiveCamera={selectMapCamera}
                 />
               </Suspense>
+              <button
+                className={`cctv-toggle ${cctvVisible ? "is-open" : ""}`}
+                aria-expanded={cctvVisible}
+                onClick={() => {
+                  if (cctvVisible) {
+                    setCctvOpen(false);
+                    setLiveSelectedId(null);
+                  } else setCctvOpen(true);
+                }}
+              >
+                <span className="cctv-toggle-icon">
+                  <Icon name="camera" size={16} />
+                </span>
+                <span className="cctv-toggle-text">
+                  <strong>Public CCTV network</strong>
+                  <small className="mono">
+                    {feedCount} Caltrans cameras · live video + local YOLO
+                  </small>
+                </span>
+                <span className="cctv-toggle-action mono">
+                  {cctvVisible ? "Hide" : "Browse"}
+                  <Icon name="chevron" size={14} />
+                </span>
+              </button>
               <div
                 ref={livePreviewRef}
                 tabIndex={-1}
                 aria-label="Selected public camera preview"
+                className={`cctv-drawer ${cctvVisible ? "is-open" : ""}`}
               >
                 <LiveCameraPanel
                   runId={state?.run.id}
@@ -1005,17 +1025,20 @@ function Operator() {
                           </li>
                         ))}
                       </ol>
-                      <div className="unknowns">
-                        <div>
+                      <details className="unknowns">
+                        <summary>
                           <Icon name="alert" size={15} />
                           <strong>Still unknown</strong>
-                        </div>
+                          <span className="unknowns-count mono">
+                            {incident.unknowns.length || 1}
+                          </span>
+                        </summary>
                         <p>
                           {incident.unknowns.length
                             ? incident.unknowns.join(" · ")
                             : "Original location and capture time are unverified."}
                         </p>
-                      </div>
+                      </details>
                       <div className="context-note">
                         <Icon name="pin" size={15} />
                         <p>

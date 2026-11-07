@@ -865,7 +865,7 @@ h3 {
   background: var(--panel);
   border: 1px solid var(--line-2);
   border-radius: 2px;
-  animation: cw-rise 0.35s var(--ease) both;
+  animation: cw-rise 0.35s var(--ease);
   transition:
     border-color 0.15s,
     background 0.15s;
@@ -1539,7 +1539,7 @@ h3 {
 }
 .evidence-body {
   padding: 18px 18px 26px;
-  animation: cw-rise 0.4s var(--ease) both;
+  animation: cw-rise 0.4s var(--ease);
 }
 .badge {
   display: inline-flex;
@@ -2171,7 +2171,7 @@ button.timestamp:hover {
   max-width: 660px;
   margin: auto;
   padding: 24px 0 20px;
-  animation: cw-rise 0.45s var(--ease) both;
+  animation: cw-rise 0.45s var(--ease);
 }
 .responder-kicker {
   display: flex;
@@ -2666,6 +2666,282 @@ button.timestamp:hover {
   border: 1px solid var(--line-2);
   border-radius: 2px;
   cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   Focus pass: one idea per area, secondary detail tucked away
+   -------------------------------------------------------------------------- */
+/* command bar + status strip */
+.topbar-shortid,
+.desk-toolbar .eyebrow,
+.desk-toolbar p {
+  display: none;
+}
+.desk-toolbar {
+  padding: 11px 18px;
+}
+.desk-toolbar h1 {
+  margin-top: 0;
+}
+.headline-signal {
+  width: 34px;
+  height: 34px;
+}
+
+/* left rail: thumbnail + name, nothing else */
+.rail-intro,
+.source-card-text small,
+.source-availability,
+.rail-footnote,
+.analysis-message,
+.queue-empty small {
+  display: none;
+}
+.rail-heading {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.source-card {
+  grid-template-columns: 78px minmax(0, 1fr);
+  align-items: center;
+  padding: 10px 16px;
+}
+.source-thumb {
+  height: 48px;
+}
+.source-number::before,
+.source-thumb .duration {
+  display: none;
+}
+.source-card-text strong {
+  font-size: 15px;
+}
+.source-card.selected .source-card-text strong::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 7px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--live);
+}
+.incident-tray {
+  flex: 1;
+}
+.queue-empty {
+  align-items: center;
+}
+.queue-empty p {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* map: title, placement note, marker, controls */
+.map-bottomline,
+.map-pill {
+  display: none;
+}
+.map-incident-callout {
+  bottom: 22px;
+}
+.map-tools {
+  bottom: 40px;
+}
+.cesium-viewer-bottom {
+  left: auto !important;
+  right: 14px !important;
+  bottom: 8px !important;
+  max-width: 46%;
+  opacity: 0.5;
+  text-align: right;
+}
+
+/* public CCTV: folded drawer */
+.cctv-toggle {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  flex: none;
+  padding: 13px 24px;
+  text-align: left;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  transition: background 0.15s;
+}
+.cctv-toggle:hover {
+  background: var(--panel);
+}
+.cctv-toggle-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  color: var(--cool);
+  border: 1px solid rgba(155, 151, 255, 0.45);
+}
+.cctv-toggle-text strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  font-stretch: 78%;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.cctv-toggle-text small {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.cctv-toggle-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 7px 10px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
+}
+.cctv-toggle:hover .cctv-toggle-action {
+  color: var(--ink);
+  border-color: var(--ink-2);
+}
+.cctv-toggle-action svg {
+  transform: rotate(90deg);
+  transition: transform 0.2s var(--ease);
+}
+.cctv-toggle.is-open .cctv-toggle-action svg {
+  transform: rotate(-90deg);
+}
+.cctv-drawer:not(.is-open) {
+  display: none;
+}
+.cctv-drawer .live-camera-heading,
+.cctv-drawer .live-camera-intro {
+  display: none;
+}
+.cctv-drawer .live-camera-panel {
+  padding-top: 4px;
+}
+
+/* evidence: the scene, the facts, the decision */
+.evidence-heading h2,
+.evidence-heading > svg,
+.detection-note,
+.gate-metric small,
+.voice-caption,
+.context-note,
+.empty-evidence > p,
+.fixture-note p {
+  display: none;
+}
+.evidence-heading {
+  padding: 13px 18px;
+}
+.evidence-heading .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+}
+.evidence-heading .eyebrow::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--live);
+}
+.state-alert .evidence-heading .eyebrow::before {
+  background: var(--hot);
+  animation: cw-blink 1.2s steps(1) infinite;
+}
+.detection-live-counts {
+  margin-bottom: 8px;
+}
+.gate-metric {
+  padding-top: 9px;
+}
+.gate-metric > strong {
+  font-size: 20px;
+}
+.fixture-note {
+  margin-top: 18px;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+.unknowns {
+  padding: 0;
+}
+.unknowns summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 12px 11px;
+  color: var(--warn);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.unknowns summary::-webkit-details-marker {
+  display: none;
+}
+.unknowns summary::after {
+  content: "+";
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+.unknowns[open] summary::after {
+  content: "−";
+}
+.unknowns-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 2px 5px;
+  font-size: 9px;
+  text-align: center;
+  color: var(--warn);
+  border: 1px solid rgba(242, 193, 78, 0.4);
+}
+.unknowns p {
+  margin: 0;
+  padding: 0 12px 12px;
+}
+
+/* footer: principle on the left, cost on the right */
+.footer-metrics > span:not(:last-child) {
+  display: none;
+}
+
+@media (min-width: 1101px) {
+  .operator-app.tab-desk {
+    height: 100vh;
+  }
+  .operator-app.tab-desk + .source-notice {
+    /* sits in the middle of the footer bar instead of adding a second strip */
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    z-index: 12;
+    height: 32px;
+    padding: 0;
+    transform: translateX(-50%);
+    background: transparent;
+    border: 0;
+  }
+  .map-shell {
+    height: auto;
+    flex: 1 0 440px;
+  }
 }
 
 /* --------------------------------------------------------------------------
