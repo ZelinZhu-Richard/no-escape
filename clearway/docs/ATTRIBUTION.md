@@ -19,6 +19,7 @@ Versions and license declarations below were checked against `web/package-lock.j
 | Manrope Variable (`@fontsource-variable/manrope`) | 5.2.8 package | SIL Open Font License 1.1; The Manrope Project Authors |
 | FastAPI / Pydantic | 0.162.0 / 2.14.3 | MIT |
 | Starlette / Uvicorn | 1.10.0 / 0.54.0 | BSD-3-Clause |
+| python-dotenv | 1.2.4 | BSD-3-Clause, checked in installed distribution metadata |
 | Vite / React Vite plugin / static-copy plugin | 8.3.6 / 6.2.1 / 4.1.1 | MIT; Vite's installed license file also lists its bundled third-party licenses |
 | TypeScript | 5.9.3 | Apache-2.0; retain its third-party notice file |
 | HTTPX / pytest (test dependencies) | 0.28.1 / 9.2.0 | BSD-3-Clause / MIT |

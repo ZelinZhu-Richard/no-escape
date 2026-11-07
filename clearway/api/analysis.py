@@ -1,8 +1,8 @@
-"""Honest fixture/frozen replay analysis with an opt-in, zero-charge-only adapter.
+"""Honest fixture/frozen replay analysis with explicitly bounded Gemini access.
 
 Default operation makes no provider calls. Enabling genuine inference requires
-both credentials and a locally reviewed billing verification record; credits,
-model names, and environment switches alone are never accepted as proof.
+both credentials and a local zero-charge verification or user-authorized paid
+budget record. Credentials and environment switches alone never authorize spend.
 """
 
 from contextlib import contextmanager
@@ -23,7 +23,8 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from .analysis_models import RESPONSE_SCHEMA, VisionResponse
-from .gemini import API_BASE, MODEL_PATTERN, ProviderError, ProviderResponse, generate_content
+from .gemini import API_BASE, MODEL_PATTERN, ProviderError, ProviderResponse, generate_content, generation_config
+from .gemini_budget import MAX_PAID_REQUESTS, amount, estimate_usage, spending, validate_paid_policy
 
 PROMPT_VERSION = "road-observation-v1"
 SCHEMA_VERSION = "road-observation-schema-v1"
@@ -103,11 +104,13 @@ def _now() -> str:
 class AnalysisService:
     """Synchronous service suitable for use in FastAPI's threadpool.
 
-    Billing policy file: data_dir/gemini-zero-charge-verification.json. It must
+    Legacy billing policy: data_dir/gemini-zero-charge-verification.json. It must
     contain provider, api_base, model, model_version, verified_by, verified_at,
     expires_at, evidence_reference, allow_zero_charge_calls:true,
     billable_cost_upper_bound_usd:0, and max_requests (1..10). This is a manual
     verification record, not an instruction to trust an advertised free tier.
+    Paid validation additionally supports gemini-budget-authorization.json,
+    limited to the explicitly approved $5 / five-attempt profile.
     """
 
     def __init__(self, data_dir: Path):
@@ -160,12 +163,15 @@ class AnalysisService:
                 "network_inference_calls": sum(r["event"] == "request_started" for r in rows),
                 "cache_hits": sum(r["event"] == "cache_hit" for r in rows),
                 "fixture_runs": sum(r["event"] == "fixture" for r in rows),
-                "estimated_spend_usd": sum(r.get("estimated_billable_cost_usd", 0) for r in rows if r["event"] == "request_reserved"),
+                **spending(rows),
                 "ledger_status": "ok",
             }
         except (OSError, ValueError, TypeError):
             return {"network_inference_calls": None, "cache_hits": None, "fixture_runs": None,
-                    "estimated_spend_usd": None, "ledger_status": "unavailable"}
+                    "estimated_spend_usd": None, "reserved_spend_usd": None,
+                    "usage_estimate_usd": None, "estimated_billable_cost_usd": None,
+                    "unknown_cost_requests": None, "spend_basis": "unavailable",
+                    "ledger_status": "unavailable"}
 
     def _unavailable(self, message: str, *, cache_key: str | None = None) -> dict:
         return {
@@ -183,7 +189,46 @@ class AnalysisService:
             raise ValueError("Explicit Gemini model and pinned model version are not configured.")
         return model, version
 
+    def readiness(self) -> dict:
+        """Read-only local eligibility check; never extracts frames or calls APIs."""
+        result = {"ready": False, "message": "Gemini configuration is not ready.",
+                  "max_billable_usd": 0.0, "max_requests": 0,
+                  "remaining_requests": 0, "reserved_spend_usd": None}
+        try:
+            model, version = self._model_identity()
+            policy = self._verified_policy(model, version)
+            with self._locked_ledger():
+                rows = self._read_events()
+            account = spending(rows)
+            reservations = [r for r in rows if r["event"] == "request_reserved" and r.get("provider") == "gemini-developer-api"]
+            paid_history = any(r.get("billing_mode") == "paid" for r in reservations)
+            ceiling = MAX_PAID_REQUESTS if policy["billing_mode"] == "paid" or paid_history else 10
+            limit = min(policy["max_requests"], ceiling)
+            remaining = max(0, limit - len(reservations))
+            result.update(max_billable_usd=policy["budget_cap_usd"], max_requests=limit,
+                          remaining_requests=remaining, reserved_spend_usd=account["reserved_spend_usd"])
+            if not os.environ.get("GEMINI_API_KEY"):
+                raise ValueError("Gemini API credentials are not configured; no request was attempted.")
+            if not remaining:
+                raise ValueError("Gemini smoke-request cap reached; use frozen cached replay.")
+            if policy["billing_mode"] == "paid" and amount(account["reserved_spend_usd"]) + amount(policy["reservation_usd"]) > amount(policy["budget_cap_usd"]):
+                raise ValueError("Gemini dollar cap reached; use frozen cached replay.")
+            result.update(ready=True, message="Gemini is configured for bounded inference; account access is not yet verified by this local check.")
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            message = str(error)
+            if type(error) is ValueError and message.startswith(("Explicit ", "Fresh Gemini", "Gemini ")):
+                result["message"] = message
+            else:
+                result["message"] = "Gemini ledger or policy is invalid; no request was attempted."
+        return result
+
     def _verified_policy(self, model: str, version: str) -> dict:
+        paid_path = self.data_dir / "gemini-budget-authorization.json"
+        if paid_path.exists():
+            try:
+                return validate_paid_policy(json.loads(paid_path.read_text()), model, version)
+            except (OSError, ValueError, KeyError, TypeError):
+                raise ValueError("Fresh Gemini analysis is blocked: a current, matching $5/five-request authorization is required for this paid model.") from None
         path = self.data_dir / "gemini-zero-charge-verification.json"
         try:
             policy = json.loads(path.read_text())
@@ -210,7 +255,8 @@ class AnalysisService:
                 raise ValueError("Verification is not current")
             if (expires - verified).total_seconds() > 24 * 3600:
                 raise ValueError("Verification must be scoped to at most one day")
-            return policy
+            return {**policy, "billing_mode": "zero_charge", "reservation_usd": 0.0,
+                    "budget_cap_usd": 0.0, "price_basis": "manually_verified_zero_billable_cost"}
         except (OSError, ValueError, KeyError, TypeError):
             raise ValueError("Fresh Gemini analysis is blocked: a current, model-specific zero-billable-cost verification record is required. Credits do not establish zero billing.") from None
 
@@ -240,6 +286,7 @@ class AnalysisService:
             "model": model, "model_version": version,
             "prompt_version": PROMPT_VERSION, "prompt_sha256": hashlib.sha256(PROMPT.encode()).hexdigest(),
             "schema_version": SCHEMA_VERSION, "schema_sha256": _hash(RESPONSE_SCHEMA),
+            "generation_config_sha256": _hash(generation_config(model)),
             "preprocessing_version": PREPROCESS_VERSION, "source_id": source_id,
             "frame_window": [{"timestamp_seconds": t, "sha256": hashlib.sha256(frame).hexdigest()} for t, frame in frames],
             "context": {"capture_time": None, "measured_location": None, "calibration": None,
@@ -283,14 +330,22 @@ class AnalysisService:
     def _reserve(self, policy: dict, key: str, identity: dict) -> str:
         with self._locked_ledger():
             events = self._read_events()
-            reserved = sum(r["event"] == "request_reserved" and r.get("provider") == "gemini-developer-api" for r in events)
-            if reserved >= min(policy["max_requests"], 10):
+            reservations = [r for r in events if r["event"] == "request_reserved" and r.get("provider") == "gemini-developer-api"]
+            account = spending(events)
+            paid_history = any(r.get("billing_mode") == "paid" for r in reservations)
+            ceiling = MAX_PAID_REQUESTS if policy["billing_mode"] == "paid" or paid_history else 10
+            if len(reservations) >= min(policy["max_requests"], ceiling):
                 raise ValueError("Gemini smoke-request cap reached; retries and failed reservations also consume the limit.")
+            reservation = amount(policy["reservation_usd"])
+            if policy["billing_mode"] == "paid" and amount(account["reserved_spend_usd"]) + reservation > amount(policy["budget_cap_usd"]):
+                raise ValueError("Gemini dollar cap reached; prior reservations remain charged against the limit.")
             request_id = str(uuid4())
             self._append_unlocked(
                 "request_reserved", request_id=request_id, provider="gemini-developer-api",
-                model=identity["model_version"], cache_key=key, estimated_billable_cost_usd=0.0,
-                price_basis="manually_verified_zero_billable_cost", verification_sha256=_hash(policy),
+                model=identity["model_version"], cache_key=key,
+                reserved_cost_usd=float(reservation), estimated_billable_cost_usd=float(reservation),
+                billing_mode=policy["billing_mode"], price_basis=policy["price_basis"],
+                verification_sha256=_hash(policy),
             )
             return request_id
 
@@ -341,11 +396,15 @@ class AnalysisService:
             if api_key in json.dumps(response):
                 raise ProviderError("Provider output failed the secret-redaction boundary.")
             duration = round((time.perf_counter() - started) * 1000, 3)
+            cost = estimate_usage(answer.usage) if policy["billing_mode"] == "paid" else 0.0
             self._event("request_succeeded", request_id=request_id, cache_key=key, response_sha256=_hash(response),
-                        usage=answer.usage, latency_ms=duration, estimated_billable_cost_usd=0.0)
+                        usage=answer.usage, latency_ms=duration, estimated_billable_cost_usd=cost,
+                        cost_status="usage_estimate" if cost is not None else "unknown_reservation_retained",
+                        price_basis=policy["price_basis"])
             entry = {"fixture": False, "origin": "provider_response", "created_at": _now(),
                      "request_id": request_id, "identity": identity, "cache_key": key,
-                     "response": response, "usage": answer.usage}
+                     "response": response, "usage": answer.usage,
+                     "estimated_billable_cost_usd": cost, "price_basis": policy["price_basis"]}
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             with tempfile.NamedTemporaryFile("w", dir=self.cache_dir, suffix=".tmp", delete=False) as stream:
                 json.dump(entry, stream, sort_keys=True)
@@ -353,7 +412,8 @@ class AnalysisService:
             temp.replace(self.cache_dir / f"{key}.json")
             return {"mode": "fresh", "status": "complete", "message": "Fresh model response; operator review required.",
                     **response, "provenance": self._provenance(identity, key)}
-        except (ProviderError, ValidationError, ValueError, TypeError, OSError):
+        except (ProviderError, ValidationError, ValueError, TypeError, OSError) as error:
             self._event("request_failed", request_id=request_id, cache_key=key, error_code="provider_or_validation_failure",
                         latency_ms=round((time.perf_counter() - started) * 1000, 3), retry_count=0)
-            return self._unavailable("Model request or response validation failed; no retry or provider substitution was attempted.", cache_key=key)
+            message = error.safe_message if isinstance(error, ProviderError) else "Model request or response validation failed; no retry or provider substitution was attempted."
+            return self._unavailable(message, cache_key=key)

@@ -447,7 +447,11 @@ function Operator() {
                 >
                   <option value="fixture">Fixture walkthrough</option>
                   <option value="cached">Frozen model cache</option>
-                  <option value="fresh" disabled={!config?.model_configured}>
+                  <option
+                    value="fresh"
+                    disabled={!config?.model_configured}
+                    title={config?.model_readiness?.message}
+                  >
                     Fresh inference
                     {!config?.model_configured ? " · unavailable" : ""}
                   </option>
@@ -845,7 +849,7 @@ function Operator() {
               <span className="mono">
                 {state?.telemetry.estimated_spend_usd == null
                   ? "Spend unknown"
-                  : `$${state.telemetry.estimated_spend_usd.toFixed(2)} API spend`}
+                  : `$${state.telemetry.estimated_spend_usd.toFixed(state.telemetry.estimated_spend_usd > 0 && state.telemetry.estimated_spend_usd < 0.01 ? 4 : 2)} ${state.telemetry.unknown_cost_requests ? "API cost bound" : "est. API cost"}`}
               </span>
             </div>
           </footer>

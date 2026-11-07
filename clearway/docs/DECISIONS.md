@@ -66,3 +66,11 @@ The final morning report records browser results, actual spend, PR state, and re
 ## November 7, 2026 — GitHub workflow authorization
 
 The initial feature-branch push was rejected because the existing GitHub OAuth connection lacks `workflow` scope. Preserve the optional workflow as `docs/ci-checks.example.yml`, amend the unpublished local commit, and push the implementation without changing account permissions. The template is not active CI; report only the verified local checks. The application/PR work remains authorized.
+
+## November 7, 2026 — Real Gemini follow-up
+
+The user requested real inference on the obstruction clip and explicitly approved **$5 total**; retain the five-inference-attempt limit from the budget question. Implement a narrow paid profile for the currently documented stable `gemini-3.5-flash-lite` model. Current official rates and full context limits support a conservative $0.50 reservation per attempt. Keep failed-call reservations, separate usage estimates from unknown charges, and do not replenish limits when authorization is renewed.
+
+Load the teammate's ignored backend `clearway/.env` privately, with literal parsing and existing environment precedence. Default the documented model/version so a key-only file is sufficient. The local authorization record derives from the user's actual approval, not a fabricated free-tier verification. The user confirmed the key has **not yet** been added; no model or account access is claimed.
+
+Add offline readiness, a bounded model-access preflight, and a smoke command using the actual 1/4/8-second frames followed by zero-network genuine-cache verification. Include generation settings in cache identity. A model no-candidate result must remain unchanged; no label, metric, or human confirmation is fabricated.

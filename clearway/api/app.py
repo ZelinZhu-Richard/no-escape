@@ -12,12 +12,14 @@ from uuid import UUID
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
+from .configuration import load_local_environment
 from .models import AnalysisResult, LabelRequest, ReplayRequest
 from .sources import SOURCES, media_path, source_record
 from .store import StateError, Store
 
 
 ROOT = Path(__file__).resolve().parent.parent
+load_local_environment()
 
 
 def _public_origin() -> tuple[str | None, str | None]:
@@ -163,11 +165,15 @@ def create_app(
 
         @application.get("/api/config")
         def config():
+            readiness = analysis_service.readiness() if hasattr(analysis_service, "readiness") else {
+                "ready": False, "message": "Provider readiness is unavailable.", "max_billable_usd": 0,
+            }
             return {
                 "public_base_url": public_url, "public_base_url_error": public_error,
                 "default_analysis_mode": "fixture", "map_mode": "basic",
-                "budgets": {"gemini": 0, "claude": 10, "openai": 0},
-                "model_configured": bool(os.environ.get("GEMINI_MODEL") and os.environ.get("GEMINI_MODEL_VERSION") and os.environ.get("GEMINI_API_KEY")),
+                "budgets": {"gemini": readiness.get("max_billable_usd", 0), "claude": 10, "openai": 0},
+                "model_configured": readiness["ready"],
+                "model_readiness": readiness,
             }
 
         @application.get("/api/sources")

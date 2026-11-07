@@ -87,3 +87,36 @@ def test_model_url_injection_rejected_before_transport(monkeypatch):
     monkeypatch.setattr(gemini, "build_opener", forbidden)
     with pytest.raises(ProviderError):
         generate_content(api_key="unit-key", model="../../bad?key=secret", prompt="", frames=[])
+
+
+def test_selected_model_has_bounded_minimal_thinking_and_one_candidate(monkeypatch):
+    captured = setup_fake(monkeypatch, envelope(modelVersion=gemini.SELECTED_MODEL))
+    generate_content(api_key="unit-test-key", model=gemini.SELECTED_MODEL, prompt="Inspect frames",
+                     frames=[(t, b"fake-jpeg") for t in (1.0, 4.0, 8.0)])
+    config = json.loads(captured[0][0].data)["generationConfig"]
+    assert config["candidateCount"] == 1
+    assert config["maxOutputTokens"] == 4096
+    assert config["thinkingConfig"] == {"thinkingLevel": "MINIMAL", "includeThoughts": False}
+    assert "tools" not in json.loads(captured[0][0].data)
+
+
+def test_metadata_preflight_sends_no_frames_or_generation_request(monkeypatch):
+    captured = setup_fake(monkeypatch, {
+        "name": "models/" + gemini.SELECTED_MODEL,
+        "supportedGenerationMethods": ["generateContent", "countTokens"],
+        "inputTokenLimit": 1048576, "outputTokenLimit": 65536,
+    })
+    metadata = gemini.get_model_metadata(api_key="unit-test-key", model=gemini.SELECTED_MODEL)
+    req, timeout = captured[0]
+    assert req.method == "GET" and req.data is None
+    assert req.full_url.endswith('/' + gemini.SELECTED_MODEL)
+    assert "unit-test-key" not in req.full_url
+    assert timeout == 15
+    assert metadata["generate_content_supported"] is True
+
+
+def test_provider_error_code_cannot_publish_raw_error_text():
+    error = ProviderError("secret raw server text", code="authentication")
+    assert "secret" not in error.safe_message
+    assert "credential" in error.safe_message
+    assert ProviderError("sensitive", code="evil raw string").code == "provider_error"

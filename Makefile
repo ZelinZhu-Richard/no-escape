@@ -1,4 +1,4 @@
-.PHONY: setup build serve test verify footage
+.PHONY: setup build serve test verify footage gemini-check gemini-smoke gemini-replay
 
 setup:
 	python3 -m venv clearway/.venv
@@ -21,3 +21,12 @@ verify:
 
 footage:
 	python3 clearway/scripts/fetch_footage.py --with-control
+
+gemini-check:
+	clearway/.venv/bin/python clearway/scripts/check_gemini.py
+
+gemini-smoke:
+	clearway/.venv/bin/python clearway/scripts/run_gemini.py
+
+gemini-replay:
+	clearway/.venv/bin/python clearway/scripts/run_gemini.py --cached-only

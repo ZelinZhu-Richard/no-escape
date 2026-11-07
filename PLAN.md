@@ -159,7 +159,7 @@ Prepare instructions only during the overnight run. [Cloudflare Quick Tunnels](h
 
 ## Spend controls
 
-These are ceilings for a future authorized build, not spending performed by this planning task.
+The table records the overnight ceilings. **Follow-up exception, November 7, 2026:** the user explicitly approved up to **$5 total Gemini billed usage** to validate the obstruction clip. Retain a five-inference-attempt limit, fixed `gemini-3.5-flash-lite` pricing/profile, persistent reservations, and no automatic retries/provider changes. The key is supplied privately through `clearway/.env`; see [MODEL-SETUP.md](clearway/docs/MODEL-SETUP.md). This does not authorize hosting, tunnels, or other providers.
 
 | Service | Overnight cap | Enabled use |
 | --- | --- | --- |
@@ -172,7 +172,7 @@ At least 90% of automated checks use fixtures; core correctness/reset tests use 
 
 `clearway/data/spend-ledger.jsonl` records provider/model, request ID/hash, request time, status, usage, estimated charge, retries, cache behavior, and known price basis. Reserve worst-case estimated cost before concurrent requests; fail closed if pricing is missing or the cap would be exceeded. Distinguish billable charge from out-of-pocket charge after credits. Unknown costs are unknown, not zero. Local Codex session usage is not automatically spending from the user's API balances.
 
-If Gemini access or zero-charge eligibility fails, keep the adapter and fixtures, log the limitation, and continue the workflow. Paid Gemini validation requires a later explicit nonzero cap. Never print, log, or commit secrets; sanitize provider errors and secret-bearing URLs. No outbound messages, organizer contact, deployments, or public tunnels during the overnight run.
+If Gemini access fails, keep fixtures visibly separate and log the limitation. Paid Gemini validation is now authorized only within the $5/five-attempt follow-up exception above. Never print, log, or commit secrets; sanitize provider errors and secret-bearing URLs. No outbound messages, organizer contact, deployments, or public tunnels are authorized by this inference follow-up.
 
 ## Build sequence and fallbacks
 

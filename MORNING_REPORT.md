@@ -2,6 +2,8 @@
 
 November 7, 2026. The local review-to-handoff workflow is implemented. **The working demonstration uses explicit fixture analysis on real licensed footage. Genuine model detection and cellular phone handoff are not yet validated.**
 
+**Gemini follow-up:** the user has now authorized **$5 total / at most five inference attempts**. Private `clearway/.env` loading, the selected `gemini-3.5-flash-lite` model, bounded cost accounting, offline readiness, and `make gemini-smoke` / `make gemini-replay` are implemented. **107 backend/setup/budget/smoke tests and five frontend tests pass.** The user confirmed the key is not yet available; the smoke command stops at that check and has made zero provider requests. See [MODEL-SETUP.md](clearway/docs/MODEL-SETUP.md) for the teammate handoff. The overnight results below remain historical verification, not a claim of real inference.
+
 Implementation branch: `feat/clearway-overnight-demo`. [Draft PR #1](https://github.com/ZelinZhu-Richard/no-escape/pull/1) is open for review and has not been merged. Nothing has been deployed, no public tunnel was started, and no organizer was contacted.
 
 ## Start the demo
@@ -32,7 +34,7 @@ Demo sequence: click **Reset demo** if the saved preview already has an incident
 - Real licensed Pexels video playback, linked source/license credit, timestamp seeking, explicit recorded-replay and fixture badges, and visible unknowns.
 - Source selection, map marker/card selection, incident evidence, human confirmation/dismissal, repeated replay deduplication, and run-safe reset.
 - Separate read-only responder application, shared state, polling, scoped video/poster routes, and expired-run handling. It has no operator mutation routes.
-- Local source/configuration validation, SQLite persistence, genuine-result cache provenance, sanitized request/spend ledger, and hard zero-billable Gemini gate. Frozen cache misses make no inference calls.
+- Local source/configuration validation, SQLite persistence, genuine-result cache provenance, sanitized request/spend ledger, and enforced Gemini authorization limits (the follow-up permits $5/five attempts). Frozen cache misses make no inference calls.
 - A human-labeling page and evaluation script. No human labels were fabricated or submitted. The evaluation report says **awaiting labels**.
 - Startup, asset restoration, five-cycle HTTP verification, draft pitch/commercial assumptions, reference attribution, and manual morning tunnel instructions.
 
@@ -40,8 +42,8 @@ Demo sequence: click **Reset demo** if the saved preview already has an incident
 
 | Area | Current limit |
 | --- | --- |
-| Computer Vision inference | Gemini Developer API adapter is implemented and tested against mocks. No key, exact model/version, or verified zero-charge account access was supplied; no actual provider call or genuine cache entry exists. Fixture observations are not AI results. |
-| Cloud credits | Google Cloud billing credit has not been verified for the selected service. This adapter is not Vertex AI. Paid access needs an explicitly revised cap/policy; credits do not make billable usage zero. |
+| Computer Vision inference | Gemini Developer API adapter and the selected model defaults are implemented and tested against mocks. The $5 follow-up is authorized, but the key is pending; no actual provider call or genuine cache entry exists. Fixture observations are not AI results. |
+| Cloud credits | Google Cloud billing credit has not been verified for the selected service. This adapter is not Vertex AI. The approved $5 ceiling allows bounded billed validation without assuming credit eligibility. |
 | Mapping | Basic Cesium/OpenStreetMap with an illustrative fallback. Photorealistic 3D requires eligible service access/token and remains unverified. The positive's coordinates are unknown, so Durham placement is simulated. |
 | QR / phone | URL composition and responder code exist. Local phone layout is tested; a real phone over cellular has not been tested. No public connection is running. |
 | Evaluation | No human labels or real predictions; no accuracy, natural-incident recall, or gate savings can be claimed. Thirty adjacent windows are not thirty independent incidents. |
@@ -71,7 +73,7 @@ python3 clearway/scripts/fetch_footage.py --with-control
 ## Morning priorities
 
 1. **Run the local demo and inspect the draft PR.** Keep the known-good fixture fallback available. Start with the 90-second [table script](clearway/docs/PITCH.md); humans finalize claims and delivery.
-2. **Make the CV component real.** Verify Google account/endpoint/model/billing, then either document genuinely zero-charge access under the current gate or explicitly authorize and implement a bounded paid policy. Follow [MODEL-SETUP.md](clearway/docs/MODEL-SETUP.md). Analyze the positive/control, inspect output, save genuine cache entries, and rehearse frozen replay. Do not present fixture observations as model output.
+2. **Make the CV component real.** Add the teammate's key to ignored `clearway/.env`, run `make gemini-check` and `make gemini-smoke` within the now-authorized $5/five-attempt limit, inspect output, and rehearse `make gemini-replay`. Restart the backend after adding the key. Follow [MODEL-SETUP.md](clearway/docs/MODEL-SETUP.md). Do not present fixture observations as model output.
 3. **Validate the phone handoff.** Follow [TUNNEL.md](clearway/docs/TUNNEL.md), expose only responder port 8001 intentionally, configure the HTTPS origin, refresh the operator, and scan on a phone with Wi-Fi off. Check confirmation updates and expiration after reset. Stop the tunnel after use.
 4. **Label and evaluate.** One person labels roughly thirty useful windows with scene/event counts. Freeze settings before running final predictions. Use [EVALUATION.md](clearway/docs/EVALUATION.md); report actual denominators and development-only limitations. Without natural events, say recall is not measurable on natural data.
 5. **Resolve event/reuse and map access.** Check organizer announcements and source-use eligibility; no clarification has been obtained. Credit both inspirations. Verify Cesium/Google photorealistic access and native credits if enabling it.

@@ -43,6 +43,8 @@ python3 clearway/scripts/evaluate.py
 
 `make verify` exercises five real HTTP replay/evidence/confirm/responder/reset cycles and checks stale-link rejection, deduplication, and zero inference requests. Browser rendering is checked separately in Codex's built-in browser; results belong in the morning report. The evaluation report remains **awaiting labels** until human submissions exist. Fixture test cases are not added to that label database.
 
+For real Gemini validation, the user has approved a $5/five-attempt limit. Have the teammate add `GEMINI_API_KEY` to ignored `clearway/.env`, then run `make gemini-check`, `make gemini-smoke`, and `make gemini-replay`. See [MODEL-SETUP.md](clearway/docs/MODEL-SETUP.md). Restart `make serve` after changing backend environment settings. Account access and actual inference remain unverified until that smoke command succeeds.
+
 For frontend iteration, run `npm run dev` inside `clearway/web` with the backend on 8000. The development server is at `http://127.0.0.1:5173` and proxies `/api` to the local operator.
 
 ## Configuration
@@ -50,7 +52,7 @@ For frontend iteration, run `npm run dev` inside `clearway/web` with the backend
 - `CLEARWAY_DATA_DIR`: optional absolute local directory for SQLite, cache, ledger, and `footage/`. Both services must use the same directory. Default: `clearway/data`.
 - `PUBLIC_BASE_URL`: optional HTTPS origin for the deliberately exposed read-only responder. Without it, the UI provides a local preview, not a public phone QR. See [TUNNEL.md](clearway/docs/TUNNEL.md) for the manual morning procedure.
 - Map settings are build-time Vite variables; see `clearway/web/.env.example`. No Cesium token is required for the basic-map/illustrative fallback.
-- Gemini configuration and the zero-charge gate are documented in [MODEL-SETUP.md](clearway/docs/MODEL-SETUP.md). A Cloud credit does not satisfy the $0 billable cap.
+- Gemini configuration and the bounded $5 follow-up authorization are documented in [MODEL-SETUP.md](clearway/docs/MODEL-SETUP.md). Cloud credit eligibility is still unverified.
 
 Never put keys in command logs, source files, or a committed environment file. Local data, `.env` files, media, and the unrelated ECC installations are ignored.
 

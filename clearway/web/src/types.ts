@@ -58,6 +58,7 @@ export interface State {
     cache_hits: number | null;
     fixture_runs: number | null;
     estimated_spend_usd: number | null;
+    unknown_cost_requests?: number;
     ledger_status?: string;
   };
 }
@@ -67,6 +68,7 @@ export interface Config {
   map_mode: string;
   budgets: { gemini: number; claude: number; openai: number };
   model_configured: boolean;
+  model_readiness?: { ready: boolean; message: string };
 }
 export interface ResponderData {
   incident: Incident;

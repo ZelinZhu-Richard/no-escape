@@ -36,6 +36,7 @@ def main() -> int:
             processes.append(subprocess.Popen([str(python), "-m", "uvicorn", app, "--host", "127.0.0.1", "--port", port], cwd=root, env=os.environ.copy()))
         print("Clearway operator: http://127.0.0.1:8000", flush=True)
         print("Read-only responder: http://127.0.0.1:8001 (no public tunnel)", flush=True)
+        print("Private settings load from clearway/.env; restart after changing them.", flush=True)
         print("Press Ctrl+C to stop both services.", flush=True)
         while not stopped:
             for process in processes:
