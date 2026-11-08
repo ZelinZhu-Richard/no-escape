@@ -291,6 +291,22 @@ def test_known_camera_graphics_exclusion_uses_centers_and_preserves_roadway(tmp_
     assert result["image_sha256"] == hashlib.sha256(jpeg()).hexdigest()
 
 
+def test_tva43_excludes_burned_in_timestamp_but_keeps_near_roadway(tmp_path):
+    detector = Detector()
+    detector.detect = lambda _: graphics_and_road_boxes()
+    instance, _, _ = service(tmp_path, detector)
+    masked = instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-285")
+    other = instance.analyze_jpeg(jpeg(), camera_id="caltrans-d4-49")
+    assert masked["excluded_regions"] == [
+        {"id": "provider-timestamp", "xyxy": [0, 0, .50, .08]},
+    ]
+    assert masked["boxes"] == graphics_and_road_boxes()[1:]
+    assert masked["excluded_detection_count"] == 1
+    assert masked["provenance"]["exclusion_policy"] == "caltrans-d4-285-timestamp-v1"
+    assert other["boxes"] == graphics_and_road_boxes()
+    assert other["provenance"]["configuration_sha256"] != masked["provenance"]["configuration_sha256"]
+
+
 @pytest.mark.parametrize("camera_id", [None, "caltrans-d4-37", "caltrans-d4-689-2"])
 def test_graphics_exclusion_is_not_applied_to_other_or_unknown_cameras(tmp_path, camera_id):
     detector = Detector()

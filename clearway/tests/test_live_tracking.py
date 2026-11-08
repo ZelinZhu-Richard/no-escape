@@ -264,3 +264,129 @@ def test_missing_numpy_returns_unavailable_without_breaking_detector_result(setu
     monkeypatch.setattr(builtins, "__import__", without_numpy)
     result = sample(setup, 0)
     assert result["status"] == "unavailable" and result["tracks"] == []
+
+
+def fast_box(x=.3, y=.7, confidence=.8, kind="car", width=.06, height=.08):
+    return {"class_name": kind, "confidence": confidence, "xyxy": [x, y, x+width, y+height]}
+
+
+@pytest.fixture
+def tva43(setup):
+    setup[2]["camera_id"] = "caltrans-d4-285"
+    return setup
+
+
+def test_tva43_sparse_fast_vehicle_keeps_id_using_only_current_high_observations(tva43):
+    first = sample(tva43, 0, [fast_box()])
+    identifier = first["tracks"][0]["track_id"]
+    recoveries = 0
+    for index in range(1, 8):
+        current = fast_box(.3 + .025*index, .7 - .04*index)
+        result = sample(tva43, index/6, [current])
+        assert result["association_policy"] == "bytetrack-tva43-gated-geometry-v1"
+        assert result["prediction_only_tracks_returned"] == 0
+        assert result["tracks"][0]["track_id"] == identifier
+        assert result["tracks"][0]["xyxy"] == current["xyxy"]
+        assert result["tracks"][0]["confidence"] == current["confidence"]
+        assert result["tracks"][0]["observation"] == "high"
+        assert result["tracks"][0]["confirmed"] is True
+        recoveries += result["geometry_recoveries"]
+    assert recoveries >= 1
+
+
+def test_tva43_can_confirm_a_uniquely_matched_fast_tentative_vehicle(tva43):
+    sample(tva43, 0, [])
+    first = sample(tva43, .125, [fast_box()])["tracks"][0]
+    assert first["confirmed"] is False
+    second = sample(tva43, .25, [fast_box(.325, .66)])
+    assert second["tracks"][0]["track_id"] == first["track_id"]
+    assert second["tracks"][0]["association"] == "gated_geometry"
+    assert second["tracks"][0]["confirmed"] is True
+
+
+def test_tva43_recorded_sparse_pair_recovers_without_reducing_detector_confidence(tva43):
+    # Development coordinates from one visibly continuous near-road vehicle;
+    # this regression does not establish population identity/speed accuracy.
+    first = {"class_name": "car", "confidence": .8592162132263184,
+             "xyxy": [.504897, .835600, .568129, .918890]}
+    second = {"class_name": "car", "confidence": .8687207698822021,
+              "xyxy": [.530423, .791728, .587271, .865820]}
+    previous = sample(tva43, 0, [first], mutate=lambda r: r.update(image_height=427))["tracks"][0]
+    result = sample(tva43, .167, [second], mutate=lambda r: r.update(image_height=427))
+    assert result["geometry_recoveries"] == 1
+    current = result["tracks"][0]
+    assert current["track_id"] == previous["track_id"]
+    assert current["xyxy"] == second["xyxy"] and current["confidence"] == second["confidence"]
+
+
+@pytest.mark.parametrize("prior,current", [
+    ([fast_box(.37, .5)], [fast_box(.32, .5), fast_box(.42, .5)]),
+    ([fast_box(.37, .5), fast_box(.47, .5)], [fast_box(.42, .5)]),
+    ([fast_box(.37, .5), fast_box(.47, .5)], [fast_box(.418, .5), fast_box(.422, .5)]),
+])
+def test_tva43_rejects_row_column_and_crossing_ambiguity_instead_of_guessing(tva43, prior, current):
+    previous = {t["track_id"] for t in sample(tva43, 0, prior)["tracks"]}
+    result = sample(tva43, .125, list(reversed(current)))
+    assert result["geometry_recoveries"] == 0
+    assert all(t["track_id"] not in previous and not t["confirmed"] for t in result["tracks"])
+
+
+@pytest.mark.parametrize("candidate", [
+    fast_box(.325, .66, kind="van"),
+    fast_box(.325, .66, confidence=.2),
+    fast_box(.325, .66, width=.02),
+    fast_box(.5, .5),
+])
+def test_tva43_recovery_refuses_wrong_class_low_scores_size_jumps_and_distant_boxes(tva43, candidate):
+    previous = sample(tva43, 0, [fast_box()])["tracks"][0]["track_id"]
+    result = sample(tva43, .125, [candidate])
+    assert result["geometry_recoveries"] == 0
+    assert all(t["track_id"] != previous for t in result["tracks"])
+
+
+@pytest.mark.parametrize("media,wall", [(.3, .3), (.125, .3)])
+def test_tva43_recovery_refuses_media_or_wall_gaps_over_a_quarter_second(tva43, media, wall):
+    previous = sample(tva43, 0, [fast_box()])["tracks"][0]["track_id"]
+    result = sample(tva43, media, [fast_box(.325, .66)], wall=wall)
+    assert result["geometry_recoveries"] == 0
+    assert result["tracks"][0]["track_id"] != previous
+
+
+def test_tva43_recovery_never_reconnects_a_lost_track(tva43):
+    previous = sample(tva43, 0, [fast_box()])["tracks"][0]["track_id"]
+    assert sample(tva43, .125, [])["tracks"] == []
+    result = sample(tva43, .25, [fast_box(.325, .66)])
+    assert result["geometry_recoveries"] == 0
+    assert result["tracks"][0]["track_id"] != previous
+
+
+def test_tva43_normal_match_has_priority_and_low_recovery_is_unchanged(tva43):
+    original = fast_box()
+    previous = sample(tva43, 0, [original])["tracks"][0]["track_id"]
+    result = sample(tva43, .125, [fast_box(.35), original])
+    matched = next(t for t in result["tracks"] if t["track_id"] == previous)
+    assert matched["association"] == "bytetrack" and matched["xyxy"] == original["xyxy"]
+    assert result["geometry_recoveries"] == 0
+    weak = {**original, "confidence": .2}
+    result = sample(tva43, .25, [weak])
+    assert result["tracks"][0]["track_id"] == previous
+    assert result["tracks"][0]["observation"] == "low_recovery"
+    assert result["geometry_recoveries"] == 0
+
+
+def test_geometry_recovery_does_not_change_other_cameras(setup):
+    previous = sample(setup, 0, [fast_box()])["tracks"][0]["track_id"]
+    result = sample(setup, 1/6, [fast_box(.325, .66)])
+    assert result["association_policy"] == "bytetrack-iou-v1"
+    assert result["geometry_recoveries"] == 0
+    assert result["tracks"][0]["track_id"] != previous
+    assert "association" not in result["tracks"][0]
+
+
+def test_tva43_geometry_recovery_survives_duplicate_frame_engine_reset(tva43):
+    sample(tva43, 0, [fast_box()], nonce="same")
+    assert sample(tva43, .125, [fast_box()], nonce="same")["tracks"] == []
+    first = sample(tva43, .25, [fast_box()], nonce="fresh")["tracks"][0]
+    result = sample(tva43, .375, [fast_box(.325, .66)], nonce="another")
+    assert result["tracks"][0]["track_id"] == first["track_id"]
+    assert result["geometry_recoveries"] == 1

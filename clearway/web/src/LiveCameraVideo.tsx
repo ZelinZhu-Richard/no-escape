@@ -4,6 +4,7 @@ import { publicStreamUrl } from "./liveCameras";
 import type { LiveCamera } from "./liveCameras";
 import { LiveImageBoxes } from "./LiveImageDetections";
 import { useLiveVideoOverlay } from "./useLiveVideoOverlay";
+import { TVA43_CALIBRATION, TVA43_CAMERA_ID, TVA43_MARKING_SOURCE } from "./trafficSpeedCalibration";
 export { captureLocalFrame } from "./useLiveVideoOverlay";
 
 export function LiveCameraVideo({
@@ -23,7 +24,8 @@ export function LiveCameraVideo({
   const [visible, setVisible] = useState(document.visibilityState !== "hidden");
   const [playback, setPlayback] = useState("connecting");
   const [yoloEnabled, setYoloEnabled] = useState(true);
-  const [showLabels, setShowLabels] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [showSpeedZone, setShowSpeedZone] = useState(true);
   const [alertsEnabled, setAlertsEnabled] = useState(true);
   const [frameSize, setFrameSize] = useState<[number, number] | null>(null);
   const [notice, setNotice] = useState("");
@@ -251,8 +253,37 @@ export function LiveCameraVideo({
           : playback === "paused"
             ? "Video paused"
             : "Connecting video…";
+  const hasSpeedPreset = camera.id === TVA43_CAMERA_ID;
   return (
     <div className="live-video-view" data-testid="live-video-view">
+      {hasSpeedPreset && (
+        <div className="live-speed-disclosure" data-testid="live-speed-status">
+          <strong>Experimental speed · approximate road scale</strong>
+          <span>
+            {overlay.speedViewMatches === false
+              ? "Camera view does not match the reference. Speeds hidden."
+              : overlay.speedViewMatches === true
+                ? "Reference view matched. Estimates need a stable vehicle track inside the outlined road area."
+                : "Waiting for fresh frames and a matching camera view."}
+          </span>
+          <span>
+            {TVA43_CALIBRATION.description} Detector confidence is not speed accuracy.
+            Cars outside the area or with unreliable tracks show speed —.
+          </span>
+          <details>
+            <summary>How the estimate is made</summary>
+            <p>Distance along an assumed flat road surface divided by elapsed video time,
+              fitted over 1–2 seconds. Three assumed 12 ft lanes and approximately
+              three 40 ft dash-and-gap cycles define the marked area. Road curvature,
+              vehicle-box position and track errors affect the result. This has not
+              been checked against known vehicle speeds.</p>
+            <a href={TVA43_MARKING_SOURCE} target="_blank" rel="noreferrer">Caltrans lane-marking guidance</a>
+          </details>
+          <button aria-pressed={showSpeedZone} onClick={() => setShowSpeedZone(value => !value)}>
+            {showSpeedZone ? "Hide speed area" : "Show speed area"}
+          </button>
+        </div>
+      )}
       <div className="live-snapshot-frame live-stream-frame">
         <video
           ref={video}
@@ -263,6 +294,12 @@ export function LiveCameraVideo({
           crossOrigin="anonymous"
           aria-label={`${camera.name} provider video`}
         />
+        {hasSpeedPreset && showSpeedZone && frameSize && overlay.speedViewMatches === true && (
+          <svg className="live-speed-zone" viewBox={`0 0 ${frameSize[0]} ${frameSize[1]}`}
+            preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <polygon points={TVA43_CALIBRATION.imageQuad.map(([x, y]) => `${x * frameSize[0]},${y * frameSize[1]}`).join(" ")} />
+          </svg>
+        )}
         {sampling && overlay.detections && (
           <div
             className="live-video-overlay"
@@ -276,6 +313,7 @@ export function LiveCameraVideo({
             <LiveImageBoxes
               detections={overlay.detections}
               labels={showLabels}
+              speeds={hasSpeedPreset ? overlay.speeds ?? {} : undefined}
             />
           </div>
         )}
@@ -285,6 +323,7 @@ export function LiveCameraVideo({
         {frameSize ? `${frameSize[0]} × ${frameSize[1]} source · ` : ""}Provider
         HLS stream · capture time and delivery delay unknown. This video stops
         loading when the tab is hidden.
+        {" "}Labels show detector confidence, not a calibrated probability of correctness.
       </p>
       {notice && (
         <p className="live-snapshot-notice" role="status">

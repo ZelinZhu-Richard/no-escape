@@ -1,5 +1,17 @@
 # Clearway morning handoff
 
+## TVA43 confidence and approximate speed — November 7, 2026
+
+**Working:** live boxes now have compact detector-confidence percentages beside them, enabled by default. **Public CCTV → Open speed example** selects TVA43 — I-580 at Grand Lakeshore. Confirmed tracks inside its outlined near-right roadway can show **est N mph**; a dash means unavailable. Labels are deliberately compact for dense traffic, with a hide control. Pause/resume clears and rebuilds estimates. A static-background view check hides speeds if the preset no longer matches.
+
+**Approximate only:** the user accepted an assumed 36 ft × 120 ft road scale. No surveyed calibration or independently known vehicle speeds exist, and only the outlined part of this one camera is enabled. Detector confidence does not measure speed accuracy. Tracking/class changes, blur, occlusion and brief time in the area make numeric estimates intermittent. This is a display feature; incident rules, stored evidence and responder briefs do not use its mph values.
+
+**Verified:** 403 backend tests and 167 frontend tests passed, along with TypeScript/production build and emitted assets/license checks. An independent read-only review found no actionable issue. On the identical 72-frame genuine development sample, TVA43's bounded geometric recovery increased in-zone confirmed observations from 2 to 72 while leaving all 1,872 high detections unchanged between policies. It produced two estimates on one visible vehicle (approximately 49 mph under the assumed scale), versus none before. This demonstrates availability, not speed or tracking accuracy. The visible built-in browser also showed a live **est 45 mph** label with genuine 720×480 video at roughly 6–6.5 local updates/s. A known timestamp-text exclusion removes false vehicle boxes from TVA43's burned-in date.
+
+**Run:** the no-reload app remains at `http://127.0.0.1:8000/`; use `make serve` when stopped. Refresh other tabs to load the new labels. One announced restart preserved the current run and all five incident records/statuses. No paid inference, new model download, training, public tunnel, deployment or reset occurred. Spend for this work: **$0**. The feature is on `feat/tva43-vehicle-speed` for a new PR after PR #4's merge.
+
+**Next:** measure road reference points and obtain independently measured speeds before treating mph as a measurement; label representative trajectories to assess ID switches and misses. Existing deferred Gemini/3D credentials, physical cellular test and human evaluation remain unchanged. Assumptions, exact same-input diagnostic commands and limits are in [VEHICLE-SPEED.md](clearway/docs/VEHICLE-SPEED.md). Local media and diagnostic outputs remain ignored under `.local/speed-tva43/`. Browser proof: `clearway/data/verification/tva43-confidence-speed.jpg` (ignored).
+
 ## Live video by default — November 7, 2026
 
 **Fixed:** the user's sidebar tab still ran an older build and its TV317 stream had fallen back to a snapshot. Retrying restored genuine video. Public CCTV now defaults to **Live video (191)** for both its list and map; **All cameras (767)** explicitly includes snapshot-only locations. Selecting a video camera starts its stream. Re-selecting a list item retries a failed stream or exits a prior manual snapshot choice; provider failure still produces a disclosed snapshot fallback with Retry live video.

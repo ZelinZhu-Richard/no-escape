@@ -487,18 +487,16 @@ describe("selected public camera preview", () => {
         ?.getAttribute("viewBox"),
     ).toBe("0 0 352 240");
     expect(container.querySelector(".live-video-view img")).toBeNull();
-    expect(container.querySelector(".live-stream-frame svg text")).toBeNull();
+    expect(container.querySelector(".live-stream-frame svg text")).not.toBeNull();
     expect(
       container.querySelector('[data-testid="live-detection-summary"]')
         ?.textContent,
     ).toContain("1 vehicles");
     const showLabels = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "Show labels",
+      (button) => button.textContent === "Hide labels",
     )!;
     await act(async () => showLabels.click());
-    expect(
-      container.querySelector(".live-stream-frame svg text")?.textContent,
-    ).toContain("car");
+    expect(container.querySelector(".live-stream-frame svg text")).toBeNull();
     expect(hlsMock.instances).toHaveLength(1);
     await act(async () => {
       visibility.mockReturnValue("hidden");
@@ -974,10 +972,9 @@ describe("verified ByteTrack live overlays", () => {
     expect(container.textContent).toContain(
       "ByteTrack: 2 shown · 1 low-confidence recoveries",
     );
-    await act(async () => button("Show labels").click());
     expect(
       container.querySelector(".live-stream-frame svg text")?.textContent,
-    ).toContain("car #1");
+    ).toContain("91%");
     await act(async () => button("Pause alerts").click());
     video.currentTime = 1.2;
     await advance(180);

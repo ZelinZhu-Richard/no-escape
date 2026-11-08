@@ -8,12 +8,27 @@ import { projectLiveFrame, trackLiveFrame } from "./liveOverlayTracking";
 import type { LiveTrackedFrame } from "./liveOverlayTracking";
 import { readLiveTracking } from "./liveTracking";
 import type { LiveTracking } from "./liveTracking";
+import { RoadSpeedEstimator } from "./liveSpeed";
+import type { RoadSpeedEstimates } from "./liveSpeed";
+import { TVA43_CALIBRATION, TVA43_CAMERA_ID } from "./trafficSpeedCalibration";
+import speedReference from "./trafficSpeedReference.json";
+import { extractSceneSignature, matchSceneSignatures } from "./speedSceneGuard";
+import type { ScenePatch, SceneSignature } from "./speedSceneGuard";
+
+const referenceScene: SceneSignature = {
+  version: "clearway-static-patches-v1",
+  aspectRatio: speedReference.signature.aspectRatio,
+  patches: speedReference.signature.patches.map(({rect, samples}) => ({
+    rect: [rect[0], rect[1], rect[2], rect[3]], samples,
+  })),
+};
 
 const SAMPLE_INTERVAL_MS = 140;
 
 export async function captureLocalFrame(
   video: HTMLVideoElement,
   presentedMediaTime = video.currentTime,
+  scenePatches?: readonly ScenePatch[],
 ) {
   if (video.readyState < 2 || video.videoWidth < 1 || video.videoHeight < 1)
     throw new Error("No decoded video frame.");
@@ -27,6 +42,17 @@ export async function captureLocalFrame(
   // drawImage happens synchronously inside the presented-frame callback. The
   // detector result must match these exact JPEG bytes before it can be used.
   context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  // Static background signatures only; no additional frame upload or storage.
+  // A missing pixel-read capability disables mph, not ordinary detections.
+  let sceneSignature: SceneSignature | null = null;
+  if (scenePatches) {
+    try {
+      sceneSignature = extractSceneSignature(
+        context.getImageData(0, 0, canvas.width, canvas.height).data,
+        canvas.width, canvas.height, scenePatches,
+      );
+    } catch { /* Unknown view means no numeric speed. */ }
+  }
   const image = canvas.toDataURL("image/jpeg", 0.8);
   const hash = await jpegHash(image);
   const bytes = Uint8Array.from(atob(image.split(",")[1]), (character) =>
@@ -39,6 +65,7 @@ export async function captureLocalFrame(
     blob: new Blob([bytes], { type: "image/jpeg" }),
     mediaTime: presentedMediaTime,
     capturedAtMs,
+    sceneSignature,
   };
 }
 
@@ -54,6 +81,8 @@ interface OverlayView {
   alertMonitor: LiveAlertMonitor | null;
   alertVersion: number;
   tracking: LiveTracking | null;
+  speeds: RoadSpeedEstimates | null;
+  speedViewMatches: boolean | null;
 }
 const initialView = (cameraId: string): OverlayView => ({
   cameraId,
@@ -67,6 +96,8 @@ const initialView = (cameraId: string): OverlayView => ({
   alertMonitor: null,
   alertVersion: -1,
   tracking: null,
+  speeds: null,
+  speedViewMatches: null,
 });
 
 export function useLiveVideoOverlay(
@@ -104,6 +135,15 @@ export function useLiveVideoOverlay(
     let tracked: LiveTrackedFrame | null = null;
     let details: ImageDetections | null = null;
     let trackingDetails: LiveTracking | null = null;
+    const calibration = cameraId === TVA43_CAMERA_ID ? TVA43_CALIBRATION : null;
+    const speedEstimator = new RoadSpeedEstimator(calibration);
+    let speeds: RoadSpeedEstimates | null = null;
+    let speedViewMatches: boolean | null = null;
+    const clearSpeeds = () => {
+      speedEstimator.reset();
+      speeds = null;
+      speedViewMatches = null;
+    };
     let mediaTime = video.currentTime;
     let lastPresentedTime: number | null = null;
     let lastSampledMediaTime: number | null = null;
@@ -123,6 +163,7 @@ export function useLiveVideoOverlay(
       tracked = null;
       details = null;
       trackingDetails = null;
+      clearSpeeds();
       alertMonitor = null;
       streamId = runId ? crypto.randomUUID() : "";
       lastPresentedTime = null;
@@ -156,6 +197,7 @@ export function useLiveVideoOverlay(
       ) {
         tracked = null;
         details = null;
+        clearSpeeds();
         message = "Local YOLO delayed · old boxes are hidden.";
       }
       updates = updates.filter((time) => now - time <= 2000);
@@ -196,6 +238,8 @@ export function useLiveVideoOverlay(
             : null,
         alertVersion: alertMonitorVersion,
         tracking: fresh ? trackingDetails : null,
+        speeds: fresh ? speeds : null,
+        speedViewMatches: fresh ? speedViewMatches : null,
       });
     };
 
@@ -220,12 +264,14 @@ export function useLiveVideoOverlay(
       try {
         let captured: Awaited<ReturnType<typeof captureLocalFrame>>;
         try {
-          captured = await captureLocalFrame(video, presentedTime);
+          captured = await captureLocalFrame(video, presentedTime,
+            calibration ? referenceScene.patches.map(patch => patch.rect) : undefined);
         } catch {
           if (!disposed && generation === epoch) {
             samplingUnavailable = true;
             tracked = null;
             details = null;
+            clearSpeeds();
             message =
               "This browser cannot sample the video. Snapshot YOLO is still available.";
           }
@@ -271,6 +317,7 @@ export function useLiveVideoOverlay(
         const receivedAtMs = performance.now();
         const result = readImageDetections(raw, captured.hash);
         if (!result) {
+          clearSpeeds();
           alertMonitor = null;
           tracked = null;
           details = null;
@@ -293,6 +340,7 @@ export function useLiveVideoOverlay(
           mediaAge > 0.35 ||
           receivedAtMs - captured.capturedAtMs > 500
         ) {
+          clearSpeeds();
           tracked = null;
           details = null;
           alertMonitor = null;
@@ -309,6 +357,21 @@ export function useLiveVideoOverlay(
               mediaTime: captured.mediaTime,
             })
           : null;
+        if (calibration) {
+          speedViewMatches = matchSceneSignatures(captured.sceneSignature, referenceScene).matches;
+          if (speedViewMatches && trackingDetails) {
+            speeds = speedEstimator.update({
+              cameraId, runId: trackingDetails.run_id, streamId: trackingDetails.stream_id,
+              configurationHash: trackingDetails.configuration_sha256,
+              imageHash: captured.hash, mediaTime: captured.mediaTime,
+              imageWidth: result.image_width, imageHeight: result.image_height,
+              tracks: trackingDetails.tracks, resetReason: trackingDetails.reset_reason,
+            });
+          } else {
+            speedEstimator.reset();
+            speeds = null;
+          }
+        }
         tracked = trackLiveFrame(tracked, {
           sourceId: `${cameraId}:${result.provenance.configuration_sha256 ?? "raw"}`,
           mediaTime: captured.mediaTime,
@@ -328,6 +391,7 @@ export function useLiveVideoOverlay(
         message = "";
       } catch {
         if (!disposed && generation === epoch) {
+          clearSpeeds();
           tracked = null;
           details = null;
           alertMonitor = null;

@@ -38,3 +38,6 @@ Clearway adaptation (api/live_tracking.py):
   predictions remain internal and never become incident-monitor evidence.
 - Does not include ReID embeddings, persistent IDs, appearance/identity models,
   upstream detector code, model weights, video data, or network access.
+- TVA43 only adds bounded geometric recovery after standard high association,
+  using current high observations and recent active/tentative tracks, with
+  same-class, size, overlap, distance, time and two-way ambiguity gates.

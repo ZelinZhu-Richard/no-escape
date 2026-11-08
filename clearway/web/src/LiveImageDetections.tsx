@@ -54,13 +54,27 @@ export function useVerifiedSnapshotDetections(snapshot: LiveSnapshot | null) {
 export function LiveImageBoxes({
   detections,
   labels = true,
+  speeds,
 }: {
   detections: ImageDetections;
   labels?: boolean;
+  speeds?: Record<string, { mph: number | null; reason: string }>;
 }) {
   const width = detections.image_width,
     height = detections.image_height;
-  const font = width / 30;
+  // Scale with the image so the same label remains legible in either player
+  // size, without the old labels covering an entire neighboring vehicle.
+  const font = Math.min(width / 60, height / 12);
+  const hasSpeed = (id?: string) => {
+    const mph = id ? speeds?.[id]?.mph : undefined;
+    return typeof mph === "number" && Number.isFinite(mph) && mph >= 0;
+  };
+  // Paint numeric estimates last so neighboring unknown labels cannot cover
+  // the mph text in dense traffic. Preserve fallback keys when reordering.
+  const orderedBoxes = detections.boxes.map((box, index) => ({
+    box, index, priority: box.class_name !== "person" && hasSpeed(box.track_id),
+  }));
+  if (speeds) orderedBoxes.sort((a, b) => Number(a.priority) - Number(b.priority));
   return (
     <svg
       className="live-image-boxes"
@@ -82,16 +96,36 @@ export function LiveImageBoxes({
           />
         );
       })}
-      {detections.boxes.map((box, index) => {
+      {orderedBoxes.map(({ box, index }) => {
         const [x1, y1, x2, y2] = box.xyxy;
-        const label = `${box.class_name}${box.track_id ? ` #${box.track_id.split("-").at(-1)}` : ""} ${Math.round(box.confidence * 100)}%`;
+        const identity = `${box.class_name}${box.track_id ? ` #${box.track_id.split("-").at(-1)}` : ""}`;
+        const confidence = Math.round(box.confidence * 100);
+        const speed = box.track_id ? speeds?.[box.track_id] : undefined;
+        const showSpeed = speeds !== undefined && box.class_name !== "person";
+        const validSpeed = typeof speed?.mph === "number" &&
+          Number.isFinite(speed.mph) && speed.mph >= 0;
+        // Keep dense-road overlays small. Full identity and the distinction
+        // between detector confidence and speed stay in the title/captions.
+        const lines = [showSpeed && !validSpeed ? `${confidence}% · —` : `${confidence}%`];
+        if (showSpeed && validSpeed)
+          lines.push(`est ${Math.round(speed!.mph!)} mph`);
+        const title = `${identity}; detector confidence ${confidence}%${showSpeed
+          ? validSpeed
+            ? `; estimated speed ${Math.round(speed!.mph!)} mph`
+            : `; speed unavailable${speed?.reason ? `: ${speed.reason}` : ""}`
+          : ""}`;
         const labelWidth = Math.min(
           width,
-          label.length * font * 0.56 + font * 0.6,
+          Math.max(...lines.map((line) => line.length)) * font * 0.62 + font * 0.8,
         );
-        const x = Math.max(0, Math.min(width - labelWidth, x1 * width));
-        const y =
-          y1 * height >= font * 1.5 ? y1 * height - font * 1.5 : y1 * height;
+        const labelHeight = font * (lines.length * 1.2 + 0.4);
+        const gap = font * 0.4;
+        const right = x2 * width + gap;
+        const side = right + labelWidth <= width
+          ? right
+          : x1 * width - labelWidth - gap;
+        const x = Math.max(0, Math.min(width - labelWidth, side));
+        const y = Math.max(0, Math.min(height - labelHeight, y1 * height));
         return (
           <g
             key={box.track_id ?? index}
@@ -103,6 +137,7 @@ export function LiveImageBoxes({
                 : "detection-vehicle"
             }
           >
+            <title>{title}</title>
             <rect
               x={x1 * width}
               y={y1 * height}
@@ -116,18 +151,21 @@ export function LiveImageBoxes({
                   x={x}
                   y={y}
                   width={labelWidth}
-                  height={font * 1.4}
+                  height={labelHeight}
                   className="detection-label-bg"
                 />
-                <text
-                  x={x + font * 0.3}
-                  y={y + font}
-                  fill="currentColor"
-                  fontSize={font}
-                  fontFamily="monospace"
-                >
-                  {label}
-                </text>
+                {lines.map((line, lineIndex) => (
+                  <text
+                    key={lineIndex}
+                    x={x + font * 0.4}
+                    y={y + font * (1.1 + lineIndex * 1.2)}
+                    fill="currentColor"
+                    fontSize={font}
+                    fontFamily="monospace"
+                  >
+                    {line}
+                  </text>
+                ))}
               </>
             )}
           </g>
