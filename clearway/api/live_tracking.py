@@ -14,6 +14,12 @@ observation in this frame. Unmatched high observations remain visible while
 tentative; unmatched low observations and prediction-only tracks never appear.
 Raw detector boxes and incident-monitor inputs are never changed.
 
+TVA43 alone adds a sparse-frame recovery after normal high-score association:
+current high observations may uniquely match a recently observed active or
+tentative vehicle using bounded center/size/overlap gates and two-way ambiguity
+margins. Lost tracks and low observations cannot enter this recovery. The
+camera-specific policy and count are explicit in response provenance.
+
 process(context, detections): context has run_id, camera_id, stream_id,
 media_time_seconds. detections is an exact-image local result with a bounded
 tracking_candidates pool (all post-NMS observations >= .1), raw high boxes,
@@ -42,6 +48,12 @@ MAX_CLOCK_STEP_DIFFERENCE = 0.5
 LOST_TTL_SECONDS = 0.75
 SESSION_TTL_SECONDS = 3.0
 LOW_THRESHOLD = 0.1
+GEOMETRY_CAMERA_ID = "caltrans-d4-285"
+GEOMETRY_POLICY = "bytetrack-tva43-gated-geometry-v1"
+GEOMETRY_MAX_GAP = .25
+GEOMETRY_MAX_DISTANCE = .65
+GEOMETRY_MIN_MARGIN = .15
+GEOMETRY_CLASSES = frozenset({"car", "truck", "bus", "van", "motorcycle"})
 CLASSES = frozenset({"person", "bicycle", "car", "motorcycle", "bus", "truck", "van", "tricycle", "awning-tricycle"})
 _HASH = re.compile(r"[a-f0-9]{64}")
 _CAMERA = re.compile(r"[A-Za-z0-9_-]{1,120}")
@@ -204,13 +216,14 @@ class _Track:
 
 
 class _ByteTrack:
-    def __init__(self, shape, threshold):
+    def __init__(self, shape, threshold, *, geometric_recovery=False):
         import numpy as np  # Optional dependency: never required to import/start API.
         self.np, self.kalman = np, _Kalman(np)
         self.shape, self.threshold = shape, threshold
         self.prefix, self.next_id = uuid4().hex[:12], 0
         self.tracks: list[_Track] = []
         self.frames = 0
+        self.geometric_recovery = geometric_recovery
 
     def _measurement(self, box):
         x1, y1, x2, y2 = box["xyxy"]
@@ -244,6 +257,58 @@ class _ByteTrack:
                     cost[i, j] = 2
         return cost
 
+    def _geometric_matches(self, tracks, boxes, media, wall):
+        """One-pass mutual nearest matches, with ambiguity in BOTH directions.
+
+        This does not optimize its way around an ambiguous choice. Competing
+        candidates remain in the matrix while margins are checked; only one
+        high observation can be assigned to each eligible recently seen track.
+        """
+        np = self.np
+        if not tracks or not boxes:
+            return []
+        costs = np.full((len(tracks), len(boxes)), np.inf)
+        for i, track in enumerate(tracks):
+            if (track.state not in {"tracked", "tentative"} or track.kind not in GEOMETRY_CLASSES
+                    or not 0 < media-track.media <= GEOMETRY_MAX_GAP
+                    or not 0 < wall-track.wall <= GEOMETRY_MAX_GAP):
+                continue
+            x, y, aspect, height = track.mean[:4]
+            width = aspect*height
+            if not all(math.isfinite(float(v)) and v > 0 for v in (width, height)):
+                continue
+            left = (x-width/2, y-height/2, x+width/2, y+height/2)
+            for j, box in enumerate(boxes):
+                if box["class_name"] != track.kind or box["confidence"] < self.threshold:
+                    continue
+                bx, by, baspect, bh = self._measurement(box)
+                bw = baspect*bh
+                if not (2/3 <= bw/width <= 1.5 and 2/3 <= bh/height <= 1.5):
+                    continue
+                diagonal = min(math.hypot(width, height), math.hypot(bw, bh))
+                distance = math.hypot(bx-x, by-y)/diagonal
+                if not math.isfinite(distance) or distance > GEOMETRY_MAX_DISTANCE:
+                    continue
+                right = (bx-bw/2, by-bh/2, bx+bw/2, by+bh/2)
+                intersection = (max(0, min(left[2], right[2])-max(left[0], right[0]))
+                                * max(0, min(left[3], right[3])-max(left[1], right[1])))
+                overlap = intersection/max(width*height+bw*bh-intersection, 1e-12)
+                if overlap >= .05:
+                    costs[i, j] = distance
+        matches = []
+        for i in range(len(tracks)):
+            j = int(np.argmin(costs[i]))
+            best = costs[i, j]
+            if not math.isfinite(float(best)) or int(np.argmin(costs[:, j])) != i:
+                continue
+            row_alternatives = np.delete(costs[i], j)
+            column_alternatives = np.delete(costs[:, j], i)
+            if ((len(row_alternatives) and float(np.min(row_alternatives))-best < GEOMETRY_MIN_MARGIN)
+                    or (len(column_alternatives) and float(np.min(column_alternatives))-best < GEOMETRY_MIN_MARGIN)):
+                continue
+            matches.append((i, j))
+        return matches
+
     def update(self, boxes, media, wall, delta):
         self.frames += 1
         self.tracks = [track for track in self.tracks
@@ -256,11 +321,12 @@ class _ByteTrack:
         low = [box for box in boxes if box["confidence"] < self.threshold]
         observations = []
 
-        def observed(track, box, kind):
+        def observed(track, box, kind, association="bytetrack"):
             track.mean, track.covariance = self.kalman.update(track.mean, track.covariance, self._measurement(box))
             track.media, track.wall, track.state, track.confirmed = media, wall, "tracked", True
             observations.append({**box, "xyxy": list(box["xyxy"]), "track_id": track.identifier,
-                                 "observation": kind, "confirmed": True})
+                                 "observation": kind, "confirmed": True,
+                                 **({"association": association} if self.geometric_recovery else {})})
 
         # Stage 1: confirmed active + recently lost tracks against high scores.
         matches, unmatched, remaining = _linear_assignment(self._cost(pool, high, True), .8, self.np)
@@ -268,6 +334,27 @@ class _ByteTrack:
             observed(pool[track_index], high[box_index], "high")
         # Stage 2: only unmatched ACTIVE tracks can recover low observations.
         active = [pool[index] for index in unmatched if pool[index].state == "tracked"]
+        removed = None
+        if self.geometric_recovery:
+            # Give normal tentative IoU association first choice as well. This
+            # operates on high scores only and cannot consume low-stage inputs.
+            remaining_high = [high[index] for index in remaining]
+            matches, removed, leftover = _linear_assignment(self._cost(tentative, remaining_high, True), .7, self.np)
+            for track_index, box_index in matches:
+                observed(tentative[track_index], remaining_high[box_index], "high")
+            remaining = [remaining[index] for index in leftover]
+            recovery_pool = [*active, *(tentative[index] for index in removed)]
+            recovery_boxes = [high[index] for index in remaining]
+            recovered = self._geometric_matches(recovery_pool, recovery_boxes, media, wall)
+            recovered_ids, recovered_boxes = set(), set()
+            for track_index, box_index in recovered:
+                track = recovery_pool[track_index]
+                observed(track, recovery_boxes[box_index], "high", "gated_geometry")
+                recovered_ids.add(track.identifier)
+                recovered_boxes.add(box_index)
+            active = [track for track in active if track.identifier not in recovered_ids]
+            removed = [index for index in removed if tentative[index].identifier not in recovered_ids]
+            remaining = [index for offset, index in enumerate(remaining) if offset not in recovered_boxes]
         matches, unmatched_active, _ = _linear_assignment(self._cost(active, low, False), .5, self.np)
         for track_index, box_index in matches:
             observed(active[track_index], low[box_index], "low_recovery")
@@ -275,9 +362,12 @@ class _ByteTrack:
             active[index].state = "lost"
         # Official tentative-track confirmation against remaining high scores.
         remaining_high = [high[index] for index in remaining]
-        matches, removed, unmatched_high = _linear_assignment(self._cost(tentative, remaining_high, True), .7, self.np)
-        for track_index, box_index in matches:
-            observed(tentative[track_index], remaining_high[box_index], "high")
+        if removed is None:
+            matches, removed, unmatched_high = _linear_assignment(self._cost(tentative, remaining_high, True), .7, self.np)
+            for track_index, box_index in matches:
+                observed(tentative[track_index], remaining_high[box_index], "high")
+        else:
+            unmatched_high = range(len(remaining_high))
         removed_ids = {tentative[index].identifier for index in removed}
         self.tracks = [track for track in self.tracks if track.identifier not in removed_ids]
         for index in unmatched_high:
@@ -344,25 +434,27 @@ class LiveTrackingService:
                         state = None
                 result = {"schema_version": SCHEMA_VERSION, "status": "available", "algorithm": "ByteTrack",
                           "implementation": "clearway-bytetrack-observed-v1", "upstream_commit": UPSTREAM_COMMIT,
+                          "association_policy": GEOMETRY_POLICY if key[1] == GEOMETRY_CAMERA_ID else "bytetrack-iou-v1",
                           "run_id": key[0], "camera_id": key[1], "stream_id": key[2],
                           "media_time_seconds": media, "image_sha256": image_hash,
                           "configuration_sha256": configuration, "reset_reason": reason,
-                          "tracks": [], "prediction_only_tracks_returned": 0}
+                          "tracks": [], "prediction_only_tracks_returned": 0, "geometry_recoveries": 0}
                 if reason == "duplicate_frame":
                     # Keep the bounded hashes as a tombstone: a frozen stream
                     # cannot alternate between reset and a newly tracked frame.
-                    state["engine"] = _ByteTrack(shape, threshold)
+                    state["engine"] = _ByteTrack(shape, threshold, geometric_recovery=key[1] == GEOMETRY_CAMERA_ID)
                     state.update(media=media, wall=now)
                     self._sessions.move_to_end(key)
                     return result
                 if state is None:
-                    state = {"engine": _ByteTrack(shape, threshold), "configuration": configuration,
+                    state = {"engine": _ByteTrack(shape, threshold, geometric_recovery=key[1] == GEOMETRY_CAMERA_ID), "configuration": configuration,
                              "shape": shape, "threshold": threshold, "media": media, "wall": now,
                              "hashes": deque(maxlen=MAX_HASHES)}
                     delta = 0.125
                 else:
                     delta = media-state["media"]
                 result["tracks"] = state["engine"].update(boxes, media, now, delta)
+                result["geometry_recoveries"] = sum(t.get("association") == "gated_geometry" for t in result["tracks"])
                 state["hashes"].append(image_hash)
                 state.update(media=media, wall=now)
                 self._sessions[key] = state

@@ -39,6 +39,7 @@ GRAPHICS_EXCLUSIONS = (
     ("provider-title", (0.0, 0.0, 0.46, 0.08)),
     ("provider-timestamp", (0.0, 0.93, 0.52, 1.0)),
 )
+TVA43_GRAPHICS_EXCLUSIONS = (("provider-timestamp", (0.0, 0.0, 0.50, 0.08)),)
 LIMITATIONS = [
     "Boxes describe this exact image, not a later video frame or continuous tracking.",
     "Detections may miss or misclassify objects; no injury, danger, identity, or calibrated lane membership is inferred.",
@@ -124,9 +125,14 @@ def _exclusion_context(camera_id: str | None) -> dict:
     if camera_id is not None and (not isinstance(camera_id, str)
                                   or not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", camera_id)):
         raise ValueError("Invalid camera identifier.")
-    regions = [{"id": identifier, "xyxy": list(rect)} for identifier, rect in GRAPHICS_EXCLUSIONS] if camera_id == GRAPHICS_CAMERA_ID else []
+    policy, excluded = "none-v1", ()
+    if camera_id == GRAPHICS_CAMERA_ID:
+        policy, excluded = GRAPHICS_EXCLUSION_POLICY, GRAPHICS_EXCLUSIONS
+    elif camera_id == "caltrans-d4-285":
+        policy, excluded = "caltrans-d4-285-timestamp-v1", TVA43_GRAPHICS_EXCLUSIONS
+    regions = [{"id": identifier, "xyxy": list(rect)} for identifier, rect in excluded]
     return {"camera_id": camera_id,
-            "exclusion_policy": GRAPHICS_EXCLUSION_POLICY if regions else "none-v1",
+            "exclusion_policy": policy,
             "excluded_regions": regions}
 
 

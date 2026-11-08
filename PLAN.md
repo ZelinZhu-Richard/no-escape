@@ -43,6 +43,10 @@ Creative tools, new formats, anything that changes how people make or experience
 
 # Clearway: Revised Build Plan
 
+## Vehicle confidence and approximate speed — November 7, 2026
+
+The user requested confidence beside each vehicle and speed estimates using TVA43 at Grand Lakeshore (caltrans-d4-285), and explicitly accepted clearly labeled approximate estimates. Default compact detector-confidence labels on live video; distinguish detector score from speed accuracy. Use existing observed ByteTrack IDs and video timestamps, a documented assumed near-road plane, and only sustained confirmed high observations. Show estimated mph inside the calibrated area; unknown outside it, on poor tracks, gaps, stale frames, or camera-view mismatch. Guard the fixed view with static-background reference signatures, keep historical evidence/rules unchanged, validate math with known synthetic trajectories and functionality with real footage without calling that speed accuracy. Use a new PR after PR #4's merge.
+
 ## Prefer live public video — November 7, 2026
 
 The user wants moving video whenever the official camera supports it. Default both the public-camera list and map to the 191 advertised video feeds, with an explicit All cameras option for the 576 snapshot-only entries. Selecting a video camera starts its stream; retain disclosed snapshot fallback and Retry live video when the provider fails. Re-selecting a list item retries video instead of retaining a previous fallback or manual snapshot choice. Keep selected-feed-only loading and existing local YOLO/ByteTrack. Refresh the user's stale built-in-browser tab after rebuilding, verify actual advancing video, and update the existing PR.

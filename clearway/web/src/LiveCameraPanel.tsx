@@ -235,6 +235,7 @@ export function LiveCameraPanel({
   const demoCamera = cameras.find(
     (camera) => camera.id === "caltrans-d4-37" && camera.streaming_url,
   );
+  const speedCamera = cameras.find(camera => camera.id === "caltrans-d4-285" && camera.streaming_url);
   const previewRef = useRef<HTMLDivElement>(null);
   const visible = useMemo(
     () => filterLiveCameras(cameras, region, query)
@@ -309,6 +310,20 @@ export function LiveCameraPanel({
           }}
         >
           Open 6th Street live <span>I-80 · San Francisco</span>
+        </button>
+      )}
+      {speedCamera && (
+        <button className="live-camera-shortcut" onClick={() => {
+          setQuery("Grand Lakeshore");
+          setRegion("");
+          setFeedType("video");
+          onSelect(speedCamera.id);
+          setPaused(false);
+          setFailedStream(null);
+          setMediaChoice({ cameraId: speedCamera.id, mode: "video" });
+          requestAnimationFrame(() => previewRef.current?.scrollIntoView({ block: "center", behavior: "auto" }));
+        }}>
+          Open speed example <span>TVA43 · Grand Lakeshore · approximate mph</span>
         </button>
       )}
       {loading ? (
